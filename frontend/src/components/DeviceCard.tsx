@@ -22,11 +22,11 @@ export default function DeviceCard({ device }: DeviceCardProps) {
       <div className="mt-6 grid grid-cols-2 gap-4 text-sm text-slate-600 dark:text-slate-300">
         <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/80">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Temperature</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{device.temperature.toFixed(1)}°C</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{device.metrics.temperature.toFixed(1)}°C</p>
         </div>
         <div className="rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/80">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Humidity</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{device.humidity}%</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">{device.metrics.humidity}%</p>
         </div>
       </div>
       <div className="mt-6 border-t border-slate-200/80 pt-4 text-sm text-slate-500 dark:border-slate-700/80 dark:text-slate-400">

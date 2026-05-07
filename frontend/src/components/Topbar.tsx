@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 
 function formatClock(date: Date) {
   return date.toLocaleTimeString("en-US", {
@@ -11,17 +11,17 @@ function formatClock(date: Date) {
   });
 }
 
+function subscribeToClock(callback: () => void) {
+  const timer = window.setInterval(callback, 1000);
+  return () => window.clearInterval(timer);
+}
+
+function getClockSnapshot() {
+  return formatClock(new Date());
+}
+
 export default function Topbar() {
-  const [currentTime, setCurrentTime] = useState(() => formatClock(new Date()));
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setCurrentTime(formatClock(new Date()));
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
+  const currentTime = useSyncExternalStore(subscribeToClock, getClockSnapshot, () => "00:00:00");
   const title = useMemo(() => "IoT Device Management", []);
 
   return (

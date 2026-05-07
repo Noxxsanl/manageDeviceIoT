@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import Navbar from "@/components/layout/Navbar";
+import Sidebar from "@/components/layout/Sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "IoT Device Management Dashboard",
-  description: "Production-ready IoT dashboard using mock data and modern responsive UI.",
+  title: "IoT Manager Admin Panel",
+  description: "Production-ready IoT admin panel built with Next.js, TailwindCSS and mock data.",
 };
 
 export default function RootLayout({
@@ -26,9 +29,18 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
-        {children}
+      <body className="min-h-screen bg-slate-950 text-slate-100">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <div className="min-h-screen w-full">
+            <Navbar />
+            <Sidebar />
+            <main className="min-h-[calc(100vh-5rem)] w-full overflow-y-auto bg-slate-950 pt-20 lg:pl-72">
+              {children}
+            </main>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );
