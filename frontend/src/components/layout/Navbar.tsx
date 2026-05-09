@@ -3,6 +3,7 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { notifications } from "@/mock/notifications";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import { useAuth } from "@/hooks/useAuth";
 
 function subscribeToClock(callback: () => void) {
   const timer = window.setInterval(callback, 1000);
@@ -22,6 +23,8 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const formattedTime = useSyncExternalStore(subscribeToClock, getClockSnapshot, () => "00:00:00");
 
+  const { user, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
   const badgeCount = useMemo(() => notifications.filter((item) => item.isNew).length, []);
 
   return (
@@ -70,9 +73,50 @@ export default function Navbar() {
           ) : null}
         </div>
         <ThemeToggle />
-        <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-sm font-semibold text-white shadow-lg shadow-slate-950/20">
-          AD
+        <div className="hidden items-center gap-3 sm:flex">
+          <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-sm font-semibold text-white shadow-lg shadow-slate-950/20">
+            {user?.username.substring(0, 2).toUpperCase() ?? "AD"}
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-white">{user?.username ?? "Admin"}</p>
+            <p className="text-xs text-slate-500">Administrator</p>
+          </div>
         </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setProfileOpen((prev) => !prev)}
+            className="inline-flex h-11 items-center gap-2 rounded-3xl border border-slate-700/80 bg-slate-900/90 px-4 py-2 text-sm text-slate-200 shadow-sm transition hover:bg-slate-800"
+          >
+            <span>{user?.username ?? "Admin"}</span>
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {profileOpen ? (
+            <div className="absolute right-0 z-50 mt-3 w-52 rounded-3xl border border-slate-800/80 bg-slate-950 p-3 shadow-xl shadow-slate-950/30">
+              <button
+                type="button"
+                onClick={() => setProfileOpen(false)}
+                className="block w-full rounded-3xl px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-900"
+              >
+                Profile
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileOpen(false);
+                  logout();
+                }}
+                className="mt-2 block w-full rounded-3xl px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-900"
+              >
+                Logout
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <div className="rounded-3xl border border-slate-700/80 bg-slate-900/90 px-4 py-2 text-sm text-slate-300 shadow-sm">
           {formattedTime}
         </div>

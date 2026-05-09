@@ -13,7 +13,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-20 z-30 hidden h-[calc(100vh-5rem)] w-72 overflow-auto border-r border-slate-900/10 bg-slate-950/95 px-5 py-6 shadow-lg shadow-slate-950/20 dark:border-slate-800/80 lg:block">
+    <aside className="hidden shrink-0 h-full w-64 overflow-auto border-r border-slate-900/10 bg-slate-950/95 px-5 py-6 shadow-lg shadow-slate-950/20 dark:border-slate-800/80 lg:flex lg:flex-col">
       <div className="mb-8 flex flex-col gap-2 rounded-3xl border border-slate-800/80 bg-slate-900/90 px-5 py-6 text-slate-300 shadow-sm">
         <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Welcome back</p>
         <p className="mt-2 text-lg font-semibold text-white">Administrator</p>
