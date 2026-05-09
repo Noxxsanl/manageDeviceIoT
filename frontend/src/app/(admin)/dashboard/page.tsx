@@ -1,6 +1,9 @@
+"use client";
+
 import { devices } from "@/mock/devices";
 import { notifications } from "@/mock/notifications";
 import StatsCard from "@/components/dashboard/StatsCard";
+import { useAuth } from "@/hooks/useAuth";
 
 const onlineDevices = devices.filter((device) => device.status === "online").length;
 const offlineDevices = devices.filter((device) => device.status === "offline").length;
@@ -8,11 +11,15 @@ const alertDevices = devices.filter((device) => device.isUnderAttack || device.s
 const averageBattery = Math.round(devices.reduce((sum, device) => sum + device.metrics.battery, 0) / devices.length);
 
 export default function DashboardPage() {
+  console.log("[render] app/(admin)/dashboard/page.tsx mounted");
+
+  const { user } = useAuth();
+
   return (
     <div className="min-h-[calc(100vh-5rem)] w-full px-4 py-6 sm:px-6 lg:px-10 xl:px-12">
       <div className="mb-6 flex flex-col gap-3">
         <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
-        <h1 className="text-4xl font-semibold text-white">Fleet overview</h1>
+        <h1 className="text-4xl font-semibold text-white">Welcome back, {user?.username ?? "admin"}</h1>
         <p className="max-w-3xl text-slate-400">Clean SaaS admin panel for IoT device management, alerts and security monitoring.</p>
       </div>
 
