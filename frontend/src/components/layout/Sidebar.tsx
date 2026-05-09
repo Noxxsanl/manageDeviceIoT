@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAddDevice } from "@/contexts/AddDeviceContext";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -11,6 +12,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { openModal } = useAddDevice();
 
   return (
     <aside className="hidden shrink-0 h-full w-64 overflow-auto border-r border-slate-900/10 bg-slate-950/95 px-5 py-6 shadow-lg shadow-slate-950/20 dark:border-slate-800/80 lg:flex lg:flex-col">
@@ -42,7 +44,7 @@ export default function Sidebar() {
 
       <div className="mt-8 rounded-3xl border border-slate-800/80 bg-slate-900/90 p-4 shadow-sm">
         <p className="text-sm uppercase tracking-[0.22em] text-slate-500">Quick action</p>
-        <button className="mt-4 inline-flex w-full items-center justify-center rounded-3xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
+        <button onClick={openModal} className="mt-4 inline-flex w-full items-center justify-center rounded-3xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
           Add Device
         </button>
       </div>
