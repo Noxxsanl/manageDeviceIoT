@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(Get-ChildItem -Path \"e:\\\\WorkSpace\\\\managerDeviceIoT\" -Force)",
-      "Bash(Select-Object Name, PSIsContainer)",
-      "Bash(Format-Table)"
-    ]
-  }
-}
