@@ -14,6 +14,10 @@ dist/
 npm-debug.log*
 *.log
 
+# Firmware credentials - NEVER commit
+firmware/**/config.h
+firmware/**/config_gw.h
+
 # OS
 .DS_Store
 Thumbs.db
