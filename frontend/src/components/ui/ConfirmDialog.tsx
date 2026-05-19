@@ -24,7 +24,7 @@ export default function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md rounded-4xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-white">{title}</h2>
         <p className="mt-2 text-sm text-slate-400">{description}</p>
         <div className="mt-6 flex justify-end gap-3">

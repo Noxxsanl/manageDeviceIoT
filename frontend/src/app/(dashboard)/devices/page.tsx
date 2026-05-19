@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Server, Cpu, Lock, Unlock, Trash2, RefreshCw, Plus } from "lucide-react";
+import { Server, Cpu, Lock, Unlock, Trash2, RefreshCw, Plus, Eye } from "lucide-react";
 import { useDeviceList } from "@/hooks/useDeviceList";
 import DeviceStatusBadge from "@/components/device/DeviceStatusBadge";
 import OnlineIndicator from "@/components/device/OnlineIndicator";
@@ -212,6 +212,13 @@ export default function DevicesPage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
+                        <Link
+                          href={`/devices/${device.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-700/50 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-white"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </Link>
                         {device.status === "blocked" ? (
                           <button
                             type="button"

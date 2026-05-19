@@ -6,7 +6,7 @@ type DeviceDetailHeaderProps = {
 
 export default function DeviceDetailHeader({ device }: DeviceDetailHeaderProps) {
   return (
-    <div className="rounded-[2rem] border border-slate-900/10 bg-slate-950/95 p-6 shadow-lg shadow-slate-950/30">
+    <div className="rounded-4xl border border-slate-900/10 bg-slate-950/95 p-6 shadow-lg shadow-slate-950/30">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Device Overview</p>

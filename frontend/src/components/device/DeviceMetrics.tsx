@@ -15,7 +15,7 @@ const metricItems = [
 
 export default function DeviceMetrics({ metrics }: DeviceMetricsProps) {
   return (
-    <div className="rounded-[2rem] border border-slate-900/10 bg-slate-950/95 p-6 shadow-lg shadow-slate-950/20">
+    <div className="rounded-4xl border border-slate-900/10 bg-slate-950/95 p-6 shadow-lg shadow-slate-950/20">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Metrics</p>

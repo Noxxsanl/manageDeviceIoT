@@ -27,14 +27,14 @@ export function RegisterModal({ deviceId, secretKey, onClose }: RegisterModalPro
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative z-10 w-full max-w-lg rounded-[2rem] border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-lg rounded-4xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
         <h2 className="text-xl font-semibold text-white">Device Credentials</h2>
         <p className="mt-1 text-sm text-slate-400">Thiết bị đã được đăng ký thành công.</p>
 
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
           <p className="text-sm font-semibold text-red-300">
-            Chỉ hiển thị 1 lần – Hãy lưu lại trước khi đóng!
+            Chỉ hiển thị 1 lần  Hãy lưu lại trước khi đóng!
           </p>
         </div>
 

@@ -22,4 +22,5 @@ firmware/**/config_gw.h
 .DS_Store
 Thumbs.db
 
-.claude
+.doneTask.md
+.task.md

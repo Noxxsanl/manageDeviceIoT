@@ -30,3 +30,21 @@ export type DashboardStats = {
   sensor_online: number;
   total_data_points: number;
 };
+
+export type ApiSensorPayload = {
+  temperature?: number;
+  humidity?: number;
+  [key: string]: unknown;
+};
+
+export type ApiSensorData = {
+  id: number;
+  device_id: number | string;
+  gateway_id: number | string;
+  payload: ApiSensorPayload;
+  received_at: string;
+};
+
+export type ApiDeviceDetail = ApiDevice & {
+  recent_data?: ApiSensorData[];
+};
