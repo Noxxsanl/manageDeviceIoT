@@ -1998,3 +1998,148 @@ Data được sort DESC theo `received_at`, lấy 20 bản ghi đầu.
 - [x] Loading state: spinner full-page khi `isLoading`
 - [x] Error state: thông báo lỗi + link quay về `/devices`
 - [x] TypeScript compile không lỗi
+
+---
+
+## Task 13 – Frontend: Trang Audit Log & Quản Lý Users
+
+**Branch:** `fe/audit-log-users`
+**Ngày hoàn thành:** 2026-05-20
+
+---
+
+### 1. Backend – Users API (`backend/src/routes/users.ts`)
+
+Tạo mới file route xử lý quản lý tài khoản dashboard:
+
+| Endpoint | Role | Mô tả |
+|---|---|---|
+| `GET /api/users` | admin | Lấy danh sách users (id, username, role, created_at, last_login) |
+| `POST /api/users` | admin | Tạo tài khoản mới (chỉ operator/viewer), validate username ≥ 3 ký tự, password ≥ 6 ký tự |
+| `PATCH /api/users/:id/password` | admin | Đổi mật khẩu, bcrypt hash cost 12 |
+| `DELETE /api/users/:id` | admin | Xoá tài khoản – không cho phép xoá admin hoặc tự xoá bản thân |
+
+Bảo vệ toàn bộ route bằng `verifyJWT` + `requireRole("admin")`.
+
+Đã đăng ký route trong `backend/src/routes/index.ts`:
+```ts
+router.use("/users", userRoutes);
+```
+
+---
+
+### 2. Frontend – Types (`frontend/src/types/api.ts`)
+
+Thêm 3 type mới:
+
+```ts
+AuditEventType  // Union type các event: AUTH_FAIL | GATEWAY_AUTH_FAIL | SENSOR_AUTH_FAIL | ...
+AuditLogEntry   // Kiểu dữ liệu 1 bản ghi audit_log từ API
+ApiUser         // Kiểu dữ liệu tài khoản: id, username, role, created_at, last_login
+```
+
+---
+
+### 3. Frontend – Hooks
+
+**`src/hooks/useAuditLog.ts`**
+- SWR fetch `GET /api/audit-log` với filter query builder (event_type, device_id, from, to)
+- `refreshInterval: 30000` (auto-refresh 30s)
+- Trả `{ logs, isLoading, isError, refresh }`
+
+**`src/hooks/useUsers.ts`**
+- SWR fetch `GET /api/users`
+- Hàm `createUser(username, password, role)` → POST + mutate
+- Hàm `changePassword(id, password)` → PATCH
+- Hàm `deleteUser(id)` → DELETE + mutate
+
+---
+
+### 4. Component `AuditLogTable.tsx` (`frontend/src/components/audit/AuditLogTable.tsx`)
+
+Bảng hiển thị audit log với màu sắc theo event type:
+
+| Màu | Event types |
+|---|---|
+| Đỏ | `AUTH_FAIL`, `GATEWAY_AUTH_FAIL`, `SENSOR_AUTH_FAIL`, `DEVICE_BLOCKED` |
+| Xanh lá | `AUTH_SUCCESS`, `DATA_RECV` |
+| Vàng | `DEVICE_REGISTER` |
+| Xám | Các event khác |
+
+Tính năng:
+- Cột Chi tiết: hiển thị JSON collapsible (nút toggle ChevronRight/ChevronDown)
+- Cột Device ID: hiển thị `device_identifier` (device_id string) với tooltip device_name
+- Format thời gian theo locale vi-VN
+- Empty state khi không có dữ liệu
+
+---
+
+### 5. Trang `/audit` (`frontend/src/app/(dashboard)/audit/page.tsx`)
+
+**Bộ lọc:**
+- Dropdown `event_type` (7 loại event)
+- Input số `device_id` (lọc theo ID nội bộ)
+- Date picker `from` / `to` (datetime-local, dark theme)
+- Nút "Xoá bộ lọc" hiện khi có filter đang active
+
+**Phân trang:**
+- Chọn pageSize: 10 / 25 / 50 records/trang
+- Nút Trước / Sau + số trang
+- Tổng số trang tự tính từ `logs.length`
+
+**Khác:**
+- Nút "Làm mới" manual với spinner khi loading
+- Thông báo lỗi khi không kết nối được backend
+- Auto-refresh qua SWR `refreshInterval: 30000`
+
+---
+
+### 6. Trang `/users` (`frontend/src/app/(dashboard)/users/page.tsx`)
+
+**Guard admin:** Nếu `user.role !== "admin"` → hiển thị màn hình "Không có quyền truy cập" (ShieldCheck icon).
+
+**Form tạo tài khoản:**
+- Input: username, password, role (operator/viewer)
+- Validation client: username ≥ 3 ký tự, password ≥ 6 ký tự
+- Hiển thị lỗi chi tiết (USERNAME_TAKEN, PASSWORD_TOO_SHORT, v.v.)
+- Success toast "Tài khoản đã tạo thành công" tự ẩn sau 3s
+
+**Bảng tài khoản:**
+- Cột: Tên đăng nhập, Vai trò (badge màu), Ngày tạo, Đăng nhập gần nhất, Thao tác
+- Badge "Bạn" đánh dấu tài khoản đang đăng nhập
+- Role badge: admin=xanh, operator=tím, viewer=xám
+
+**Thao tác:**
+- "Đổi mật khẩu" → mở `PasswordModal` (inline component): form 2 field password + confirm, validation, submit PATCH
+- "Xoá" → mở `ConfirmDialog` với `danger=true`
+- Nút Xoá ẩn với tài khoản admin và tài khoản đang đăng nhập
+
+---
+
+### Tóm tắt files đã tạo / chỉnh sửa
+
+| File | Hành động |
+|---|---|
+| `backend/src/routes/users.ts` | Tạo mới – CRUD users API (admin only) |
+| `backend/src/routes/index.ts` | Thêm `router.use("/users", userRoutes)` |
+| `frontend/src/types/api.ts` | Thêm `AuditEventType`, `AuditLogEntry`, `ApiUser` |
+| `frontend/src/hooks/useAuditLog.ts` | Tạo mới – SWR + filter query builder, refresh 30s |
+| `frontend/src/hooks/useUsers.ts` | Tạo mới – SWR + createUser, changePassword, deleteUser |
+| `frontend/src/components/audit/AuditLogTable.tsx` | Tạo mới – bảng màu event type + collapsible JSON |
+| `frontend/src/app/(dashboard)/audit/page.tsx` | Tạo mới – filters, pagination, auto-refresh |
+| `frontend/src/app/(dashboard)/users/page.tsx` | Tạo mới – admin guard, form tạo tài khoản, bảng quản lý |
+
+---
+
+### Checklist hoàn thành Task 13
+
+- [x] `backend/src/routes/users.ts` – GET/POST/PATCH password/DELETE với validation đầy đủ
+- [x] `backend/src/routes/index.ts` – đăng ký `/users` route
+- [x] `frontend/src/types/api.ts` – thêm `AuditLogEntry`, `AuditEventType`, `ApiUser`
+- [x] `frontend/src/hooks/useAuditLog.ts` – SWR auto-refresh 30s, filter query builder
+- [x] `frontend/src/hooks/useUsers.ts` – SWR + CRUD mutations
+- [x] `AuditLogTable.tsx` – màu đỏ/xanh/vàng theo event type, collapsible JSON
+- [x] `/audit` page – dropdown event_type, input device_id, date range, phân trang 10/25/50
+- [x] `/users` page – admin-only guard, form tạo operator/viewer, đổi mật khẩu modal, xoá với confirm
+- [x] Sidebar `/audit` và `/users` đã có sẵn từ trước → không cần sửa
+- [x] TypeScript compile không lỗi (frontend + backend)
