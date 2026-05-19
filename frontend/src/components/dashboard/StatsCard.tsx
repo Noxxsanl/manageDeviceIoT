@@ -1,6 +1,6 @@
 type StatsCardProps = {
   title: string;
-  value: number;
+  value: number | string;
   subtitle: string;
   icon: React.ReactNode;
   accent: string;

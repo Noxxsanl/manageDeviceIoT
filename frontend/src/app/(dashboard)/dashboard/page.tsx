@@ -1,22 +1,27 @@
 "use client";
 
+import { Server, Cpu, Wifi, Radio } from "lucide-react";
 import { notifications } from "@/mock/notifications";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useAddDevice } from "@/contexts/AddDeviceContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const { openModal } = useAddDevice();
   const { devices } = useDevices();
+  const { stats, isLoading } = useDashboardStats();
 
-  const onlineDevices = devices.filter((device) => device.status === "online").length;
-  const offlineDevices = devices.filter((device) => device.status === "offline").length;
-  const alertDevices = devices.filter((device) => device.isUnderAttack || device.securityStatus !== "Normal").length;
-  const averageBattery = devices.length
-    ? Math.round(devices.reduce((sum, device) => sum + device.metrics.battery, 0) / devices.length)
-    : 0;
+  const alertDevices = devices.filter(
+    (device) => device.isUnderAttack || device.securityStatus !== "Normal"
+  ).length;
+
+  const totalGateway = stats?.total_gateway ?? 0;
+  const totalSensor = stats?.total_sensor ?? 0;
+  const gatewayOnline = stats?.gateway_online ?? 0;
+  const sensorOnline = stats?.sensor_online ?? 0;
 
   return (
     <div className="min-h-[calc(100vh-5rem)] w-full">
@@ -42,32 +47,32 @@ export default function DashboardPage() {
 
       <div className="grid gap-5 xl:grid-cols-4">
         <StatsCard
-          title="Total devices"
-          value={devices.length}
-          subtitle="Connected fleet across all gateways."
+          title="Total Gateway"
+          value={isLoading ? "—" : totalGateway}
+          subtitle="Gateway nodes registered in the system."
           accent="bg-sky-500/10 text-sky-300"
-          icon={<span className="text-lg">📡</span>}
+          icon={<Server className="h-5 w-5" />}
         />
         <StatsCard
-          title="Online devices"
-          value={onlineDevices}
-          subtitle="Devices currently connected and reporting data."
+          title="Total Sensor"
+          value={isLoading ? "—" : totalSensor}
+          subtitle="Sensor nodes registered in the system."
+          accent="bg-violet-500/10 text-violet-300"
+          icon={<Cpu className="h-5 w-5" />}
+        />
+        <StatsCard
+          title="Gateway Online"
+          value={isLoading ? "—" : gatewayOnline}
+          subtitle="Gateways connected and reporting in the last 60s."
           accent="bg-emerald-500/10 text-emerald-300"
-          icon={<span className="text-lg">✅</span>}
+          icon={<Wifi className="h-5 w-5" />}
         />
         <StatsCard
-          title="Offline devices"
-          value={offlineDevices}
-          subtitle="Devices that lost connectivity recently."
-          accent="bg-slate-400/10 text-slate-200"
-          icon={<span className="text-lg">⚠️</span>}
-        />
-        <StatsCard
-          title="Security alerts"
-          value={alertDevices}
-          subtitle="Devices requiring immediate review."
-          accent="bg-rose-500/10 text-rose-300"
-          icon={<span className="text-lg">🚨</span>}
+          title="Sensor Online"
+          value={isLoading ? "—" : sensorOnline}
+          subtitle="Sensors connected and reporting in the last 60s."
+          accent="bg-amber-500/10 text-amber-300"
+          icon={<Radio className="h-5 w-5" />}
         />
       </div>
 
@@ -77,10 +82,10 @@ export default function DashboardPage() {
           <h2 className="mt-3 text-2xl font-semibold text-white">Device resiliency</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {[
-              { label: "Average battery", value: `${averageBattery}%` },
-              { label: "Devices online", value: onlineDevices },
-              { label: "Devices offline", value: offlineDevices },
-              { label: "Alerted devices", value: alertDevices },
+              { label: "Total Gateway", value: isLoading ? "—" : totalGateway },
+              { label: "Gateway online", value: isLoading ? "—" : gatewayOnline },
+              { label: "Total Sensor", value: isLoading ? "—" : totalSensor },
+              { label: "Sensor online", value: isLoading ? "—" : sensorOnline },
             ].map(({ label, value }) => (
               <div key={label} className="rounded-3xl bg-slate-900/90 p-5">
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-500">{label}</p>
