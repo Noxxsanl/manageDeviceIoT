@@ -88,6 +88,48 @@ router.get("/", verifyJWT, async (_req: Request, res: Response): Promise<void> =
   res.json({ devices: rows });
 });
 
+// GET /api/devices/:id/data  – paginated sensor history (page, limit)
+router.get("/:id/data", verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+  const offset = (page - 1) * limit;
+
+  const [deviceRows] = await pool.execute<any[]>(
+    "SELECT id FROM devices WHERE id = ?",
+    [id]
+  );
+  if (!deviceRows.length) {
+    res.status(404).json({ error: "DEVICE_NOT_FOUND" });
+    return;
+  }
+
+  const [[{ total }]] = await pool.execute<any[]>(
+    "SELECT COUNT(*) AS total FROM sensor_data WHERE device_id = ?",
+    [id]
+  );
+
+  const [dataRows] = await pool.execute<any[]>(
+    `SELECT sd.id, sd.device_id, sd.gateway_id, gw.device_id AS gateway_device_id, sd.payload, sd.received_at
+     FROM sensor_data sd
+     LEFT JOIN devices gw ON sd.gateway_id = gw.id
+     WHERE sd.device_id = ?
+     ORDER BY sd.received_at DESC
+     LIMIT ? OFFSET ?`,
+    [id, limit, offset]
+  );
+
+  res.json({
+    data: dataRows,
+    pagination: {
+      page,
+      limit,
+      total: Number(total),
+      total_pages: Math.ceil(Number(total) / limit),
+    },
+  });
+});
+
 // GET /api/devices/:id  – any authenticated user
 router.get("/:id", verifyJWT, async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
