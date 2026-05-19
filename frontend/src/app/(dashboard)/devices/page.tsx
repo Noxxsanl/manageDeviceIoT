@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Server, Cpu, Lock, Unlock, Trash2, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Server, Cpu, Lock, Unlock, Trash2, RefreshCw, Plus } from "lucide-react";
 import { useDeviceList } from "@/hooks/useDeviceList";
-import { useAddDevice } from "@/contexts/AddDeviceContext";
 import DeviceStatusBadge from "@/components/device/DeviceStatusBadge";
 import OnlineIndicator from "@/components/device/OnlineIndicator";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -28,7 +28,6 @@ function formatLastSeen(lastSeen: string | null): string {
 
 export default function DevicesPage() {
   const { devices, isLoading, isError, updateStatus, deleteDevice } = useDeviceList();
-  const { openModal } = useAddDevice();
   const [activeTab, setActiveTab] = useState<Tab>("gateway");
   const [pending, setPending] = useState<PendingAction>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -86,12 +85,13 @@ export default function DevicesPage() {
             Manage device status, access control and security posture.
           </p>
         </div>
-        <button
-          onClick={openModal}
-          className="inline-flex items-center justify-center rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+        <Link
+          href="/devices/new"
+          className="inline-flex items-center justify-center gap-2 rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
         >
+          <Plus className="h-4 w-4" />
           Add Device
-        </button>
+        </Link>
       </div>
 
       {/* Summary cards */}

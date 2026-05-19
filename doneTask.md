@@ -1356,3 +1356,416 @@ Xóa thư mục `app/(admin)/` sau khi migrate để tránh duplicate route conf
 - [x] Migrate `(admin)` → `(dashboard)`, xóa route group cũ
 - [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
 - [x] Kiểm tra: login đúng → vào được `/dashboard`, login sai → hiện lỗi tiếng Việt, truy cập `/` chưa login → redirect `/login`
+
+---
+
+## Task 10 – Frontend: Dashboard & Danh Sách Thiết Bị
+
+**Branch:** `fe/dashboard-device-list`
+**Ngày hoàn thành:** 2026-05-20
+
+---
+
+### 1. Tạo `frontend/src/types/api.ts` – Kiểu dữ liệu API
+
+Định nghĩa kiểu TypeScript khớp với response thực của backend:
+
+```typescript
+export type ApiDeviceStatus = "active" | "inactive" | "blocked";
+export type ApiDeviceType   = "sensor" | "gateway";
+
+export type ApiDevice = {
+  id:          number;
+  device_id:   string;       // "ESP32-SN-XXXXXXXX" / "ESP32-GW-XXXXXXXX"
+  device_name: string;
+  device_type: ApiDeviceType;
+  status:      ApiDeviceStatus;
+  location:    string;
+  last_seen:   string | null; // ISO 8601 datetime hoặc null nếu chưa kết nối
+  fail_count:  number;
+  created_by:  number;
+};
+
+export type DashboardStats = {
+  total_gateway:    number;
+  total_sensor:     number;
+  gateway_online:   number;
+  sensor_online:    number;
+  total_data_points: number;
+};
+```
+
+---
+
+### 2. Tạo `frontend/src/hooks/useDashboardStats.ts` – SWR Hook Stats
+
+```typescript
+const fetcher = (url: string) => api.get<DashboardStats>(url).then((r) => r.data);
+
+export function useDashboardStats() {
+  const { data, error, isLoading } = useSWR<DashboardStats>(
+    "/api/dashboard/stats",
+    fetcher,
+    { refreshInterval: 10000 } // polling mỗi 10 giây
+  );
+  return { stats: data ?? null, isLoading, isError: !!error };
+}
+```
+
+---
+
+### 3. Tạo `frontend/src/hooks/useDeviceList.ts` – SWR Hook Device List
+
+```typescript
+const fetcher = (url: string) => api.get<ApiDevice[]>(url).then((r) => r.data);
+
+export function useDeviceList() {
+  const { data, error, isLoading, mutate } = useSWR<ApiDevice[]>(
+    "/api/devices",
+    fetcher,
+    { refreshInterval: 10000 } // polling mỗi 10 giây
+  );
+
+  const updateStatus = async (id: number, status: ApiDeviceStatus) => {
+    await api.patch(`/api/devices/${id}/status`, { status });
+    mutate(); // revalidate SWR cache ngay lập tức
+  };
+
+  const deleteDevice = async (id: number) => {
+    await api.delete(`/api/devices/${id}`);
+    mutate();
+  };
+
+  return { devices: data ?? [], isLoading, isError: !!error, updateStatus, deleteDevice };
+}
+```
+
+---
+
+### 4. Tạo `frontend/src/components/device/OnlineIndicator.tsx`
+
+Component hiển thị trạng thái kết nối real-time dựa vào `last_seen`:
+
+- Nếu `last_seen < 60 giây` → hiện dot xanh chớp (CSS `animate-ping`) + chữ "Online"
+- Nếu `last_seen >= 60 giây` hoặc `null` → dot xám + chữ "Offline"
+
+```tsx
+function isOnline(lastSeen: string | null): boolean {
+  if (!lastSeen) return false;
+  return (Date.now() - new Date(lastSeen).getTime()) / 1000 < 60;
+}
+```
+
+Dot xanh chớp dùng 2 layer Tailwind:
+```tsx
+<span className="relative flex h-2.5 w-2.5">
+  <span className="absolute ... animate-ping ... bg-emerald-400 opacity-75" />
+  <span className="relative ... bg-emerald-500" />
+</span>
+```
+
+---
+
+### 5. Tạo `frontend/src/components/ui/ConfirmDialog.tsx`
+
+Modal xác nhận trước khi thực hiện thao tác nguy hiểm (xoá / khoá thiết bị):
+
+| Prop | Kiểu | Mô tả |
+|---|---|---|
+| `open` | boolean | Hiển thị hay ẩn dialog |
+| `title` | string | Tiêu đề modal |
+| `description` | string | Nội dung mô tả hành động |
+| `confirmLabel` | string | Label nút xác nhận (mặc định "Confirm") |
+| `danger` | boolean | `true` → nút đỏ, `false` → nút xanh |
+| `onConfirm` | () => void | Callback khi người dùng xác nhận |
+| `onCancel` | () => void | Callback khi huỷ (hoặc click backdrop) |
+
+Không có nút X – chỉ có 2 lựa chọn Cancel / Confirm để tránh đóng nhầm.
+
+---
+
+### 6. Cập nhật `frontend/src/components/device/DeviceStatusBadge.tsx`
+
+Mở rộng từ chỉ hỗ trợ `online/offline` (mock) sang hỗ trợ đầy đủ 5 trạng thái:
+
+| Status | Màu badge | Dùng cho |
+|---|---|---|
+| `active` / `online` | Xanh lá (`emerald`) | Thiết bị đang hoạt động |
+| `inactive` / `offline` | Xám (`slate`) | Thiết bị chưa kích hoạt hoặc offline |
+| `blocked` | Đỏ (`rose`) | Thiết bị bị khoá |
+
+Dùng lookup object `statusConfig` thay vì if/else chain để dễ mở rộng.
+
+---
+
+### 7. Cập nhật `frontend/src/components/dashboard/StatsCard.tsx`
+
+Mở rộng prop `value` từ `number` sang `number | string` để hỗ trợ hiển thị `"—"` khi đang loading.
+
+---
+
+### 8. Cập nhật `frontend/src/app/(dashboard)/dashboard/page.tsx`
+
+**4 StatsCards từ API** (thay thế mock stats):
+
+| Card | API Field | Icon | Màu accent |
+|---|---|---|---|
+| Total Gateway | `total_gateway` | `Server` (lucide) | `sky` |
+| Total Sensor | `total_sensor` | `Cpu` (lucide) | `violet` |
+| Gateway Online | `gateway_online` | `Wifi` (lucide) | `emerald` |
+| Sensor Online | `sensor_online` | `Radio` (lucide) | `amber` |
+
+- Dùng `useDashboardStats()` – SWR polling 10s
+- Hiển thị `"—"` khi `isLoading === true` (chờ API)
+- Phần **Health Overview** phía dưới cũng cập nhật theo 4 giá trị API thay vì mock
+- Giữ nguyên "Security preview" (notifications) và "Recent events" sections
+
+---
+
+### 9. Viết lại `frontend/src/app/(dashboard)/devices/page.tsx`
+
+**2 Tab – Gateway / Sensor:**
+
+```
+[ Gateway (3) ]  [ Sensor (8) ]
+```
+
+- Tab Gateway → chỉ hiện thiết bị `device_type === "gateway"`
+- Tab Sensor → chỉ hiện thiết bị `device_type === "sensor"`
+- Badge đếm số lượng ở mỗi tab
+
+**Bảng thiết bị** – 8 cột:
+
+| Cột | Nguồn dữ liệu |
+|---|---|
+| Device ID | `device_id` (font-mono) |
+| Name | `device_name` |
+| Type | `device_type` (capitalized) |
+| Location | `location` |
+| Status | `DeviceStatusBadge` với `status` |
+| Connection | `OnlineIndicator` với `last_seen` |
+| Last Seen | `formatLastSeen(last_seen)` – hiện dạng "Xs ago / Xm ago / ..." |
+| Actions | Nút Lock/Unlock + Delete |
+
+**Actions:**
+
+| Nút | Điều kiện hiển thị | Hành động |
+|---|---|---|
+| Lock (vàng) | `status !== "blocked"` | Mở `ConfirmDialog` → `PATCH /api/devices/:id/status { status: "blocked" }` |
+| Unlock (xanh) | `status === "blocked"` | Mở `ConfirmDialog` → `PATCH /api/devices/:id/status { status: "active" }` |
+| Delete (đỏ) | Luôn hiển thị | Mở `ConfirmDialog` → `DELETE /api/devices/:id` |
+
+**Summary cards** (trên bảng):
+
+```
+┌─────────────────────┐  ┌─────────────────────┐
+│ [Server icon] Gateways │  │ [Cpu icon] Sensors     │
+│ 3                   │  │ 8                   │
+│ 2 active            │  │ 6 active            │
+└─────────────────────┘  └─────────────────────┘
+```
+
+**Loading / Error state:**
+- `isLoading` → hiện icon spinner `RefreshCw animate-spin` ở header bảng
+- `isError` → hiện text "Failed to load — check backend connection" màu đỏ
+- Bảng trống → hiện message "No gateways/sensors registered yet."
+
+---
+
+### Luồng thao tác Lock/Unlock/Delete
+
+```
+[User click Lock]
+  → setPending({ type: "lock", device })
+  → ConfirmDialog mở với title "Block device"
+
+[User click Confirm]
+  → setActionLoading(true)
+  → api.patch(`/api/devices/${id}/status`, { status: "blocked" })
+  → mutate() → SWR revalidate → bảng cập nhật badge "blocked" (đỏ)
+  → setActionLoading(false), setPending(null)
+
+[User click Cancel]
+  → setPending(null) → dialog đóng, không có thay đổi
+```
+
+---
+
+### Checklist hoàn thành Task 10
+
+- [x] `src/types/api.ts` – `ApiDevice`, `DashboardStats` khớp backend schema
+- [x] `src/hooks/useDashboardStats.ts` – SWR polling `/api/dashboard/stats` mỗi 10s
+- [x] `src/hooks/useDeviceList.ts` – SWR polling `/api/devices` mỗi 10s, kèm `updateStatus` và `deleteDevice`
+- [x] `src/components/device/OnlineIndicator.tsx` – dot xanh chớp nếu `last_seen < 60s`
+- [x] `src/components/ui/ConfirmDialog.tsx` – modal xác nhận với backdrop, nút Cancel/Confirm
+- [x] `src/components/device/DeviceStatusBadge.tsx` – mở rộng: active=xanh / inactive=xám / blocked=đỏ
+- [x] `src/components/dashboard/StatsCard.tsx` – `value` chấp nhận `number | string`
+- [x] `src/app/(dashboard)/dashboard/page.tsx` – 4 cards từ API: Total Gateway, Total Sensor, Gateway Online, Sensor Online; SWR polling 10s
+- [x] `src/app/(dashboard)/devices/page.tsx` – 2 tab Gateway/Sensor, bảng 8 cột, nút Lock/Unlock/Delete với ConfirmDialog, SWR polling 10s
+- [x] TypeScript compile không lỗi
+
+---
+
+## Task 11 – Frontend: Đăng Ký Thiết Bị Mới
+
+**Branch:** `fe/device-registration`
+**Ngày hoàn thành:** 2026-05-20
+
+---
+
+### 1. Thêm `RegisterDeviceResponse` vào `frontend/src/types/api.ts`
+
+Kiểu TypeScript cho response của `POST /api/devices/register` — trả credentials một lần duy nhất:
+
+```typescript
+export type RegisterDeviceResponse = {
+  id:          number;
+  device_id:   string;          // "ESP32-SN-XXXXXXXX" hoặc "ESP32-GW-XXXXXXXX"
+  device_name: string;
+  device_type: ApiDeviceType;
+  status:      ApiDeviceStatus;
+  location:    string;
+  secret_key:  string;          // 64-char hex – chỉ có trong response này, không bao giờ xuất hiện lại
+};
+```
+
+---
+
+### 2. Tạo `frontend/src/components/device/RegisterModal.tsx`
+
+Modal hiển thị credentials sau khi đăng ký thành công. Thiết kế buộc người dùng phải lưu trước khi đóng:
+
+#### Đặc điểm bảo mật UI
+
+| Điểm | Cách xử lý |
+|---|---|
+| Không có nút X | Component dùng `div` thủ công, không dùng `<Dialog>` của shadcn (tránh nút đóng mặc định) |
+| Không đóng khi click nền | Backdrop không có `onClick` handler |
+| Không đóng bằng Escape | Không mount event listener keyboard |
+| Cảnh báo đỏ nổi bật | Banner `border-red-500/30 bg-red-500/10` với icon `AlertTriangle` |
+| Chỉ 1 nút thoát | "Tôi đã lưu – Đóng" → callback `onClose` → redirect về `/devices` |
+
+#### Hiển thị credentials
+
+- **Device ID** và **Secret Key** mỗi field trong box `bg-slate-950`, font `font-mono`, `break-all`
+- Mỗi field có nút **Copy** riêng:
+  - Dùng `navigator.clipboard.writeText()`
+  - Sau khi copy: icon đổi sang `Check` màu xanh + label "Copied" trong 2 giây
+  - Tự động reset về `Copy` sau 2 giây (`setTimeout`)
+
+```tsx
+const copy = async (text: string, which: "id" | "key") => {
+  await navigator.clipboard.writeText(text);
+  if (which === "id") {
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  } else {
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  }
+};
+```
+
+---
+
+### 3. Tạo `frontend/src/app/(dashboard)/devices/new/page.tsx`
+
+Trang đăng ký thiết bị mới tại route `/devices/new`.
+
+#### Form fields
+
+| Field | Kiểu | Bắt buộc | Ghi chú |
+|---|---|---|---|
+| Tên thiết bị | text input | Có | Validation: không được rỗng sau trim |
+| Loại thiết bị | select | Có | Giá trị: `sensor` / `gateway` |
+| Vị trí | text input | Không | Truyền `undefined` lên API nếu rỗng |
+
+#### Validation
+
+- Validate client-side trước khi gọi API
+- Tên trống → hiện thông báo lỗi inline màu đỏ: *"Tên thiết bị không được để trống."*
+- Lỗi xóa ngay khi người dùng bắt đầu nhập lại (`onChange`)
+- Lỗi từ API (4xx) hiện trong banner đỏ dưới form
+
+#### Luồng submit
+
+```
+[User nhấn "Đăng ký thiết bị"]
+  → Validate client-side
+  → setSubmitting(true) → nút disabled + label "Đang đăng ký…"
+  → POST /api/devices/register { device_name, device_type, location }
+  → Thành công: setCredentials({ device_id, secret_key }) → RegisterModal hiện
+  → Thất bại: setApiError(message) → banner lỗi hiện
+  → setSubmitting(false)
+
+[User nhấn "Tôi đã lưu – Đóng" trong modal]
+  → router.push("/devices")
+  → Thiết bị mới xuất hiện trong danh sách với status "inactive"
+```
+
+#### Navigation
+
+- Nút **Back** (← Back to Fleet registry) ở đầu trang dùng `Link href="/devices"`
+- Nút **Huỷ** trong form cũng dùng `Link href="/devices"`
+
+---
+
+### 4. Cập nhật `frontend/src/app/(dashboard)/devices/page.tsx`
+
+Đổi nút "Add Device" từ `<button onClick={openModal}>` (mở modal mock) thành `<Link href="/devices/new">` (điều hướng tới trang đăng ký thực):
+
+```tsx
+// Trước
+<button onClick={openModal} className="...">
+  Add Device
+</button>
+
+// Sau
+<Link href="/devices/new" className="...">
+  <Plus className="h-4 w-4" />
+  Add Device
+</Link>
+```
+
+- Thêm icon `Plus` từ `lucide-react`
+- Xóa import `useAddDevice` không còn dùng nữa
+
+---
+
+### Luồng hoàn chỉnh Task 11
+
+```
+[User vào /devices] → [Click "Add Device"]
+  → Chuyển đến /devices/new
+
+[/devices/new] → Điền form → Submit
+  → POST /api/devices/register
+  → Backend: sinh device_id + secret_key → INSERT DB (status=inactive)
+  → Frontend: nhận { device_id, secret_key } → hiện RegisterModal
+
+[RegisterModal]
+  → Cảnh báo đỏ: "Chỉ hiển thị 1 lần – Hãy lưu lại trước khi đóng!"
+  → User copy device_id và secret_key
+  → Click "Tôi đã lưu – Đóng"
+  → router.push("/devices")
+
+[/devices] → SWR revalidate → thiết bị mới xuất hiện với badge "inactive"
+```
+
+---
+
+### Checklist hoàn thành Task 11
+
+- [x] `src/types/api.ts` – thêm `RegisterDeviceResponse` với field `secret_key`
+- [x] `src/components/device/RegisterModal.tsx` – không có nút X, không đóng khi click ngoài
+- [x] `RegisterModal` hiển thị `device_id` và `secret_key` font monospace với nút Copy riêng
+- [x] Nút Copy: dùng Clipboard API, feedback "Copied" + icon check trong 2 giây
+- [x] Cảnh báo đỏ "Chỉ hiển thị 1 lần – Hãy lưu lại trước khi đóng!" với icon `AlertTriangle`
+- [x] Nút duy nhất "Tôi đã lưu – Đóng" → `onClose` callback → redirect `/devices`
+- [x] `src/app/(dashboard)/devices/new/page.tsx` – form 3 field: Tên (bắt buộc), Loại, Vị trí
+- [x] Validation client-side: tên trống → lỗi inline, xóa lỗi khi user nhập lại
+- [x] Lỗi API hiện banner đỏ dưới form
+- [x] Submit → `POST /api/devices/register` → hiện `RegisterModal` với credentials
+- [x] Đóng modal → `router.push("/devices")` → thiết bị mới xuất hiện với status `inactive`
+- [x] `src/app/(dashboard)/devices/page.tsx` – "Add Device" đổi thành `Link href="/devices/new"`
+- [x] TypeScript compile không lỗi
