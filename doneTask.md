@@ -157,3 +157,709 @@ persistence_location /mosquitto/data/
 - [x] `.gitignore` loại trừ `config.h` và `config_gw.h` firmware
 - [x] `docker-compose.yml` có đủ 4 services với healthcheck
 - [x] `mosquitto/mosquitto.conf` được tạo với listener 1883, allow_anonymous true
+
+---
+
+## Task 2 – Thiết kế & khởi tạo Database Schema
+
+**Branch:** `db/schema-migration`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Tạo `backend/src/config/db.ts` – Connection Pool
+
+File kết nối MySQL dùng `mysql2/promise` với connection pool:
+
+```typescript
+import mysql from "mysql2/promise";
+
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  connectionLimit: 10,
+  timezone: "+00:00",
+});
+
+export default pool;
+```
+
+---
+
+### 2. Tạo `database/migrations/001_schema.sql` – 5 Bảng
+
+#### Bảng `users`
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | INT UNSIGNED AI PK | |
+| username | VARCHAR(64) UNIQUE | |
+| password_hash | VARCHAR(255) | bcrypt cost 12 |
+| role | ENUM(admin, operator, viewer) | DEFAULT viewer |
+| created_at | DATETIME | DEFAULT NOW |
+| last_login | DATETIME NULL | |
+
+#### Bảng `devices`
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | INT UNSIGNED AI PK | |
+| device_id | VARCHAR(64) UNIQUE | ESP32-SN/GW-xxxxxxxx |
+| device_name | VARCHAR(128) | |
+| device_type | ENUM(sensor, gateway) | |
+| secret_key | VARCHAR(64) | 32 random bytes hex |
+| status | ENUM(inactive, active, blocked) | DEFAULT inactive |
+| location | VARCHAR(255) NULL | |
+| fail_count | TINYINT UNSIGNED | DEFAULT 0, auto-block >= 5 |
+| last_seen | DATETIME NULL | online nếu < 60s |
+| created_by | FK → users.id | ON DELETE SET NULL |
+
+#### Bảng `sensor_data`
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | BIGINT UNSIGNED AI PK | |
+| device_id | FK → devices.id | CASCADE DELETE |
+| gateway_id | FK → devices.id | CASCADE DELETE |
+| payload | JSON | {temperature, humidity, ...} |
+| received_at | DATETIME | DEFAULT NOW |
+
+#### Bảng `device_tokens`
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | BIGINT UNSIGNED AI PK | |
+| device_id | FK → devices.id | CASCADE DELETE |
+| token_hash | VARCHAR(255) | |
+| expires_at | DATETIME | |
+| revoked | TINYINT(1) | DEFAULT 0 |
+
+#### Bảng `audit_log`
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | BIGINT UNSIGNED AI PK | |
+| event_type | VARCHAR(64) | DATA_RECV, AUTH_FAIL, DEVICE_BLOCKED, ... |
+| device_id | FK → devices.id NULL | ON DELETE SET NULL |
+| ip_address | VARCHAR(45) | Hỗ trợ IPv6 |
+| user_agent | VARCHAR(512) NULL | |
+| details | JSON NULL | |
+| created_at | DATETIME | DEFAULT NOW |
+
+---
+
+### 3. Indexes
+
+| Index | Bảng | Mục đích |
+|---|---|---|
+| `uq_devices_device_id` | devices | Tra cứu nhanh theo device_id (UNIQUE) |
+| `idx_devices_status` | devices | Filter danh sách active/blocked |
+| `idx_sensor_data_device_received` | sensor_data | Phân trang lịch sử theo device + thời gian |
+| `idx_audit_log_event_created` | audit_log | Filter event_type + sắp xếp DESC |
+
+---
+
+### 4. Seed Admin
+
+Admin mặc định được INSERT vào bảng `users` ngay trong file migration:
+
+```sql
+INSERT IGNORE INTO users (username, password_hash, role)
+VALUES ('admin', '$2b$12$IbNzJkN3mOznQ4rNb9zjAOcrrfWfvqHMHYoaUKnCsCk0FdQPYetze', 'admin');
+-- password: admin123, bcrypt cost 12
+```
+
+---
+
+### 5. Tạo `backend/src/scripts/seed.ts`
+
+Script seed dùng cho môi trường ngoài Docker (chạy `npm run seed`):
+- Dùng `bcrypt.hash(ADMIN_PASSWORD, 12)` để sinh hash tại runtime
+- Dùng `INSERT IGNORE` – không lỗi nếu admin đã tồn tại
+- Đọc username/password từ biến môi trường `ADMIN_USERNAME`, `ADMIN_PASSWORD`
+
+---
+
+### Checklist hoàn thành Task 2
+
+- [x] `backend/src/config/db.ts` – connection pool mysql2/promise
+- [x] `database/migrations/001_schema.sql` – 5 bảng đúng cấu trúc
+- [x] Đủ 4 indexes theo tài liệu
+- [x] FK và cascade rules đúng (CASCADE DELETE / SET NULL)
+- [x] Seed admin `admin/admin123` bcrypt cost 12
+- [x] `backend/src/scripts/seed.ts` – seed script ngoài Docker
+- [x] `package.json` thêm script `"seed": "ts-node src/scripts/seed.ts"`
+- [x] Kiểm tra: `SHOW TABLES` → 5 bảng, `SELECT * FROM users` → thấy admin
+
+---
+
+## Task 3 – Backend: HMAC Service & Middleware xác thực thiết bị
+
+**Branch:** `be/hmac-auth-service`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Tạo `backend/src/services/auditLogger.ts`
+
+Hàm tiện ích ghi nhật ký bảo mật vào bảng `audit_log`:
+
+```typescript
+log(event_type, device_id, ip, user_agent, details)
+```
+
+- Tham số `device_id` là **numeric FK** (`devices.id`) – không phải chuỗi `device_id`
+- Serialize `details` sang JSON trước khi INSERT
+- Bắt lỗi nội bộ bằng `try/catch` để audit không bao giờ làm crash request chính
+
+---
+
+### 2. Tạo `backend/src/services/hmacService.ts`
+
+Service xác thực HMAC-SHA256 hai cấp:
+
+#### `verifyGatewayHMAC(gateway_id, gw_timestamp, gw_hmac)`
+1. Tra bảng `devices` theo `device_id` (VARCHAR)
+2. Kiểm tra cửa sổ timestamp: `|now/1000 - timestamp| <= 300s` → chống **Replay Attack**
+3. Tính `HMAC-SHA256(secret_key, "gateway_id:timestamp")` → so sánh bằng `crypto.timingSafeEqual()` → chống **Timing Attack**
+
+#### `verifyDeviceHMAC(sensor_id, sn_timestamp, sn_hmac)`
+- Logic tương tự cho sensor, message = `"sensor_id:timestamp"`
+
+#### Các mã lỗi trả về:
+| Error | Nguyên nhân |
+|---|---|
+| `NOT_FOUND` | device_id không tồn tại trong DB |
+| `TIMESTAMP_EXPIRED` | timestamp ngoài cửa sổ ±300s |
+| `HMAC_MISMATCH` | HMAC sai (sai secret hoặc giả mạo) |
+
+---
+
+### 3. Tạo `backend/src/middleware/validateDevice.ts`
+
+Middleware Express thực hiện xác thực 2 cấp:
+
+#### Cấp 1 – Gateway HMAC
+- Thiếu field (`gateway_id`, `gw_timestamp`, `gw_hmac`) → `400 MISSING_GATEWAY_FIELDS`
+- Xác thực HMAC fail → `401 GATEWAY_AUTH_FAIL` + ghi `audit_log` + tăng `fail_count`
+- `fail_count >= 5` → `UPDATE status='blocked'` + ghi `DEVICE_BLOCKED`
+
+#### Cấp 2 – Sensor HMAC
+- Thiếu field (`sensor_id`, `sn_timestamp`, `sn_hmac`) → `400 MISSING_SENSOR_FIELDS`
+- Xác thực HMAC fail → `401 SENSOR_AUTH_FAIL` + ghi `audit_log` + tăng `fail_count`
+- `fail_count >= 5` → `UPDATE status='blocked'` + ghi `DEVICE_BLOCKED`
+
+#### Khi xác thực thành công:
+- Gắn `req.gateway` và `req.sensor` (object chứa `id`, `device_id`, `status`, `fail_count`) cho các handler phía sau dùng
+
+---
+
+### 4. Tạo `backend/src/routes/data.routes.ts`
+
+Route `POST /api/device/data` dùng middleware `validateDevice`, thực hiện:
+- Kiểm tra RBAC: `gateway_id` phải là `device_type='gateway'`, `sensor_id` phải là `device_type='sensor'`
+- Kiểm tra cả hai thiết bị có `status='active'` (blocked → 403, inactive → 403)
+- `INSERT sensor_data` với `{sensor_id, gateway_id, payload JSON}`
+- `UPDATE devices SET last_seen=NOW(), fail_count=0` cho cả Gateway lẫn Sensor
+- Ghi `audit_log` với `event_type='DATA_RECV'`
+- Trả `200 {success: true, sensor_id, gateway_id, received_at}`
+
+---
+
+### 5. Cập nhật `backend/src/routes/index.ts`
+
+Đăng ký route mới:
+
+```typescript
+router.use("/device/data", dataRoutes);
+```
+
+---
+
+### Checklist hoàn thành Task 3
+
+- [x] `src/services/auditLogger.ts` – hàm `log()` ghi audit_log
+- [x] `src/services/hmacService.ts` – `verifyGatewayHMAC()` và `verifyDeviceHMAC()`
+- [x] Kiểm tra timestamp window ±300s chống Replay Attack
+- [x] So sánh HMAC bằng `crypto.timingSafeEqual()` chống Timing Attack
+- [x] `src/middleware/validateDevice.ts` – xác thực 2 cấp GW → SN
+- [x] Auto-block thiết bị khi `fail_count >= 5`
+- [x] Ghi audit log cho mọi sự kiện: `GATEWAY_AUTH_FAIL`, `SENSOR_AUTH_FAIL`, `DEVICE_BLOCKED`, `DATA_RECV`
+- [x] `src/routes/data.routes.ts` – `POST /api/device/data` với RBAC + status check + lưu DB
+- [x] `routes/index.ts` đăng ký route `/api/device/data`
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+
+---
+
+## Task 4 – Backend: Admin Authentication (Login & JWT)
+
+**Branch:** `be/admin-authentication`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Tạo `backend/src/middleware/verifyJWT.ts`
+
+Middleware đọc JWT từ `httpOnly` cookie và gắn thông tin user vào request:
+
+```typescript
+verifyJWT(req, res, next)
+```
+
+- Parse cookie header thủ công (không cần thêm dependency `cookie-parser`)
+- Gọi `jwt.verify(token, JWT_SECRET)` để xác minh chữ ký và thời hạn
+- Gắn `req.user = { id, username, role }` cho các handler phía sau
+- Thiếu cookie → `401 NO_TOKEN`
+- Token sai / hết hạn → `401 INVALID_TOKEN`
+
+---
+
+### 2. Tạo `backend/src/middleware/rbac.ts`
+
+Higher-order middleware kiểm tra quyền theo role:
+
+```typescript
+requireRole(...roles: string[])
+```
+
+- Nhận danh sách role được phép vào route (`'admin'`, `'operator'`, `'viewer'`)
+- Đọc `req.user.role` (đã được `verifyJWT` gắn trước đó)
+- Role không khớp → `403 FORBIDDEN`
+- Ví dụ sử dụng: `router.post('/register', verifyJWT, requireRole('admin', 'operator'), handler)`
+
+---
+
+### 3. Tạo `backend/src/routes/auth.ts`
+
+Ba endpoint xác thực admin:
+
+#### `POST /api/auth/login`
+| Bước | Chi tiết |
+|---|---|
+| Validate input | Thiếu `username` hoặc `password` → `400 MISSING_FIELDS` |
+| Tra DB | `SELECT id, username, password_hash, role FROM users WHERE username = ?` |
+| So sánh mật khẩu | `bcrypt.compare(password, password_hash)` |
+| Chống timing attack | Nếu user không tồn tại → vẫn chạy `bcrypt.compare()` với dummy hash để tránh user enumeration qua thời gian phản hồi |
+| Thành công | Ký JWT payload `{ id, username, role }`, expires `8h` |
+| Set cookie | `httpOnly: true`, `sameSite: strict`, `maxAge: 8h` |
+| Cập nhật DB | `UPDATE users SET last_login = NOW()` |
+| Response | `{ success: true, user: { id, username, role } }` |
+| Thất bại | `401 INVALID_CREDENTIALS` (không tiết lộ user có tồn tại hay không) |
+
+#### `POST /api/auth/logout`
+- `res.clearCookie('token')` → xóa cookie phía client
+- Response: `{ success: true }`
+
+#### `GET /api/auth/me`
+- Bảo vệ bằng `verifyJWT`
+- Trả thông tin user hiện tại từ JWT payload: `{ user: { id, username, role } }`
+
+---
+
+### 4. Cập nhật `backend/src/routes/index.ts`
+
+Đăng ký auth routes:
+
+```typescript
+import authRoutes from "./auth";
+router.use("/auth", authRoutes);
+```
+
+---
+
+### Checklist hoàn thành Task 4
+
+- [x] `src/middleware/verifyJWT.ts` – đọc cookie `token`, verify JWT, gắn `req.user`
+- [x] `src/middleware/rbac.ts` – `requireRole(...roles)` kiểm tra role, trả 403 nếu không đủ quyền
+- [x] `POST /api/auth/login` – bcrypt compare, ký JWT 8h, set httpOnly cookie
+- [x] `POST /api/auth/logout` – clear cookie
+- [x] `GET /api/auth/me` – trả thông tin user từ JWT (bảo vệ bởi verifyJWT)
+- [x] Chống timing attack (user enumeration) tại login
+- [x] `routes/index.ts` đăng ký route `/api/auth`
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+
+---
+
+## Task 5 – Backend: Device Management API (CRUD Thiết Bị)
+
+**Branch:** `be/device-management`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Tạo `backend/src/routes/devices.ts`
+
+File route quản lý thiết bị đầy đủ với 5 endpoints:
+
+#### `POST /api/devices/register` – admin / operator
+
+| Bước | Chi tiết |
+|---|---|
+| Validate input | Thiếu `device_name` hoặc `device_type` → `400 MISSING_FIELDS` |
+| Validate type | `device_type` không phải `sensor` / `gateway` → `400 INVALID_DEVICE_TYPE` |
+| Sinh `device_id` | `ESP32-SN-{8 hex hoa}` cho sensor, `ESP32-GW-{8 hex hoa}` cho gateway – dùng `crypto.randomBytes(4)` |
+| Sinh `secret_key` | `crypto.randomBytes(32).toString('hex')` – 64 ký tự hex |
+| INSERT DB | Trạng thái khởi tạo `inactive`, `fail_count = 0` |
+| Ghi audit log | `event_type = 'DEVICE_REGISTER'` kèm `device_id`, `device_name`, `registered_by` |
+| Response | `201` trả đầy đủ `{ device_id, secret_key, ... }` – **duy nhất 1 lần** |
+
+#### `GET /api/devices` – mọi user đã xác thực
+
+- Lấy toàn bộ danh sách thiết bị, sắp xếp `created_at DESC`
+- Tính `is_online` trực tiếp trong SQL:
+  ```sql
+  CASE WHEN last_seen IS NOT NULL AND TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60
+       THEN TRUE ELSE FALSE END AS is_online
+  ```
+
+#### `GET /api/devices/:id` – mọi user đã xác thực
+
+- Trả chi tiết thiết bị + trường `is_online`
+- Kèm **10 bản ghi `sensor_data` gần nhất** (`ORDER BY received_at DESC LIMIT 10`)
+- Không tìm thấy → `404 DEVICE_NOT_FOUND`
+
+#### `GET /api/devices/:id/data` – mọi user đã xác thực (thêm bởi linter)
+
+- Lịch sử `sensor_data` có phân trang: `?page=1&limit=50` (giới hạn tối đa 200)
+- JOIN với bảng `devices` để lấy `gateway_device_id` (chuỗi device_id của gateway)
+- Trả kèm metadata phân trang: `{ page, limit, total, total_pages }`
+
+#### `PATCH /api/devices/:id/status` – admin / operator
+
+- Validate: `status` phải là `active` / `blocked` / `inactive` → `400 INVALID_STATUS`
+- Không tìm thấy thiết bị → `404 DEVICE_NOT_FOUND`
+- `UPDATE devices SET status = ?`
+- Ghi audit log `event_type = 'DEVICE_STATUS_CHANGE'` kèm `new_status`, `changed_by`
+
+#### `DELETE /api/devices/:id` – admin only
+
+Xóa cascade theo thứ tự an toàn (con trước, cha sau):
+
+1. `DELETE FROM sensor_data WHERE device_id = ?`
+2. `DELETE FROM device_tokens WHERE device_id = ?`
+3. `DELETE FROM devices WHERE id = ?`
+
+- Ghi audit log `event_type = 'DEVICE_DELETE'` kèm `deleted_device_id`, `device_name`, `deleted_by`
+
+---
+
+### 2. Bảo mật
+
+| Điểm | Cách xử lý |
+|---|---|
+| SQL Injection | Toàn bộ queries dùng parameterized statements `pool.execute(sql, [params])` |
+| `secret_key` | Chỉ trả về đúng 1 lần tại `POST /register` – không bao giờ xuất hiện trong các GET |
+| RBAC | `register` + `status` yêu cầu `admin/operator`; `delete` chỉ `admin` |
+| Audit trail | Mọi thao tác thay đổi (register, status change, delete) đều ghi `audit_log` |
+| IP tracking | Hỗ trợ `x-forwarded-for` header (qua reverse proxy) |
+
+---
+
+### 3. Cập nhật `backend/src/routes/index.ts`
+
+Đăng ký device routes:
+
+```typescript
+import deviceRoutes from "./devices";
+router.use("/devices", deviceRoutes);
+```
+
+---
+
+### Checklist hoàn thành Task 5
+
+- [x] `POST /api/devices/register` – sinh `device_id` + `secret_key`, INSERT DB, ghi audit log, trả credentials 1 lần
+- [x] `GET /api/devices` – danh sách + `is_online` tính từ `last_seen < 60s`
+- [x] `GET /api/devices/:id` – chi tiết + 10 bản ghi `sensor_data` gần nhất
+- [x] `GET /api/devices/:id/data` – lịch sử phân trang với `gateway_device_id`
+- [x] `PATCH /api/devices/:id/status` – đổi status, ghi audit log
+- [x] `DELETE /api/devices/:id` – xóa cascade (sensor_data → device_tokens → devices)
+- [x] Toàn bộ queries dùng parameterized statements
+- [x] `routes/index.ts` đăng ký route `/api/devices`
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+
+---
+
+## Task 6 – Backend: Data Ingestion API (Nhận dữ liệu từ Gateway)
+
+**Branch:** `be/data-ingestion`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Cập nhật `backend/src/routes/data.routes.ts`
+
+Hoàn thiện endpoint `POST /api/device/data` từ placeholder Task 3 thành luồng ingestion đầy đủ.
+
+#### Luồng xử lý request
+
+| Bước | Hành động | Lỗi trả về |
+|---|---|---|
+| 1 | Middleware `validateDevice` xác thực HMAC 2 cấp (GW → SN) | `400 MISSING_*_FIELDS`, `401 GATEWAY/SENSOR_AUTH_FAIL` |
+| 2 | Validate `data` trong body phải là object | `400 MISSING_PAYLOAD_DATA` |
+| 3 | Truy vấn DB lấy `device_type` + `status` mới nhất của cả 2 thiết bị (1 query duy nhất) | — |
+| 4 | Kiểm tra RBAC `device_type`: gateway phải là `'gateway'`, sensor phải là `'sensor'` | `403 INVALID_DEVICE_TYPE` |
+| 5 | Kiểm tra `status='active'` cho cả 2 thiết bị | `403 DEVICE_BLOCKED` hoặc `403 DEVICE_NOT_ACTIVE` |
+| 6 | `INSERT INTO sensor_data` với `(sensor.id, gateway.id, JSON.stringify(data))` | — |
+| 7 | `UPDATE devices SET last_seen=NOW(), fail_count=0` cho cả GW lẫn SN (1 query duy nhất) | — |
+| 8 | Ghi `audit_log` với `event_type='DATA_RECV'` | — |
+| 9 | Trả `200 { success, sensor_id, gateway_id, received_at }` | — |
+
+---
+
+### 2. Bảng tổng hợp lỗi
+
+| Trường hợp | HTTP | Error code |
+|---|---|---|
+| Thiếu `gateway_id`, `gw_timestamp`, `gw_hmac` | 400 | `MISSING_GATEWAY_FIELDS` |
+| Thiếu `sensor_id`, `sn_timestamp`, `sn_hmac` | 400 | `MISSING_SENSOR_FIELDS` |
+| Thiếu hoặc sai kiểu trường `data` | 400 | `MISSING_PAYLOAD_DATA` |
+| HMAC gateway sai / hết hạn / không tìm thấy | 401 | `GATEWAY_AUTH_FAIL` |
+| HMAC sensor sai / hết hạn / không tìm thấy | 401 | `SENSOR_AUTH_FAIL` |
+| `gateway_id` có `device_type != 'gateway'` | 403 | `INVALID_DEVICE_TYPE` |
+| `sensor_id` có `device_type != 'sensor'` | 403 | `INVALID_DEVICE_TYPE` |
+| Thiết bị có `status = 'blocked'` | 403 | `DEVICE_BLOCKED` |
+| Thiết bị có `status = 'inactive'` | 403 | `DEVICE_NOT_ACTIVE` |
+
+---
+
+### 3. Cấu trúc request hợp lệ
+
+```json
+{
+  "gateway_id":   "ESP32-GW-A1B2C3D4",
+  "gw_timestamp": 1716115200,
+  "gw_hmac":      "a3f...64-char-hex",
+  "sensor_id":    "ESP32-SN-E5F6G7H8",
+  "sn_timestamp": 1716115200,
+  "sn_hmac":      "9c2...64-char-hex",
+  "data": {
+    "temperature": 26.5,
+    "humidity": 63.2
+  }
+}
+```
+
+---
+
+### 4. Cấu trúc response thành công
+
+```json
+{
+  "success": true,
+  "sensor_id":   "ESP32-SN-E5F6G7H8",
+  "gateway_id":  "ESP32-GW-A1B2C3D4",
+  "received_at": "2026-05-19T08:00:00.000Z"
+}
+```
+
+---
+
+### 5. Điểm bảo mật
+
+| Điểm | Cách xử lý |
+|---|---|
+| HMAC giả mạo | Middleware `validateDevice` – `crypto.timingSafeEqual()` chống Timing Attack |
+| Replay Attack | Cửa sổ timestamp ±300s trong `hmacService` |
+| Brute force | Auto-block sau 5 lần fail (`fail_count >= 5`) |
+| RBAC device type | Xác minh `device_type` bằng DB query – không tin vào dữ liệu client |
+| Thiết bị bị khóa | Kiểm tra `status` từ DB (luôn mới nhất) sau khi middleware pass |
+| SQL Injection | Toàn bộ queries dùng parameterized statements `pool.execute(sql, [params])` |
+
+---
+
+### Checklist hoàn thành Task 6
+
+- [x] `POST /api/device/data` – middleware `validateDevice` xác thực HMAC 2 cấp
+- [x] Validate `data` object trong body – `400 MISSING_PAYLOAD_DATA` nếu thiếu
+- [x] Kiểm tra RBAC `device_type`: gateway phải `'gateway'`, sensor phải `'sensor'` → `403`
+- [x] Kiểm tra `status='active'` cả 2 thiết bị – blocked → `403`, inactive → `403`
+- [x] `INSERT sensor_data (device_id, gateway_id, payload)` vào DB
+- [x] `UPDATE devices SET last_seen=NOW(), fail_count=0` cho cả GW lẫn SN
+- [x] Ghi `audit_log` với `event_type='DATA_RECV'`
+- [x] Trả `200 { success, sensor_id, gateway_id, received_at }`
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+
+---
+
+## Task 7 – Backend: Dashboard Stats & Audit Log API
+
+**Branch:** `be/dashboard-audit-api`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Tạo `backend/src/services/deviceStatus.ts`
+
+Service tiện ích quản lý trạng thái online của thiết bị:
+
+#### `isOnline(lastSeen)`
+- Nhận `Date | string | null`, tính hiệu thời gian với `Date.now()`
+- Trả `true` nếu `lastSeen < 60 giây` trước, ngược lại `false`
+
+#### Heartbeat Monitor (in-memory cache)
+- Biến module-level `onlineDeviceIds: Set<number>` — lưu danh sách `id` các thiết bị online
+- Hàm `startHeartbeatMonitor()`: chạy ngay lập tức lần đầu, sau đó lặp mỗi **30 giây** bằng `setInterval`
+- Mỗi tick: query DB `TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60` → cập nhật set
+- **Không đổi DB** — chỉ dùng để phục vụ API response, lỗi query được bắt im lặng
+- Xuất thêm `isOnlineFromCache(deviceId)` và `getOnlineDeviceIds()` cho các module khác dùng nếu cần
+
+---
+
+### 2. Tạo `backend/src/routes/dashboard.ts`
+
+#### `GET /api/dashboard/stats` – bảo vệ bởi `verifyJWT`
+
+Truy vấn **2 SQL** song song:
+
+| Query | Nội dung |
+|---|---|
+| Aggregation trên bảng `devices` | `SUM(device_type = 'gateway')`, `SUM(device_type = 'sensor')`, `SUM(... AND TIMESTAMPDIFF < 60)` cho từng loại |
+| COUNT trên bảng `sensor_data` | Tổng số bản ghi data points đã nhận |
+
+Response:
+
+```json
+{
+  "total_gateways": 3,
+  "total_sensors": 8,
+  "online_gateways": 2,
+  "online_sensors": 5,
+  "total_data_points": 14820
+}
+```
+
+- Dùng `COALESCE(..., 0)` trong SQL → đảm bảo trả về `0` thay vì `null` khi bảng rỗng
+- Cast kết quả sang `Number()` vì MySQL trả BigInt dưới dạng string với một số driver
+
+---
+
+### 3. Tạo `backend/src/routes/audit.ts`
+
+#### `GET /api/audit-log` – bảo vệ bởi `verifyJWT`
+
+Hỗ trợ **4 query parameter** lọc động:
+
+| Param | Kiểu | Mô tả |
+|---|---|---|
+| `event_type` | string | Lọc đúng khớp: `DATA_RECV`, `AUTH_FAIL`, `DEVICE_BLOCKED`, ... |
+| `device_id` | number | `id` nội bộ của thiết bị (FK) |
+| `from` | ISO 8601 string | `created_at >= from` |
+| `to` | ISO 8601 string | `created_at <= to` |
+
+- Build WHERE clause động: chỉ thêm điều kiện khi param được truyền vào
+- Dùng `pool.query()` thay vì `pool.execute()` cho query động (tránh giới hạn server-side prepared statements)
+- Validate `device_id` phải là số nguyên dương → `400 INVALID_DEVICE_ID`
+- Validate `from`/`to` là ngày hợp lệ → `400 INVALID_FROM_DATE` / `400 INVALID_TO_DATE`
+- JOIN với `devices` để lấy `device_identifier` (chuỗi `device_id`) và `device_name`
+- Sắp xếp `ORDER BY a.created_at DESC`, giới hạn `LIMIT 500`
+
+Response:
+
+```json
+{
+  "audit_log": [
+    {
+      "id": 42,
+      "event_type": "DATA_RECV",
+      "device_id": 3,
+      "device_identifier": "ESP32-SN-A1B2C3D4",
+      "device_name": "Sensor phòng lab",
+      "ip_address": "192.168.1.10",
+      "user_agent": "ESP32HTTPClient/1.0",
+      "details": { "gateway_id": "ESP32-GW-...", "data_id": 120 },
+      "created_at": "2026-05-19T08:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 4. Cập nhật `backend/src/routes/devices.ts`
+
+Thêm endpoint `GET /api/devices/:id/data` — lịch sử sensor_data có phân trang:
+
+| Query param | Mặc định | Giới hạn |
+|---|---|---|
+| `page` | 1 | tối thiểu 1 |
+| `limit` | 50 | tối đa 200 |
+
+- Kiểm tra thiết bị tồn tại → `404 DEVICE_NOT_FOUND` nếu không có
+- Đếm tổng bản ghi (`COUNT(*)`) để tính `total_pages`
+- JOIN với `devices` để lấy `gateway_device_id` (chuỗi `device_id` của gateway) kèm mỗi record
+- Đặt route **trước** `GET /:id` trong file để Express khớp đúng (tránh "data" bị hiểu là `:id`)
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": 120,
+      "device_id": 3,
+      "gateway_id": 1,
+      "gateway_device_id": "ESP32-GW-A1B2C3D4",
+      "payload": { "temperature": 26.5, "humidity": 63.2 },
+      "received_at": "2026-05-19T08:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 320,
+    "total_pages": 7
+  }
+}
+```
+
+---
+
+### 5. Cập nhật `backend/src/routes/index.ts`
+
+Đăng ký 2 router mới:
+
+```typescript
+import dashboardRoutes from "./dashboard";
+import auditRoutes    from "./audit";
+
+router.use("/dashboard", dashboardRoutes);
+router.use("/audit-log", auditRoutes);
+```
+
+---
+
+### 6. Cập nhật `backend/src/server.ts`
+
+Gọi `startHeartbeatMonitor()` ngay sau khi server bắt đầu lắng nghe:
+
+```typescript
+import { startHeartbeatMonitor } from "./services/deviceStatus";
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  startHeartbeatMonitor();
+});
+```
+
+---
+
+### Tóm tắt API endpoints mới
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/dashboard/stats` | JWT | Thống kê tổng quan hệ thống |
+| `GET` | `/api/devices/:id/data` | JWT | Lịch sử sensor_data phân trang |
+| `GET` | `/api/audit-log` | JWT | Nhật ký bảo mật, lọc đa điều kiện |
+
+---
+
+### Checklist hoàn thành Task 7
+
+- [x] `src/services/deviceStatus.ts` – `isOnline()`, `startHeartbeatMonitor()` (setInterval 30s, không đổi DB)
+- [x] `GET /api/dashboard/stats` – tổng GW, SN, online GW, online SN, tổng data points
+- [x] `GET /api/audit-log` – filter `event_type`, `device_id`, `from`, `to`; DESC; LIMIT 500
+- [x] `GET /api/devices/:id/data` – phân trang `page`+`limit`, kèm `gateway_device_id`
+- [x] Validate query params (device_id phải là số, date phải parse được)
+- [x] Route `/:id/data` đặt trước `/:id` để Express routing đúng thứ tự
+- [x] `routes/index.ts` đăng ký `/dashboard` và `/audit-log`
+- [x] `server.ts` khởi động heartbeat monitor cùng lúc server start
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
