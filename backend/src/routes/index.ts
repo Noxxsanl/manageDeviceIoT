@@ -5,6 +5,7 @@ import dashboardRoutes from "./dashboard";
 import dataRoutes from "./data.routes";
 import deviceRoutes from "./devices";
 import healthRoutes from "./health.routes";
+import userRoutes from "./users";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/devices", deviceRoutes);
 router.use("/device/data", dataRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/audit-log", auditRoutes);
+router.use("/users", userRoutes);
 
 export default router;

@@ -48,3 +48,33 @@ export type ApiSensorData = {
 export type ApiDeviceDetail = ApiDevice & {
   recent_data?: ApiSensorData[];
 };
+
+export type AuditEventType =
+  | "AUTH_SUCCESS"
+  | "AUTH_FAIL"
+  | "GATEWAY_AUTH_FAIL"
+  | "SENSOR_AUTH_FAIL"
+  | "DATA_RECV"
+  | "DEVICE_REGISTER"
+  | "DEVICE_BLOCKED"
+  | string;
+
+export type AuditLogEntry = {
+  id: number;
+  event_type: AuditEventType;
+  device_id: number | null;
+  device_identifier: string | null;
+  device_name: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type ApiUser = {
+  id: number;
+  username: string;
+  role: "admin" | "operator" | "viewer";
+  created_at: string;
+  last_login: string | null;
+};
