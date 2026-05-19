@@ -13,7 +13,7 @@ const levelStyles: Record<LogEntry["level"], string> = {
 
 export default function LogTable({ logs }: LogTableProps) {
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-slate-900/10 bg-slate-950/95 shadow-lg shadow-slate-950/20">
+    <div className="overflow-hidden rounded-4xl border border-slate-900/10 bg-slate-950/95 shadow-lg shadow-slate-950/20">
       <div className="border-b border-slate-900/10 px-6 py-4 text-sm text-slate-400">System events log</div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">

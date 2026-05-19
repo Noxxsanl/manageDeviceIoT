@@ -1769,3 +1769,232 @@ Trang đăng ký thiết bị mới tại route `/devices/new`.
 - [x] Đóng modal → `router.push("/devices")` → thiết bị mới xuất hiện với status `inactive`
 - [x] `src/app/(dashboard)/devices/page.tsx` – "Add Device" đổi thành `Link href="/devices/new"`
 - [x] TypeScript compile không lỗi
+
+---
+
+## Task 12 – Frontend: Chi Tiết Thiết Bị & Biểu Đồ Cảm Biến
+
+**Branch:** `fe/device-detail-charts`
+**Ngày hoàn thành:** 2026-05-20
+
+---
+
+### 1. Cập nhật `frontend/src/types/api.ts` – Thêm kiểu dữ liệu cảm biến
+
+Bổ sung 3 kiểu TypeScript mới:
+
+```typescript
+export type ApiSensorPayload = {
+  temperature?: number;
+  humidity?: number;
+  [key: string]: unknown;   // hỗ trợ payload mở rộng trong tương lai
+};
+
+export type ApiSensorData = {
+  id:          number;
+  device_id:   number | string;   // FK → devices.id (integer) hoặc device_id string
+  gateway_id:  number | string;   // FK → devices.id (integer) hoặc device_id string
+  payload:     ApiSensorPayload;
+  received_at: string;            // ISO 8601
+};
+
+export type ApiDeviceDetail = ApiDevice & {
+  recent_data?: ApiSensorData[];  // 10 bản ghi gần nhất từ GET /api/devices/:id
+};
+```
+
+---
+
+### 2. Tạo `frontend/src/hooks/useDeviceDetail.ts`
+
+SWR hook fetch chi tiết một thiết bị và expose action mutations:
+
+```typescript
+export function useDeviceDetail(id: string | number) {
+  // SWR fetch GET /api/devices/:id, polling 10s
+  const updateStatus = async (status: ApiDeviceStatus) => {
+    await api.patch(`/api/devices/${id}/status`, { status });
+    mutate();
+  };
+  const deleteDevice = async () => {
+    await api.delete(`/api/devices/${id}`);
+  };
+  return { device, isLoading, isError, mutate, updateStatus, deleteDevice };
+}
+```
+
+- Endpoint: `GET /api/devices/:id`
+- `refreshInterval: 10000` – polling 10s
+- Trả `null` khi chưa load xong (thay vì gây lỗi undefined)
+- `updateStatus` và `deleteDevice` là mutations kèm `mutate()` revalidate
+
+---
+
+### 3. Tạo `frontend/src/hooks/useSensorData.ts`
+
+SWR hook fetch lịch sử sensor data có conditional:
+
+```typescript
+export function useSensorData(id: string | number | null) {
+  // Khi id === null → SWR không fetch (dùng cho thiết bị gateway)
+  useSWR(
+    id !== null ? `/api/devices/${id}/data?limit=200` : null,
+    fetcher,
+    { refreshInterval: 10000 }
+  );
+}
+```
+
+- Endpoint: `GET /api/devices/:id/data?limit=200`
+- Hỗ trợ cả 2 response format: `ApiSensorData[]` và `{ data: ApiSensorData[] }` (tự detect)
+- `id = null` → SWR key null → không fetch (dùng cho gateway)
+- `refreshInterval: 10000` – polling 10s
+
+---
+
+### 4. Tạo `frontend/src/components/device/SensorChart.tsx`
+
+Component biểu đồ Recharts dành riêng cho thiết bị sensor:
+
+#### Tính năng
+
+| Feature | Chi tiết |
+|---|---|
+| Loại biểu đồ | `LineChart` với `ResponsiveContainer` 100% width, height 260px |
+| Đường nhiệt độ | `stroke="#f97316"` (cam đỏ), label "Temperature (°C)" |
+| Đường độ ẩm | `stroke="#38bdf8"` (xanh dương), label "Humidity (%)" |
+| Trục X | `received_at` được format theo khoảng thời gian đang chọn |
+| Tooltip | Dark theme `bg-slate-950 border-slate-800`, hiện đủ cả 2 giá trị khi hover |
+| `connectNulls` | Nối liền đường dù có điểm bị thiếu dữ liệu |
+| `dot={false}` | Không vẽ dot từng điểm – tăng performance khi nhiều data |
+
+#### Bộ chọn khoảng thời gian
+
+```
+[ 1h ]  [ 6h ]  [ 24h ]
+```
+
+- 3 nút toggle `1h / 6h / 24h`
+- Filter client-side trên data đã fetch (không gọi lại API)
+- Khoảng đang chọn: `bg-slate-700 text-white`, còn lại: `text-slate-400`
+
+#### Trạng thái đặc biệt
+
+| Trường hợp | Hiển thị |
+|---|---|
+| `isLoading === true` | "Loading chart data…" placeholder 208px |
+| Không có data trong khoảng | "No data in the last Xh." |
+| Có data | Recharts `LineChart` đầy đủ |
+
+#### Helpers nội bộ
+
+```typescript
+function formatTime(iso: string, range: TimeRange): string
+// 1h → HH:MM:SS, 6h/24h → HH:MM
+
+function filterByRange(data: ApiSensorData[], range: TimeRange): ApiSensorData[]
+// Lọc data theo cutoff = Date.now() - hours * 3600000
+```
+
+---
+
+### 5. Viết lại `frontend/src/app/(dashboard)/devices/[id]/page.tsx`
+
+Trang chi tiết thiết bị hoàn toàn mới – thay thế trang cũ dùng mock data.
+
+#### Kiến trúc
+
+- `"use client"` – Client Component (cần SWR, useState, useRouter)
+- Dùng `useParams<{ id: string }>()` thay vì `await params` (Server Component)
+- Hai hook: `useDeviceDetail(id)` + `useSensorData(isSensor ? id : null)`
+
+#### Layout trang
+
+```
+[← Back to Devices]
+[Icon] [Device Name]       [Block] [Delete]
+[Device ID font-mono]
+
+┌─────────────────── Device Info ──────────────────┐
+│ Type │ Status │ Connection │ Last Seen            │
+│ Location │ Linked Gateway │ Fail Count │ Device ID│
+└──────────────────────────────────────────────────┘
+
+(Chỉ hiển thị khi là sensor):
+┌─────── SensorChart ──────────────────────────────┐
+│ [1h] [6h] [24h]                                  │
+│ Recharts LineChart (temp=cam, humidity=xanh)     │
+└──────────────────────────────────────────────────┘
+
+┌─────── Recent Data (20 bản ghi) ─────────────────┐
+│ Time │ Temperature (°C) │ Humidity (%) │ Gateway  │
+└──────────────────────────────────────────────────┘
+```
+
+#### Phần thông tin (`InfoCard` component)
+
+Helper component nội bộ `InfoCard` hiển thị các ô thông tin nhỏ:
+
+| Field | Nguồn | Ghi chú |
+|---|---|---|
+| Type | `device_type` | Icon Server (xanh) cho gateway, Cpu (tím) cho sensor |
+| Status | `status` | `DeviceStatusBadge` component |
+| Connection | `last_seen` | `OnlineIndicator` component |
+| Last Seen | `last_seen` | `formatLastSeen()` – Xs/Xm/Xh/Xd ago |
+| Location | `location` | Hiện có điều kiện (chỉ khi có data) |
+| Linked Gateway | `recentData[0].gateway_id` | Hiện có điều kiện (chỉ khi là sensor và có data) |
+| Fail Count | `fail_count` | Text vàng `text-amber-300` khi > 0 |
+| Device ID | `device_id` | Font mono, text nhỏ |
+
+#### Nút hành động
+
+| Nút | Màu | Điều kiện | Hành động |
+|---|---|---|---|
+| Block | Vàng `amber` | `status !== "blocked"` | `ConfirmDialog` → `PATCH status="blocked"` |
+| Unblock | Xanh `emerald` | `status === "blocked"` | `ConfirmDialog` → `PATCH status="active"` |
+| Delete | Đỏ `rose` | Luôn hiện | `ConfirmDialog` → `DELETE` → `router.push("/devices")` |
+
+#### Bảng Recent Data (20 bản ghi)
+
+| Cột | Nguồn | Màu |
+|---|---|---|
+| Time | `received_at` | `formatDateTime()` → "DD/MM/YYYY, HH:MM:SS" |
+| Temperature | `payload.temperature` | `text-orange-300`, `—` nếu undefined |
+| Humidity | `payload.humidity` | `text-sky-300`, `—` nếu undefined |
+| Gateway | `gateway_id` | Font mono, text nhỏ |
+
+Data được sort DESC theo `received_at`, lấy 20 bản ghi đầu.
+
+#### Trạng thái loading / error
+
+| Trường hợp | Hiển thị |
+|---|---|
+| `isLoading` | Full-page spinner `RefreshCw animate-spin` + "Loading device…" |
+| `isError \|\| !device` | Full-page error "Failed to load device." + link back |
+
+---
+
+### Tóm tắt files đã tạo / chỉnh sửa
+
+| File | Hành động |
+|---|---|
+| `src/types/api.ts` | Thêm `ApiSensorPayload`, `ApiSensorData`, `ApiDeviceDetail` |
+| `src/hooks/useDeviceDetail.ts` | Tạo mới – SWR fetch + updateStatus + deleteDevice |
+| `src/hooks/useSensorData.ts` | Tạo mới – SWR fetch conditional (null-key nếu gateway) |
+| `src/components/device/SensorChart.tsx` | Tạo mới – Recharts LineChart với time-range selector |
+| `src/app/(dashboard)/devices/[id]/page.tsx` | Viết lại – Client Component dùng real API |
+
+---
+
+### Checklist hoàn thành Task 12
+
+- [x] `src/types/api.ts` – thêm `ApiSensorPayload`, `ApiSensorData`, `ApiDeviceDetail`
+- [x] `src/hooks/useDeviceDetail.ts` – SWR `GET /api/devices/:id`, polling 10s, kèm `updateStatus`, `deleteDevice`
+- [x] `src/hooks/useSensorData.ts` – SWR `GET /api/devices/:id/data?limit=200`, polling 10s, conditional fetch (null-key cho gateway)
+- [x] `src/components/device/SensorChart.tsx` – Recharts `LineChart`, 2 đường (cam=nhiệt độ, xanh=độ ẩm), bộ chọn 1h/6h/24h, tooltip dark-theme
+- [x] `src/app/(dashboard)/devices/[id]/page.tsx` – Client Component, `useParams()`, đầy đủ info cards, nút Block/Unblock/Delete với `ConfirmDialog`, redirect `/devices` sau delete
+- [x] Chỉ hiện `SensorChart` và bảng `Recent Data` khi `device_type === "sensor"`
+- [x] `useSensorData(null)` khi device là gateway → SWR không fetch
+- [x] Loading state: spinner full-page khi `isLoading`
+- [x] Error state: thông báo lỗi + link quay về `/devices`
+- [x] TypeScript compile không lỗi

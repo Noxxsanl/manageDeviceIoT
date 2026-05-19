@@ -17,7 +17,7 @@ export function DeviceCredentialModal({ deviceId, secretKey, onClose }: DeviceCr
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Device Credentials</DialogTitle>
         </DialogHeader>

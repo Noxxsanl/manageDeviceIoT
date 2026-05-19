@@ -17,7 +17,7 @@ export default function DeviceTable({ devices }: DeviceTableProps) {
   };
 
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-slate-900/10 bg-slate-950/95 shadow-lg shadow-slate-950/20">
+    <div className="overflow-hidden rounded-4xl border border-slate-900/10 bg-slate-950/95 shadow-lg shadow-slate-950/20">
       <div className="flex items-center justify-between border-b border-slate-900/10 px-6 py-4 text-sm text-slate-400">
         <span>{deviceCount} devices deployed</span>
         <button className="rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
