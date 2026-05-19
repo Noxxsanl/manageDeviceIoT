@@ -5,6 +5,11 @@ import { verifyJWT } from "../middleware/verifyJWT";
 import { requireRole } from "../middleware/rbac";
 import { log } from "../services/auditLogger";
 
+function sanitize(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
+}
+
 const router = Router();
 
 // POST /api/devices/register  – admin or operator only
@@ -13,7 +18,10 @@ router.post(
   verifyJWT,
   requireRole("admin", "operator"),
   async (req: Request, res: Response): Promise<void> => {
-    const { device_name, device_type, location } = req.body ?? {};
+    const raw = req.body ?? {};
+    const device_name = sanitize(raw.device_name, 128);
+    const device_type = sanitize(raw.device_type, 16);
+    const location = raw.location ? sanitize(raw.location, 256) || null : null;
 
     if (!device_name || !device_type) {
       res.status(400).json({ error: "MISSING_FIELDS" });
