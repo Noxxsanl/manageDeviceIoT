@@ -1,34 +1,100 @@
-const navLinks = [
-  { label: "Dashboard", href: "#", active: true },
-  { label: "Devices", href: "#" },
-  { label: "Logs", href: "#" },
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Cpu,
+  Shield,
+  Users,
+  LogOut,
+  Wifi,
+} from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+
+const NAV_LINKS = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Thiết bị", href: "/devices", icon: Cpu },
+  { label: "Audit Log", href: "/audit", icon: Shield },
+  { label: "Người dùng", href: "/users", icon: Users },
 ];
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Quản trị viên",
+  operator: "Vận hành",
+  viewer: "Xem",
+};
+
 export default function Sidebar() {
+  const pathname = usePathname();
+  const { user, logout } = useAuth();
+
   return (
-    <aside className="hidden w-full max-w-xs shrink-0 overflow-hidden rounded-4xl border border-slate-200/80 bg-white/90 p-6 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/90 lg:block">
-      <div className="flex flex-col gap-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">IoT Control</p>
-          <h2 className="mt-3 text-2xl font-semibold text-slate-950 dark:text-white">Device Dashboard</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">Monitor device health, connectivity and environment from one place.</p>
+    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-slate-800 bg-slate-950">
+      {/* Logo */}
+      <div className="flex items-center gap-3 border-b border-slate-800 px-5 py-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-sm font-bold text-white shadow-lg shadow-sky-950/40">
+          <Wifi size={18} />
         </div>
-        <nav className="space-y-2">
-          {navLinks.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              className={`group flex items-center gap-3 rounded-3xl px-4 py-3 text-sm font-medium transition ${
-                item.active
-                  ? "bg-slate-100 text-slate-950 shadow-sm shadow-slate-200/80 dark:bg-slate-800 dark:text-white"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
-              }`}
-            >
-              <span className="h-2.5 w-2.5 rounded-full bg-slate-400 group-hover:bg-slate-600 dark:group-hover:bg-slate-300"></span>
-              {item.label}
-            </a>
-          ))}
-        </nav>
+        <div>
+          <p className="text-sm font-semibold text-white">IoT Manager</p>
+          <p className="text-xs text-slate-500">Control Panel</p>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+          Menu
+        </p>
+        <ul className="space-y-1">
+          {NAV_LINKS.map(({ label, href, icon: Icon }) => {
+            const isActive =
+              pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-sky-500/15 text-sky-400"
+                      : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100"
+                  }`}
+                >
+                  <Icon
+                    size={16}
+                    className={isActive ? "text-sky-400" : "text-slate-500"}
+                  />
+                  {label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* User info + logout */}
+      <div className="border-t border-slate-800 p-4">
+        <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-900 px-3 py-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-700 text-xs font-bold uppercase text-slate-300">
+            {user?.username?.[0] ?? "?"}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-slate-200">
+              {user?.username ?? "—"}
+            </p>
+            <p className="text-xs text-slate-500">
+              {user?.role ? (ROLE_LABELS[user.role] ?? user.role) : "—"}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => logout()}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+        >
+          <LogOut size={15} />
+          Đăng xuất
+        </button>
       </div>
     </aside>
   );

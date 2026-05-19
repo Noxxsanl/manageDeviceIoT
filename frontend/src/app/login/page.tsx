@@ -1,17 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { AUTH_ROUTES } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { isAxiosError } from "axios";
 
 export default function LoginPage() {
-  console.log("[render] app/login/page.tsx mounted");
-
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -20,16 +16,22 @@ export default function LoginPage() {
     setError("");
 
     if (!username.trim() || !password) {
-      setError("Username and password are required.");
+      setError("Vui lòng nhập tên đăng nhập và mật khẩu.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await login(username, password, remember);
+      await login(username.trim(), password);
     } catch (err) {
-      setError((err as Error).message);
+      if (isAxiosError(err) && err.response?.status === 401) {
+        setError("Sai tên đăng nhập hoặc mật khẩu.");
+      } else if (isAxiosError(err) && err.response?.status === 429) {
+        setError("Quá nhiều lần thử. Vui lòng đợi và thử lại.");
+      } else {
+        setError("Không thể kết nối đến máy chủ. Vui lòng thử lại.");
+      }
       setIsSubmitting(false);
     }
   };
@@ -42,15 +44,19 @@ export default function LoginPage() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500 text-lg font-semibold text-white shadow-xl shadow-sky-950/30">
               IoT
             </div>
-            <p className="mt-6 text-sm uppercase tracking-[0.3em] text-slate-500">Admin access</p>
-            <h1 className="mt-3 text-3xl font-semibold text-white">Sign in</h1>
-            <p className="mt-2 text-sm text-slate-400">Use your admin account to access the IoT Manager dashboard.</p>
+            <p className="mt-6 text-sm uppercase tracking-[0.3em] text-slate-500">
+              Quản trị hệ thống
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-white">Đăng nhập</h1>
+            <p className="mt-2 text-sm text-slate-400">
+              Truy cập vào Dashboard quản lý thiết bị IoT.
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <div>
               <label htmlFor="username" className="mb-2 block text-sm font-semibold text-slate-200">
-                Username
+                Tên đăng nhập
               </label>
               <input
                 id="username"
@@ -58,7 +64,7 @@ export default function LoginPage() {
                 type="text"
                 autoComplete="username"
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20"
                 placeholder="admin"
                 aria-invalid={Boolean(error)}
@@ -68,7 +74,7 @@ export default function LoginPage() {
 
             <div>
               <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-200">
-                Password
+                Mật khẩu
               </label>
               <input
                 id="password"
@@ -76,31 +82,19 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20"
-                placeholder="123456"
+                placeholder="••••••••"
                 aria-invalid={Boolean(error)}
                 required
               />
             </div>
 
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <label className="flex items-center gap-2 text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(event) => setRemember(event.target.checked)}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500 focus:ring-sky-500"
-                />
-                Remember me
-              </label>
-              <Link href={AUTH_ROUTES.forgotPassword} className="font-medium text-sky-300 transition hover:text-sky-200">
-                Forgot password?
-              </Link>
-            </div>
-
             {error ? (
-              <div className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-rose-500/20">
+              <div
+                role="alert"
+                className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-rose-500/20"
+              >
                 {error}
               </div>
             ) : null}
@@ -110,13 +104,8 @@ export default function LoginPage() {
               disabled={isSubmitting}
               className="inline-flex w-full items-center justify-center rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSubmitting ? "Signing in..." : "Login"}
+              {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
-
-            <p className="text-center text-xs text-slate-500">
-              Demo: <span className="font-semibold text-slate-300">admin</span> /{" "}
-              <span className="font-semibold text-slate-300">123456</span>
-            </p>
           </form>
         </section>
       </div>

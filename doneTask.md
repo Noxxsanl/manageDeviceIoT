@@ -1077,3 +1077,282 @@ JWT_SECRET=change_this_to_a_long_random_secret_min_32_chars
 - [x] `.env.example` – thêm `FRONTEND_URL`, ghi chú min-length `JWT_SECRET`
 - [x] `secret_key` không bao giờ bị log ra console hoặc audit_log
 - [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+
+---
+
+## Task 9 – Frontend: Setup Next.js & Trang Login
+
+**Branch:** `fe/setup-login`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Cài đặt dependencies
+
+Cài thêm **5 package** vào `frontend/package.json`:
+
+| Package | Mục đích |
+|---|---|
+| `swr` | Data fetching + polling real-time (dùng từ Task 10) |
+| `axios` | HTTP client gọi backend API |
+| `recharts` | Biểu đồ sensor (dùng từ Task 12) |
+| `lucide-react` | Icon set cho Sidebar và UI |
+| `socket.io-client` | WebSocket real-time (dùng từ Task 10) |
+
+---
+
+### 2. Cập nhật `frontend/next.config.ts` – Proxy Rewrites
+
+Thêm `rewrites()` để forward toàn bộ `/api/*` tới backend (port 5000):
+
+```typescript
+async rewrites() {
+  return [
+    {
+      source: "/api/:path*",
+      destination: `${process.env.BACKEND_URL || "http://localhost:5000"}/api/:path*`,
+    },
+  ];
+},
+```
+
+Lợi ích:
+- Tránh CORS issue hoàn toàn (request qua Next.js server)
+- Cookie `httpOnly` do backend set sẽ được gán cho domain `localhost:3000` (frontend)
+- Middleware phía Next.js có thể đọc được cookie để bảo vệ route
+
+Biến môi trường `BACKEND_URL` được khai báo trong `frontend/.env.local`:
+```env
+BACKEND_URL=http://localhost:5000
+```
+
+---
+
+### 3. Tạo `frontend/src/lib/axios.ts` – Axios Instance
+
+```typescript
+const api = axios.create({
+  baseURL: "",          // dùng relative URL → đi qua Next.js proxy
+  withCredentials: true, // tự động gửi httpOnly cookie theo mọi request
+});
+
+// Interceptor: 401 → redirect về /login
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+---
+
+### 4. Thay `frontend/src/lib/auth.ts` – Real Backend API
+
+Xóa toàn bộ mock authentication, thay bằng 3 hàm gọi backend thực:
+
+| Hàm | Endpoint | Mô tả |
+|---|---|---|
+| `login(username, password)` | `POST /api/auth/login` | Backend set `httpOnly` cookie `token` (8h) |
+| `logout()` | `POST /api/auth/logout` | Backend clear cookie |
+| `getUser()` | `GET /api/auth/me` | Trả `User` từ JWT; `null` nếu chưa login |
+
+`AUTH_ROUTES`:
+```typescript
+export const AUTH_ROUTES = {
+  login: "/login",
+  dashboard: "/dashboard",
+} as const;
+```
+
+`AUTH_TOKEN_COOKIE` và `AUTH_ROUTES.forgotPassword` bị xóa (không dùng nữa).
+
+---
+
+### 5. Cập nhật `frontend/src/types/user.ts`
+
+Thêm `role` vào User type để khớp với JWT payload từ backend:
+
+```typescript
+export type UserRole = "admin" | "operator" | "viewer";
+
+export type User = {
+  id: number;
+  username: string;
+  role: UserRole;
+};
+```
+
+---
+
+### 6. Tạo `frontend/src/middleware.ts` – Bảo vệ Route bằng JWT Cookie
+
+```typescript
+const PUBLIC_PATHS = ["/login"];
+
+export function middleware(request: NextRequest) {
+  const token = request.cookies.get("token");
+  const { pathname } = request.nextUrl;
+
+  // Root redirect
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL(token ? "/dashboard" : "/login", request.url));
+  }
+
+  // Chưa login + route không public → redirect /login
+  if (!token && !isPublic) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Đã login + vào /login → redirect /dashboard
+  if (token && isPublic) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/((?!api|_next/static|_next/image|favicon\\.ico|public).*)"],
+};
+```
+
+Middleware đọc cookie `token` (httpOnly, set bởi backend) ở server-side nên hoạt động đúng khi `withCredentials + proxy`.
+
+---
+
+### 7. Cập nhật `frontend/src/contexts/AuthContext.tsx`
+
+Thay mock `isAuthenticated()` bằng real backend call:
+
+```typescript
+useEffect(() => {
+  getUser()
+    .then(setUser)
+    .finally(() => setLoading(false));
+}, []);
+```
+
+- Loading state hiển thị spinner thay vì full-page block
+- `login()` và `logout()` bây giờ là `async` (gọi API thực)
+- Xóa tham số `remember` khỏi `login()` (backend JWT cố định 8h)
+
+---
+
+### 8. Cập nhật `frontend/src/app/login/page.tsx` – Trang Đăng Nhập
+
+Trang đăng nhập được cập nhật:
+
+- **UI tiếng Việt**: "Tên đăng nhập", "Mật khẩu", "Đang đăng nhập...", "Đăng nhập"
+- **Xử lý lỗi** dùng `isAxiosError()` để phân biệt loại lỗi:
+
+| HTTP Status | Thông báo hiển thị |
+|---|---|
+| `401` | "Sai tên đăng nhập hoặc mật khẩu." |
+| `429` | "Quá nhiều lần thử. Vui lòng đợi và thử lại." |
+| Network error | "Không thể kết nối đến máy chủ. Vui lòng thử lại." |
+
+- Bỏ "Remember me" và "Forgot password?" (backend không hỗ trợ)
+- Bỏ text demo credentials (không phù hợp production)
+
+---
+
+### 9. Xây dựng `frontend/src/components/Sidebar.tsx`
+
+Sidebar đầy đủ theo yêu cầu Task 9:
+
+**Navigation links** (với lucide-react icons):
+
+| Label | Route | Icon |
+|---|---|---|
+| Dashboard | `/dashboard` | `LayoutDashboard` |
+| Thiết bị | `/devices` | `Cpu` |
+| Audit Log | `/audit` | `Shield` |
+| Người dùng | `/users` | `Users` |
+
+**Active state**: dùng `usePathname()` từ `next/navigation` để highlight link hiện tại.
+
+**User info block**: hiển thị avatar chữ, `username`, `role` (dịch sang tiếng Việt: Quản trị viên / Vận hành / Xem).
+
+**Nút Đăng xuất**: gọi `logout()` từ `useAuth()`, chuyển về `/login`.
+
+---
+
+### 10. Tạo `frontend/src/app/(dashboard)/layout.tsx`
+
+Layout bao gồm Navbar (top) + Sidebar (left) + main content:
+
+```
+┌─────────────────────────────────────────┐
+│              Navbar (fixed top 80px)    │
+├──────────┬──────────────────────────────┤
+│          │                              │
+│ Sidebar  │      Main Content            │
+│ (240px)  │      (flex-1)                │
+│          │                              │
+└──────────┴──────────────────────────────┘
+```
+
+Providers được wrap tại layout này (cần cho mock dashboard pages):
+- `DevicesProvider` – mock device data context
+- `AddDeviceProvider` – "Add Device" modal context
+
+---
+
+### 11. Migrate Route Group `(admin)` → `(dashboard)`
+
+Toàn bộ pages từ `app/(admin)/` được chuyển vào `app/(dashboard)/`:
+
+| Route cũ | Route mới | URL |
+|---|---|---|
+| `(admin)/dashboard/page.tsx` | `(dashboard)/dashboard/page.tsx` | `/dashboard` |
+| `(admin)/devices/page.tsx` | `(dashboard)/devices/page.tsx` | `/devices` |
+| `(admin)/devices/[id]/page.tsx` | `(dashboard)/devices/[id]/page.tsx` | `/devices/:id` |
+| `(admin)/logs/page.tsx` | `(dashboard)/logs/page.tsx` | `/logs` |
+
+Xóa thư mục `app/(admin)/` sau khi migrate để tránh duplicate route conflict.
+
+---
+
+### Luồng xác thực hoàn chỉnh
+
+```
+[Trình duyệt] GET /
+  → Middleware: không có cookie token
+  → Redirect → /login
+
+[Trang login] POST /api/auth/login
+  → Next.js proxy → Backend POST /api/auth/login
+  → Backend: bcrypt.compare() → ký JWT → Set-Cookie: token=...; HttpOnly
+  → AuthContext.login() → setUser() → router.replace("/dashboard")
+
+[Trình duyệt] GET /dashboard
+  → Middleware: cookie token tồn tại → NextResponse.next()
+  → AuthContext: useEffect() → GET /api/auth/me → setUser({ id, username, role })
+  → Sidebar hiển thị username + role
+
+[Nút Đăng xuất]
+  → AuthContext.logout() → POST /api/auth/logout → Backend clear cookie
+  → setUser(null) → router.replace("/login")
+```
+
+---
+
+### Checklist hoàn thành Task 9
+
+- [x] Cài đủ 5 dependencies: `swr`, `axios`, `recharts`, `lucide-react`, `socket.io-client`
+- [x] `next.config.ts` – rewrites proxy `/api/*` → `http://localhost:5000/api/*`
+- [x] `src/lib/axios.ts` – axios instance với `withCredentials: true` và interceptor 401
+- [x] `src/lib/auth.ts` – thay mock bằng real API calls (`login`, `logout`, `getUser`)
+- [x] `src/types/user.ts` – `User` type có `id`, `username`, `role`
+- [x] `src/middleware.ts` – bảo vệ route bằng cookie `token`, redirect `/login` khi chưa auth
+- [x] `src/contexts/AuthContext.tsx` – dùng `GET /api/auth/me` để khôi phục session
+- [x] `src/app/login/page.tsx` – form tiếng Việt, phân biệt lỗi 401/429/network
+- [x] `src/components/Sidebar.tsx` – 4 nav links, active state, username+role, nút đăng xuất
+- [x] `src/app/(dashboard)/layout.tsx` – Navbar + Sidebar + DevicesProvider + AddDeviceProvider
+- [x] Migrate `(admin)` → `(dashboard)`, xóa route group cũ
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+- [x] Kiểm tra: login đúng → vào được `/dashboard`, login sai → hiện lỗi tiếng Việt, truy cập `/` chưa login → redirect `/login`

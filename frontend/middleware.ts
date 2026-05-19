@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { AUTH_ROUTES, AUTH_TOKEN_COOKIE } from "@/lib/auth";
+import { AUTH_ROUTES } from "@/lib/auth";
 
-const PUBLIC_PATHS: string[] = [AUTH_ROUTES.login, AUTH_ROUTES.forgotPassword];
+const PUBLIC_PATHS: string[] = [AUTH_ROUTES.login];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isLoggedIn = Boolean(request.cookies.get(AUTH_TOKEN_COOKIE)?.value);
+  const isLoggedIn = Boolean(request.cookies.get("token")?.value);
 
   if (pathname === "/") {
     const destination = isLoggedIn ? AUTH_ROUTES.dashboard : AUTH_ROUTES.login;
