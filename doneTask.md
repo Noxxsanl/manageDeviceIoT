@@ -863,3 +863,217 @@ app.listen(PORT, () => {
 - [x] `routes/index.ts` đăng ký `/dashboard` và `/audit-log`
 - [x] `server.ts` khởi động heartbeat monitor cùng lúc server start
 - [x] TypeScript compile không lỗi (`tsc --noEmit` pass)
+
+---
+
+## Task 8 – Backend: Security Hardening
+
+**Branch:** `be/security-hardening`
+**Ngày hoàn thành:** 2026-05-19
+
+---
+
+### 1. Tạo `backend/src/config/env.ts` – Validate env vars khi startup
+
+File mới tập trung toàn bộ logic khởi động môi trường:
+
+- Gọi `dotenv.config()` ngay tại module level → load `.env` trước mọi module khác
+- Định nghĩa danh sách **6 biến bắt buộc**: `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`, `JWT_SECRET`, `PORT`
+- Kiểm tra từng biến: nếu thiếu → in danh sách thiếu ra stderr và gọi `process.exit(1)`
+- Kiểm tra thêm: `JWT_SECRET` phải dài tối thiểu **32 ký tự** → crash nếu quá ngắn
+- Tự động gọi `validateEnv()` khi module được import (không cần gọi thủ công)
+
+```typescript
+const REQUIRED_ENV_VARS = ["DB_HOST", "DB_USER", "DB_PASS", "DB_NAME", "JWT_SECRET", "PORT"];
+
+export function validateEnv(): void {
+  const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]?.trim());
+  if (missing.length) {
+    console.error(`[startup] Missing required environment variables: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  if (process.env.JWT_SECRET!.trim().length < 32) {
+    console.error("[startup] JWT_SECRET must be at least 32 characters");
+    process.exit(1);
+  }
+}
+
+validateEnv(); // auto-validate on import
+```
+
+---
+
+### 2. Cập nhật `backend/src/server.ts` – Import env.ts làm import đầu tiên
+
+Đặt `import "./config/env"` là dòng đầu tiên trong `server.ts`. Với CommonJS (TypeScript compile target), lệnh `require()` chạy theo thứ tự khai báo, nên `env.ts` được load và validate trước khi `app.ts` (và `db.ts`) chạy.
+
+```typescript
+import "./config/env"; // loads .env và validates – phải là import đầu tiên
+import app from "./app";
+import { startHeartbeatMonitor } from "./services/deviceStatus";
+```
+
+---
+
+### 3. Cập nhật `backend/src/app.ts` – Helmet, CORS, Rate Limiters, Body Limit
+
+#### 3.1 HTTP Security Headers – `helmet()`
+
+```typescript
+app.use(helmet());
+```
+
+`helmet()` mặc định bật đồng thời nhiều header bảo vệ:
+
+| Header | Bảo vệ |
+|---|---|
+| `Content-Security-Policy` | Chống XSS – giới hạn nguồn script/style được phép load |
+| `X-Frame-Options: SAMEORIGIN` | Chống Clickjacking – chặn iframe nhúng từ domain khác |
+| `X-Content-Type-Options: nosniff` | Chống MIME sniffing – buộc browser tôn trọng Content-Type |
+| `Referrer-Policy` | Không gửi URL referrer ra ngoài domain |
+| `X-DNS-Prefetch-Control: off` | Tắt DNS prefetch |
+
+---
+
+#### 3.2 CORS – Chỉ cho phép frontend origin
+
+Thay `cors()` mặc định (cho phép tất cả) bằng cấu hình chặt chẽ:
+
+```typescript
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true, // cho phép gửi httpOnly cookie
+}));
+```
+
+- Đọc origin từ biến môi trường `FRONTEND_URL` → dễ thay đổi khi deploy production
+- `credentials: true` bắt buộc để browser gửi cookie JWT cùng request
+
+---
+
+#### 3.3 Body Size Limit
+
+```typescript
+app.use(express.json({ limit: "10kb" }));
+```
+
+Ngăn chặn tấn công Payload-based DoS bằng cách từ chối body JSON lớn hơn 10 KB.
+
+---
+
+#### 3.4 Rate Limiters – 3 tầng
+
+| Limiter | Path | Giới hạn | Mục đích |
+|---|---|---|---|
+| `authLimiter` | `/api/auth/login` | 10 req / 15 phút / IP | Chống brute force mật khẩu |
+| `deviceDataLimiter` | `/api/device/data` | 60 req / phút / IP | Giới hạn tần suất ESP32 gửi data |
+| `apiLimiter` | `/api/*` (trừ `/api/device/data`) | 100 req / 15 phút / IP | Bảo vệ admin API |
+
+Chi tiết cấu hình:
+- `standardHeaders: true` → trả về `RateLimit-*` headers theo RFC 6585
+- `legacyHeaders: false` → tắt `X-RateLimit-*` headers cũ
+- `message` rõ ràng: `{ error: "TOO_MANY_REQUESTS", detail: "..." }`
+- `apiLimiter` dùng `skip` function để bỏ qua `/api/device/data` (đã có limiter riêng)
+
+Thứ tự mount middleware trong `app.ts`:
+
+```typescript
+app.use("/api/auth/login", authLimiter);
+app.use("/api/device/data", deviceDataLimiter);
+app.use("/api", apiLimiter);
+app.use("/api", routes);
+```
+
+---
+
+### 4. Cập nhật `backend/src/routes/auth.ts` – Input Sanitization
+
+Tại `POST /api/auth/login`, thay vì dùng trực tiếp `req.body.username`:
+
+```typescript
+const username = typeof raw.username === "string" ? raw.username.trim().slice(0, 64) : "";
+const password = typeof raw.password === "string" ? raw.password.slice(0, 128) : "";
+```
+
+| Field | Xử lý | Giới hạn |
+|---|---|---|
+| `username` | `typeof` check + `trim()` + `slice()` | Tối đa 64 ký tự |
+| `password` | `typeof` check + `slice()` (không trim – mật khẩu có thể có khoảng trắng hợp lệ) | Tối đa 128 ký tự |
+
+---
+
+### 5. Cập nhật `backend/src/routes/devices.ts` – Input Sanitization
+
+Thêm helper function `sanitize()` dùng chung trong file:
+
+```typescript
+function sanitize(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
+}
+```
+
+Tại `POST /api/devices/register`, áp dụng sanitize cho tất cả string input:
+
+```typescript
+const device_name = sanitize(raw.device_name, 128);
+const device_type = sanitize(raw.device_type, 16);
+const location    = raw.location ? sanitize(raw.location, 256) || null : null;
+```
+
+| Field | Giới hạn | Ghi chú |
+|---|---|---|
+| `device_name` | 128 ký tự | Bắt buộc – trả `400 MISSING_FIELDS` nếu rỗng sau trim |
+| `device_type` | 16 ký tự | Bắt buộc – validate thêm là `sensor`/`gateway` |
+| `location` | 256 ký tự | Tùy chọn – `null` nếu không truyền hoặc rỗng sau trim |
+
+---
+
+### 6. Cập nhật `backend/.env.example` – Thêm FRONTEND_URL
+
+```env
+# CORS – URL của Next.js frontend (mặc định http://localhost:3000 nếu không set)
+FRONTEND_URL=http://localhost:3000
+```
+
+Thêm ghi chú nhắc nhở về `JWT_SECRET`:
+
+```env
+# JWT (tối thiểu 32 ký tự – server sẽ crash khi start nếu ngắn hơn)
+JWT_SECRET=change_this_to_a_long_random_secret_min_32_chars
+```
+
+---
+
+### Bảng tổng hợp bảo vệ
+
+| Tấn công / Rủi ro | Cơ chế bảo vệ |
+|---|---|
+| XSS | `helmet()` – `Content-Security-Policy` |
+| Clickjacking | `helmet()` – `X-Frame-Options: SAMEORIGIN` |
+| MIME Sniffing | `helmet()` – `X-Content-Type-Options: nosniff` |
+| CORS không kiểm soát | `cors({ origin: FRONTEND_URL })` – chỉ cho phép frontend đã biết |
+| Brute Force Login | `authLimiter` – 10 req / 15 phút / IP → HTTP 429 |
+| Payload DoS | `express.json({ limit: '10kb' })` – từ chối body quá lớn |
+| Thiếu env vars | `validateEnv()` – crash ngay startup, không chạy với config thiếu |
+| JWT_SECRET yếu | `validateEnv()` – kiểm tra tối thiểu 32 ký tự |
+| Input quá dài / sai kiểu | `sanitize()` + `typeof` check – trim, giới hạn độ dài |
+| Secret key bị log | Code không bao giờ log `secret_key` (chỉ trả về 1 lần tại register, không vào audit_log) |
+
+---
+
+### Checklist hoàn thành Task 8
+
+- [x] `src/config/env.ts` – validate 6 biến bắt buộc + độ dài JWT_SECRET khi startup
+- [x] `server.ts` – `import "./config/env"` là import đầu tiên
+- [x] `app.ts` – `helmet()` bật đầy đủ security headers
+- [x] `app.ts` – CORS chỉ cho phép `FRONTEND_URL` (default `http://localhost:3000`), `credentials: true`
+- [x] `app.ts` – `express.json({ limit: '10kb' })` giới hạn body size
+- [x] `app.ts` – `authLimiter`: 10 req/15 phút/IP trên `/api/auth/login`
+- [x] `app.ts` – `deviceDataLimiter`: 60 req/phút/IP trên `/api/device/data`
+- [x] `app.ts` – `apiLimiter`: 100 req/15 phút/IP trên toàn bộ `/api` còn lại
+- [x] `auth.ts` – sanitize `username` (trim, max 64) và `password` (max 128)
+- [x] `devices.ts` – helper `sanitize()` + áp dụng cho `device_name` (128), `device_type` (16), `location` (256)
+- [x] `.env.example` – thêm `FRONTEND_URL`, ghi chú min-length `JWT_SECRET`
+- [x] `secret_key` không bao giờ bị log ra console hoặc audit_log
+- [x] TypeScript compile không lỗi (`tsc --noEmit` pass)

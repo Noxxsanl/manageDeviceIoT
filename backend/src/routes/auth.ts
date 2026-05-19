@@ -8,7 +8,9 @@ const router = Router();
 
 // POST /api/auth/login
 router.post("/login", async (req: Request, res: Response): Promise<void> => {
-  const { username, password } = req.body ?? {};
+  const raw = req.body ?? {};
+  const username = typeof raw.username === "string" ? raw.username.trim().slice(0, 64) : "";
+  const password = typeof raw.password === "string" ? raw.password.slice(0, 128) : "";
 
   if (!username || !password) {
     res.status(400).json({ error: "MISSING_FIELDS" });
