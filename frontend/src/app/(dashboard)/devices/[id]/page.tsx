@@ -22,14 +22,16 @@ export default async function DeviceDetailPage({ params }: DeviceDetailPageProps
   const deviceLogs = logs.filter((log) => log.deviceId === device.deviceId).slice(0, 5);
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] w-full px-4 py-6 sm:px-6 lg:px-10 xl:px-12">
+    <div className="min-h-[calc(100vh-5rem)] w-full">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-2">
           <Link href="/devices" className="text-sm text-slate-400 hover:text-slate-100">
             {"<- Back to Devices"}
           </Link>
           <h1 className="text-4xl font-semibold text-white">{device.name}</h1>
-          <p className="text-slate-400">Detailed operational and security view for the selected device.</p>
+          <p className="text-slate-400">
+            Detailed operational and security view for the selected device.
+          </p>
         </div>
         <div className="rounded-3xl bg-slate-900/90 px-4 py-3 text-sm text-slate-300">
           Device #{device.deviceId}
@@ -37,9 +39,11 @@ export default async function DeviceDetailPage({ params }: DeviceDetailPageProps
       </div>
 
       {device.isUnderAttack ? (
-        <div className="mb-6 rounded-[2rem] border border-rose-500/30 bg-rose-500/10 px-6 py-5 text-sm text-rose-200 shadow-lg shadow-rose-950/20">
+        <div className="mb-6 rounded-[2rem] border border-rose-500/30 bg-rose-500/10 px-6 py-5 text-sm text-rose-200">
           <p className="font-semibold text-rose-100">Attack warning detected</p>
-          <p className="mt-2 text-slate-200">Immediate review recommended for security threats and authentication anomalies.</p>
+          <p className="mt-2 text-slate-200">
+            Immediate review recommended for security threats and authentication anomalies.
+          </p>
         </div>
       ) : null}
 
@@ -51,7 +55,7 @@ export default async function DeviceDetailPage({ params }: DeviceDetailPageProps
         </div>
         <div className="space-y-5">
           <DeviceSecurityPanel device={device} />
-          <div className="rounded-[2rem] border border-slate-900/10 bg-slate-950/95 p-6 shadow-lg shadow-slate-950/20">
+          <div className="rounded-[2rem] border border-slate-800 bg-slate-950/95 p-6">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Recent device logs</p>
