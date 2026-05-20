@@ -2443,3 +2443,317 @@ Build thành công, không có lỗi compile.
 - [x] `mqtt_sender.cpp` – build JSON payload, tính HMAC, publish topic `local/sensors/<ID>/data`
 - [x] `main.cpp` – setup() khởi tạo đúng thứ tự, loop() với guard conditions + LED nháy khi gửi OK
 - [x] Build thành công: `[SUCCESS]` – Flash 58%, RAM 14%, không có lỗi compile
+
+---
+
+## Task 15 – Firmware ESP32: Gateway Node (ESP32-S3 N16R8)
+
+**Branch:** `hw/gateway-firmware-integration`
+**Ngày hoàn thành:** 2026-05-21
+
+---
+
+### 1. Cập nhật `firmware/gateway-node/platformio.ini` – ESP32-S3 N16R8
+
+Cấu hình đúng cho board **ESP32-S3 N16R8** (16MB Flash, 8MB OPI PSRAM):
+
+```ini
+[env:esp32s3-n16r8]
+platform = espressif32
+board = esp32-s3-devkitc-1
+framework = arduino
+monitor_speed = 115200
+monitor_rts = 0
+monitor_dtr = 0
+
+board_build.flash_size          = 16MB
+board_build.flash_mode          = qio
+board_build.partitions          = partitions_16MB.csv
+board_build.arduino.memory_type = qio_opi   ; QIO Flash + OPI PSRAM (N16R8)
+
+build_flags =
+    -DCORE_DEBUG_LEVEL=0
+    -DBOARD_HAS_PSRAM
+    -DARDUINO_USB_CDC_ON_BOOT=1             ; Serial → USB CDC native
+    -DARDUINO_USB_MODE=1
+
+lib_deps =
+    knolleary/PubSubClient@^2.8
+    bblanchon/ArduinoJson@^6.21.5
+```
+
+**Các lỗi đã sửa so với cấu hình cũ:**
+
+| Lỗi cũ | Sửa thành |
+|---|---|
+| `-mfix-esp32-psram-cache-issue` | Xóa – flag này chỉ dành cho ESP32 cổ điển, gây lỗi compile trên S3 |
+| Không có `board_build.flash_size` | Thêm `16MB` |
+| Không có partition table | Thêm `partitions_16MB.csv` |
+| Không có PSRAM type | `board_build.arduino.memory_type = qio_opi` (OPI PSRAM của N16R8) |
+| Không có USB CDC flag | `-DARDUINO_USB_CDC_ON_BOOT=1`, `-DARDUINO_USB_MODE=1` |
+
+---
+
+### 2. Tạo `firmware/gateway-node/partitions_16MB.csv`
+
+Custom partition table cho 16MB flash:
+
+```csv
+# Name,   Type, SubType,  Offset,    Size
+nvs,      data, nvs,      0x9000,    0x5000
+otadata,  data, ota,      0xe000,    0x2000
+app0,     app,  ota_0,    0x10000,   0x640000   ; 6.25 MB / slot
+app1,     app,  ota_1,    0x650000,  0x640000
+spiffs,   data, spiffs,   0xC90000,  0x360000   ; 3.375 MB user storage
+coredump, data, coredump, 0xFF0000,  0x10000
+```
+
+---
+
+### 3. Tạo `firmware/gateway-node/src/config_gw.h` – Gateway Config
+
+File khai báo toàn bộ hằng số cấu hình cho Gateway Node:
+
+| Hằng số | Mô tả |
+|---|---|
+| `GW_DEVICE_ID` | Device ID nhận từ `POST /api/devices/register` (vd: `"ESP32-GW-XXXXXXXX"`) |
+| `GW_SECRET_KEY` | Secret key 64 ký tự hex nhận từ `POST /api/devices/register` |
+| `WIFI_SSID` / `WIFI_PASS` | Thông tin WiFi |
+| `MQTT_HOST` / `MQTT_PORT` | IP và port của MQTT broker |
+| `MQTT_BUFFER_SIZE` | 1024 bytes – buffer cho MQTT payload |
+| `BACKEND_URL` | `http://<ip>:3000/api/device/data` |
+| `HTTP_TIMEOUT` | 10000 ms |
+| `LED_WIFI_PIN` | GPIO 4 – LED ngoài báo WiFi (không dùng GPIO 0 = BOOT) |
+| `LED_FWD_PIN` | GPIO 5 – LED ngoài nháy khi forward thành công |
+
+**Lưu ý quan trọng về GPIO ESP32-S3:**
+- GPIO 0 = BOOT button → **KHÔNG dùng làm LED**
+- GPIO 2 trên S3 **KHÔNG** có onboard LED (khác ESP32 cổ điển)
+- GPIO 48 = onboard RGB WS2812B → cần thư viện NeoPixel, không dùng `digitalWrite`
+- GPIO 19/20 = USB D-/D+ → **KHÔNG dùng**
+- Dùng LED ngoài trên GPIO 4, 5 (qua điện trở 220Ω–330Ω)
+
+**Cấu trúc `KNOWN_SENSORS`** – danh sách sensor được phép forward:
+
+```cpp
+struct SensorCredential {
+    const char* device_id;
+    const char* secret_key;
+};
+
+static const SensorCredential KNOWN_SENSORS[] = {
+    { "ESP32-SN-XXXXXXXX", "sensor-64-char-hex-secret-key" },
+};
+```
+
+> ⚠️ File `config_gw.h` được thêm vào `.gitignore` để tránh commit credentials lên repo.
+
+---
+
+### 4. Tạo `firmware/gateway-node/src/wifi_manager.h/.cpp`
+
+Tái sử dụng cấu trúc tương tự sensor-node, quản lý WiFi với auto-reconnect:
+
+#### `wifiSetup()`
+- `WiFi.mode(WIFI_STA)` → `WiFi.begin(SSID, PASS)`
+- Polling tối đa 40 lần (×500ms = 20s)
+- Thành công: `digitalWrite(LED_WIFI_PIN, HIGH)` + in IP
+
+#### `wifiMaintain()`
+- Phát hiện ngắt kết nối: `LED_WIFI_PIN LOW` + `WiFi.reconnect()`
+
+#### `wifiIsConnected()`
+- `return WiFi.status() == WL_CONNECTED`
+
+---
+
+### 5. Tạo `firmware/gateway-node/src/ntp_sync.h/.cpp`
+
+Đồng bộ thời gian NTP – **bắt buộc trước khi xử lý HMAC**:
+
+```cpp
+void ntpSetup()             // configTime(UTC+7), polling tối đa 20 lần
+unsigned long getCurrentTimestamp()  // time_t → Unix timestamp (giây)
+bool ntpIsSynced()          // true nếu đã sync ít nhất 1 lần
+```
+
+> Gateway từ chối xử lý message MQTT nếu NTP chưa đồng bộ (timestamp sẽ không hợp lệ).
+
+---
+
+### 6. Tạo `firmware/gateway-node/src/hmac_util.h/.cpp`
+
+Tính HMAC-SHA256 dùng **mbedtls built-in** của ESP32 (không cần lib ngoài):
+
+```cpp
+String computeHMAC(const String& key, const String& message);
+```
+
+Luồng tính toán:
+1. `mbedtls_md_setup(&ctx, MBEDTLS_MD_SHA256, 1)` – HMAC mode
+2. `mbedtls_md_hmac_starts/update/finish` – tính 32 bytes
+3. Convert → hex string 64 ký tự lowercase
+
+---
+
+### 7. Tạo `firmware/gateway-node/src/mqtt_client.h/.cpp`
+
+MQTT client subscribe wildcard để nhận dữ liệu từ mọi sensor:
+
+#### `mqttClientSetup(cb)`
+- `mqttClient.setServer(MQTT_HOST, MQTT_PORT)`
+- `mqttClient.setBufferSize(1024)`
+- Đăng ký callback `onMqttMessage` → null-terminate payload → gọi user callback
+
+#### `mqttClientMaintain()`
+- Nếu connected: `mqttClient.loop()` – xử lý MQTT heartbeat (non-blocking)
+- Nếu mất kết nối: reconnect sau 5s throttle, auto re-subscribe wildcard `local/sensors/+/data`
+
+#### MQTT Wildcard Subscribe:
+```
+Topic: local/sensors/+/data
+```
+Gateway nhận dữ liệu từ **tất cả sensor** qua wildcard `+`.
+
+---
+
+### 8. Tạo `firmware/gateway-node/src/forwarder.h/.cpp`
+
+Module trung tâm – xác thực Sensor HMAC và forward lên Backend:
+
+#### Luồng xử lý `forwardSensorData(topic, payload, length)`:
+
+| Bước | Hành động | Kết quả khi thất bại |
+|---|---|---|
+| 1 | Parse JSON payload từ Sensor | Log lỗi + return |
+| 2 | Kiểm tra đủ field bắt buộc (`sensor_id`, `sn_timestamp`, `sn_hmac`, `data`) | Log + return |
+| 3 | Tra cứu `sensor_id` trong `KNOWN_SENSORS` | Log `REJECT – sensor không trong whitelist` + return |
+| 4 | Kiểm tra timestamp window: `|now - sn_timestamp| ≤ 300s` | Log `REJECT – timestamp quá cũ/mới` + return |
+| 5 | Xác thực Sensor HMAC bằng constant-time XOR | Log `REJECT – HMAC không hợp lệ` + return |
+| 6 | Tính Gateway HMAC: `HMAC(GW_SECRET, "gw_id:gw_timestamp")` | — |
+| 7 | Build payload đầy đủ 7 field | — |
+| 8 | `HTTP POST /api/device/data` + xử lý response | Log HTTP error code |
+| 9 | HTTP 200 → nháy LED_FWD_PIN + log OK | — |
+
+#### Payload gửi lên Backend:
+```json
+{
+  "gateway_id":   "ESP32-GW-XXXXXXXX",
+  "gw_timestamp": 1716174600,
+  "gw_hmac":      "64-char-hex",
+  "sensor_id":    "ESP32-SN-YYYYYYYY",
+  "sn_timestamp": 1716174600,
+  "sn_hmac":      "64-char-hex",
+  "data": { "temperature": 28.5, "humidity": 65.2 }
+}
+```
+
+#### Constant-time HMAC comparison (chống timing attack):
+```cpp
+uint8_t diff = 0;
+for (size_t i = 0; i < expected.length(); i++) {
+    diff |= (uint8_t)(expected[i] ^ sn_hmac[i]);
+}
+return diff == 0;
+```
+
+---
+
+### 9. Viết lại `firmware/gateway-node/src/main.cpp`
+
+#### `setup()`
+1. `Serial.begin(115200)` + banner khởi động
+2. `pinMode(LED_FWD_PIN, OUTPUT)` – cấu hình LED GPIO 5
+3. `wifiSetup()` – kết nối WiFi, LED GPIO 4
+4. `ntpSetup()` – đồng bộ thời gian (cần WiFi)
+5. `mqttClientSetup(onSensorMessage)` – subscribe `local/sensors/+/data`
+
+#### `loop()`
+1. `wifiMaintain()` – duy trì WiFi
+2. `mqttClientMaintain()` – duy trì MQTT + xử lý message đến (non-blocking, không có `delay`)
+
+#### Guard NTP trong callback:
+```cpp
+static void onSensorMessage(topic, payload, length) {
+    if (!ntpIsSynced()) {
+        // Bỏ qua – không thể xác thực timestamp
+        return;
+    }
+    forwardSensorData(topic, payload, length);
+}
+```
+
+---
+
+### 10. Tạo `firmware/gateway-node/.vscode/c_cpp_properties.json`
+
+Cấu hình IntelliSense cho VS Code trỏ đúng sang ESP32-S3 SDK:
+
+| Mục | Giá trị |
+|---|---|
+| SDK include path | `tools/sdk/esp32s3/` (thay vì `esp32/` của sensor-node) |
+| Variant | `variants/esp32s3` |
+| Compiler | `toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-gcc.exe` |
+| Defines | `ESP32S3`, `ARDUINO_ESP32S3_DEV`, `BOARD_HAS_PSRAM`, `ARDUINO_USB_CDC_ON_BOOT=1` |
+| Thêm mới | `tools/sdk/esp32s3/include/usb/include`, `arduino_tinyusb` (USB native của S3) |
+
+---
+
+### Cấu trúc file đã tạo
+
+```
+firmware/gateway-node/
+├── platformio.ini              # ESP32-S3 N16R8: 16MB Flash, OPI PSRAM, USB CDC
+├── partitions_16MB.csv         # Custom partition table: 2×6.25MB OTA + 3.375MB SPIFFS
+├── .vscode/
+│   ├── c_cpp_properties.json   # IntelliSense → sdk/esp32s3/, toolchain-xtensa-esp32s3
+│   └── extensions.json
+└── src/
+    ├── config_gw.h             # GW_DEVICE_ID, GW_SECRET_KEY, MQTT, Backend URL, GPIO 4/5
+    ├── wifi_manager.h/.cpp     # WiFi kết nối + auto-reconnect + LED GPIO 4
+    ├── ntp_sync.h/.cpp         # NTP UTC+7 + getCurrentTimestamp() + ntpIsSynced()
+    ├── hmac_util.h/.cpp        # computeHMAC() dùng mbedtls built-in
+    ├── mqtt_client.h/.cpp      # MQTT subscribe wildcard local/sensors/+/data
+    ├── forwarder.h/.cpp        # Xác thực SN HMAC → tính GW HMAC → HTTP POST Backend
+    └── main.cpp                # setup() + loop() non-blocking
+```
+
+---
+
+### Serial Monitor Output mẫu
+
+```
+╔══════════════════════════════════╗
+║   IoT Gateway Node – Khởi động   ║
+╚══════════════════════════════════╝
+  Gateway ID : ESP32-GW-A1B2C3D4
+  Backend URL: http://192.168.1.100:3000/api/device/data
+
+[WiFi] Connecting to 'MyNetwork'......... OK – IP: 192.168.1.106
+[NTP] Syncing......... OK – 2026-05-21 09:00:00 (UTC+7)
+[MQTT] Broker: 192.168.1.100:1883
+[MQTT] Connecting as 'gw-ESP32-GW-A1B2C3D4'... OK
+[MQTT] Subscribed to 'local/sensors/+/data'
+[MAIN] Setup hoàn tất – lắng nghe sensor data...
+
+[MQTT] Received on 'local/sensors/ESP32-SN-E5F6G7H8/data' (120 bytes)
+[FWD] Sensor HMAC OK – 'ESP32-SN-E5F6G7H8'
+[FWD] Payload (310 bytes): {"gateway_id":"ESP32-GW-A1B2C3D4","gw_timestamp":1716174600,...}
+[FWD] Backend OK (200) – {"success":true,...}
+```
+
+---
+
+### Checklist hoàn thành Task 15
+
+- [x] `platformio.ini` – board `esp32-s3-devkitc-1`, `16MB` flash, `qio_opi` PSRAM, USB CDC flags
+- [x] `partitions_16MB.csv` – partition table 2×OTA app (6.25MB) + SPIFFS (3.375MB)
+- [x] `config_gw.h` – `GW_DEVICE_ID`, `GW_SECRET_KEY`, WiFi, MQTT, Backend URL, `LED_WIFI_PIN=4`, `LED_FWD_PIN=5`, `KNOWN_SENSORS[]`
+- [x] Không dùng GPIO 0 (BOOT) và GPIO 2 (không có LED trên S3); không dùng GPIO 48 (WS2812B cần NeoPixel lib)
+- [x] `wifi_manager.cpp` – kết nối WiFi, auto-reconnect, LED GPIO 4
+- [x] `ntp_sync.cpp` – `configTime(UTC+7)`, `getCurrentTimestamp()`, `ntpIsSynced()`
+- [x] `hmac_util.cpp` – `computeHMAC()` dùng `mbedtls_md_hmac`, trả hex string 64 ký tự
+- [x] `mqtt_client.cpp` – subscribe wildcard `local/sensors/+/data`, auto-reconnect 5s throttle, non-blocking `mqttClient.loop()`
+- [x] `forwarder.cpp` – parse JSON sensor, tra KNOWN_SENSORS, kiểm tra timestamp ±300s, xác thực SN HMAC constant-time, tính GW HMAC, HTTP POST Backend, nháy LED khi 200 OK
+- [x] `main.cpp` – guard NTP trong callback, `loop()` không có `delay` (non-blocking)
+- [x] `.vscode/c_cpp_properties.json` – IntelliSense trỏ đúng `sdk/esp32s3/`, compiler `xtensa-esp32s3-elf-gcc.exe`
