@@ -2143,3 +2143,303 @@ Tính năng:
 - [x] `/users` page – admin-only guard, form tạo operator/viewer, đổi mật khẩu modal, xoá với confirm
 - [x] Sidebar `/audit` và `/users` đã có sẵn từ trước → không cần sửa
 - [x] TypeScript compile không lỗi (frontend + backend)
+
+---
+
+## Task 14 – Firmware ESP32: Sensor Node
+
+**Branch:** `hw/sensor-node-firmware`
+**Ngày hoàn thành:** 2026-05-20
+
+---
+
+### 1. Cập nhật `firmware/sensor-node/platformio.ini`
+
+Bổ sung thư viện và cấu hình build cho ESP32 WROOM-32 (DOIT DevKit v1):
+
+```ini
+[env:esp32doit-devkit-v1]
+platform = espressif32
+board = esp32doit-devkit-v1
+framework = arduino
+monitor_speed = 115200
+
+lib_deps =
+    knolleary/PubSubClient@^2.8
+    adafruit/DHT sensor library@^1.4.4
+    adafruit/Adafruit Unified Sensor@^1.1.9
+    bblanchon/ArduinoJson@^6.21.5
+
+build_flags =
+    -DCORE_DEBUG_LEVEL=0
+```
+
+| Thư viện | Mục đích |
+|---|---|
+| `PubSubClient` | MQTT client publish/subscribe |
+| `DHT sensor library` | Đọc dữ liệu từ DHT22 |
+| `Adafruit Unified Sensor` | Dependency bắt buộc của DHT library |
+| `ArduinoJson` | Build và serialize JSON payload |
+
+`mbedtls` (dùng cho HMAC-SHA256) là thư viện **built-in** của ESP32 Arduino framework – không cần khai báo thêm.
+
+---
+
+### 2. Tạo `firmware/sensor-node/src/config.h`
+
+File khai báo toàn bộ hằng số cấu hình:
+
+| Hằng số | Mô tả |
+|---|---|
+| `DEVICE_ID` | Device ID nhận từ `POST /api/devices/register` (vd: `"ESP32-SN-XXXXXXXX"`) |
+| `SECRET_KEY` | Secret key 64 ký tự hex nhận từ `POST /api/devices/register` |
+| `WIFI_SSID` / `WIFI_PASS` | Thông tin WiFi |
+| `MQTT_HOST` / `MQTT_PORT` | IP và port của MQTT broker (hoặc Gateway) |
+| `DHT_PIN` | GPIO 4 – chân DATA của DHT22, kèm điện trở pull-up 10kΩ lên 3.3V |
+| `DHT_TYPE` | `DHT22` |
+| `LED_WIFI_PIN` | GPIO 0 – LED xanh báo WiFi đã kết nối |
+| `LED_SEND_PIN` | GPIO 2 – LED đỏ onboard, nháy khi gửi dữ liệu thành công |
+| `SEND_INTERVAL` | 5000 ms – chu kỳ gửi dữ liệu |
+| `MQTT_BUFFER_SIZE` | 512 bytes – kích thước buffer MQTT payload |
+
+> ⚠️ File `config.h` được thêm vào `.gitignore` để tránh commit credentials lên repo.
+
+---
+
+### 3. Tạo `firmware/sensor-node/src/wifi_manager.h` + `wifi_manager.cpp`
+
+Quản lý kết nối WiFi với tự động reconnect:
+
+#### `wifiSetup()`
+- `WiFi.mode(WIFI_STA)` → `WiFi.begin(SSID, PASS)`
+- Polling `WiFi.status()` tối đa 40 lần (×500ms = 20s)
+- Kết nối thành công: `digitalWrite(LED_WIFI_PIN, HIGH)` + in IP ra Serial
+- Thất bại: in cảnh báo, sẽ thử lại trong `loop()`
+
+#### `wifiMaintain()`
+- Gọi mỗi vòng `loop()`
+- Phát hiện ngắt kết nối: `LED_WIFI_PIN LOW` + `WiFi.reconnect()`
+- Phát hiện reconnect thành công: `LED_WIFI_PIN HIGH` + in IP mới
+
+#### `wifiIsConnected()`
+- `return WiFi.status() == WL_CONNECTED`
+
+---
+
+### 4. Tạo `firmware/sensor-node/src/ntp_sync.h` + `ntp_sync.cpp`
+
+Đồng bộ thời gian thực từ NTP server:
+
+#### `ntpSetup()`
+- `configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov")` → UTC+7 Việt Nam
+- Polling `getLocalTime()` tối đa 20 lần (×500ms = 10s)
+- Thành công: in thời gian hiện tại, đặt `_synced = true`
+- Thất bại: cảnh báo timestamp sẽ không chính xác
+
+#### `getCurrentTimestamp()`
+- `time_t now; time(&now); return (unsigned long)now;`
+- Trả Unix timestamp (giây) dùng trong HMAC message
+
+#### `ntpIsSynced()`
+- Trả `true` nếu đã sync ít nhất 1 lần thành công
+
+---
+
+### 5. Tạo `firmware/sensor-node/src/hmac_util.h` + `hmac_util.cpp`
+
+Tính HMAC-SHA256 dùng **mbedtls built-in** của ESP32:
+
+```cpp
+String computeHMAC(const String& key, const String& message);
+```
+
+#### Luồng tính toán:
+1. `mbedtls_md_context_t ctx` – khởi tạo context
+2. `mbedtls_md_setup(&ctx, MBEDTLS_MD_SHA256, 1)` – chọn SHA-256 + HMAC mode
+3. `mbedtls_md_hmac_starts(&ctx, key.c_str(), key.length())` – set key
+4. `mbedtls_md_hmac_update(&ctx, message.c_str(), message.length())` – đưa data
+5. `mbedtls_md_hmac_finish(&ctx, hmacResult)` – lấy 32 bytes kết quả
+6. `mbedtls_md_free(&ctx)` – giải phóng memory
+7. Convert 32 bytes → 64 ký tự hex lowercase bằng `snprintf("%02x", ...)`
+
+#### Format message để ký:
+```
+message = DEVICE_ID + ":" + timestamp
+ví dụ: "ESP32-SN-A1B2C3D4:1700000000"
+```
+
+Kết quả: hex string 64 ký tự, ví dụ: `"a3f9c2e1..."`
+
+---
+
+### 6. Tạo `firmware/sensor-node/src/sensor_reader.h` + `sensor_reader.cpp`
+
+Đọc dữ liệu nhiệt độ và độ ẩm từ DHT22:
+
+```cpp
+struct SensorData {
+    float temperature;  // °C
+    float humidity;     // %
+    bool  valid;        // false nếu đọc thất bại
+};
+```
+
+#### `sensorSetup()`
+- `dht.begin()` – khởi tạo DHT22 trên GPIO 4
+- `delay(2000)` – DHT22 cần 2s warmup sau khi cấp nguồn
+- In thông báo khởi tạo ra Serial
+
+#### `readSensor()`
+- `dht.readHumidity()` + `dht.readTemperature()`
+- Kiểm tra `isnan()` cho cả 2 giá trị
+- Nếu NaN: `valid = false`, log lỗi
+- Nếu hợp lệ: `valid = true`, log giá trị ra Serial
+
+> **Phần cứng:** DHT22 dùng GPIO 4, thêm điện trở pull-up **10kΩ** từ DATA pin lên 3.3V.
+
+---
+
+### 7. Tạo `firmware/sensor-node/src/mqtt_sender.h` + `mqtt_sender.cpp`
+
+MQTT client publish dữ liệu lên topic cho Gateway:
+
+#### `mqttSetup()`
+- `mqttClient.setServer(MQTT_HOST, MQTT_PORT)`
+- `mqttClient.setBufferSize(MQTT_BUFFER_SIZE)` – 512 bytes
+- In thông tin broker ra Serial
+
+#### `mqttMaintain()`
+- Gọi mỗi vòng `loop()`
+- Nếu đang kết nối: `mqttClient.loop()` – xử lý MQTT heartbeat
+- Nếu mất kết nối: reconnect sau 5s (`millis()` throttle) với client ID `"sn-<DEVICE_ID>"`
+
+#### `mqttPublishSensorData(const SensorData& data)`
+
+Luồng xử lý:
+1. Kiểm tra `mqttClient.connected()` – nếu không thì return false
+2. Lấy `timestamp = getCurrentTimestamp()`
+3. Tạo `message = DEVICE_ID + ":" + timestamp`
+4. Tính `hmac = computeHMAC(SECRET_KEY, message)`
+5. Build JSON bằng `StaticJsonDocument<256>`:
+6. Serialize JSON → `char payload[512]`
+7. `mqttClient.publish(topic, payload, false)` – QoS 0, no retain
+
+#### Payload JSON gửi lên MQTT:
+```json
+{
+  "sensor_id":    "ESP32-SN-XXXXXXXX",
+  "sn_timestamp": 1700000000,
+  "sn_hmac":      "64-char-hex-string",
+  "data": {
+    "temperature": 28.5,
+    "humidity": 65.2
+  }
+}
+```
+
+#### Topic MQTT:
+```
+local/sensors/ESP32-SN-XXXXXXXX/data
+```
+
+Gateway sẽ subscribe wildcard `local/sensors/+/data` để nhận dữ liệu từ tất cả sensor.
+
+---
+
+### 8. Viết lại `firmware/sensor-node/src/main.cpp`
+
+File điều phối chính toàn bộ firmware:
+
+#### `setup()`
+1. `Serial.begin(115200)` – in banner khởi động
+2. `pinMode(LED_SEND_PIN, OUTPUT)` – cấu hình LED GPIO 2
+3. `wifiSetup()` – kết nối WiFi
+4. `ntpSetup()` – đồng bộ thời gian (cần WiFi)
+5. `sensorSetup()` – khởi tạo DHT22
+6. `mqttSetup()` – cấu hình MQTT client
+
+#### `loop()`
+1. `wifiMaintain()` – duy trì WiFi
+2. `mqttMaintain()` – duy trì MQTT + `mqttClient.loop()`
+3. Kiểm tra `millis() - lastSendTime >= SEND_INTERVAL` (5000ms)
+4. Guard conditions trước khi gửi:
+   - `wifiIsConnected()` – nếu không: skip + log
+   - `ntpIsSynced()` – nếu không: skip + log (HMAC sẽ sai)
+   - `mqttIsConnected()` – nếu không: skip + log
+5. `readSensor()` – đọc DHT22
+6. Guard: `data.valid` – nếu không: skip + log
+7. `mqttPublishSensorData(data)` – tính HMAC + gửi MQTT
+8. Nháy LED GPIO 2: `HIGH(100ms) → LOW` khi gửi thành công
+
+---
+
+### Serial Monitor Output mẫu
+
+```
+╔══════════════════════════════════╗
+║   IoT Sensor Node – Khởi động    ║
+╚══════════════════════════════════╝
+  Device ID  : ESP32-SN-A1B2C3D4
+  DHT22 Pin  : GPIO 4
+  Gửi mỗi   : 5000 ms
+
+[WiFi] Connecting to 'MyNetwork'......... OK – IP: 192.168.1.105
+[NTP] Syncing......... OK – 2026-05-20 14:30:00 (UTC+7)
+[DHT] DHT22 khởi tạo trên GPIO 4
+[MAIN] Setup hoàn tất – vào vòng lặp chính
+
+[DHT] Nhiệt độ: 28.5°C | Độ ẩm: 65.2%
+[MQTT] Published (120 bytes): {"sensor_id":"ESP32-SN-A1B2C3D4","sn_timestamp":1716174600,"sn_hmac":"a3f9...","data":{"temperature":28.5,"humidity":65.2}}
+```
+
+---
+
+### Cấu trúc file đã tạo
+
+```
+firmware/sensor-node/
+├── platformio.ini          # Board config + lib_deps
+└── src/
+    ├── config.h            # Device ID, Secret Key, WiFi, MQTT, GPIO
+    ├── wifi_manager.h/.cpp # WiFi kết nối + auto-reconnect + LED GPIO 0
+    ├── ntp_sync.h/.cpp     # NTP UTC+7 + getCurrentTimestamp()
+    ├── hmac_util.h/.cpp    # computeHMAC() dùng mbedtls built-in
+    ├── sensor_reader.h/.cpp # DHT22 GPIO 4 + struct SensorData
+    ├── mqtt_sender.h/.cpp  # MQTT publish + JSON + HMAC
+    └── main.cpp            # setup() + loop() orchestration
+```
+
+---
+
+### Kết quả build
+
+```
+RAM:   [=         ]  14.1% (used 46048 bytes from 327680 bytes)
+Flash: [======    ]  58.0% (used 759641 bytes from 1310720 bytes)
+========================= [SUCCESS] Took 54.75 seconds =========================
+```
+
+Build thành công, không có lỗi compile.
+
+---
+
+### Hướng dẫn sử dụng
+
+1. **Đăng ký thiết bị** qua `POST /api/devices/register` → lấy `device_id` và `secret_key`
+2. **Cập nhật `config.h`**: điền `DEVICE_ID`, `SECRET_KEY`, `WIFI_SSID`, `WIFI_PASS`, `MQTT_HOST`
+3. **Flash firmware**: `pio run --target upload`
+4. **Giám sát**: `pio device monitor` (115200 baud)
+
+---
+
+### Checklist hoàn thành Task 14
+
+- [x] `platformio.ini` – board `esp32doit-devkit-v1`, lib_deps: PubSubClient, DHT, ArduinoJson
+- [x] `config.h` – khai báo đầy đủ `DEVICE_ID`, `SECRET_KEY`, WiFi, MQTT, GPIO, `SEND_INTERVAL`
+- [x] `wifi_manager.cpp` – kết nối WiFi, auto-reconnect, LED GPIO 0
+- [x] `ntp_sync.cpp` – `configTime(UTC+7)`, `getCurrentTimestamp()` trả Unix timestamp
+- [x] `hmac_util.cpp` – `computeHMAC()` dùng `mbedtls_md_hmac`, trả hex string 64 ký tự
+- [x] `sensor_reader.cpp` – DHT22 GPIO 4, pull-up 10kΩ, `readSensor()` trả `SensorData`
+- [x] `mqtt_sender.cpp` – build JSON payload, tính HMAC, publish topic `local/sensors/<ID>/data`
+- [x] `main.cpp` – setup() khởi tạo đúng thứ tự, loop() với guard conditions + LED nháy khi gửi OK
+- [x] Build thành công: `[SUCCESS]` – Flash 58%, RAM 14%, không có lỗi compile
