@@ -32,16 +32,13 @@ void wifiSetup() {
 void wifiMaintain() {
     if (WiFi.status() == WL_CONNECTED) {
         if (!_connected) {
-            // Vừa reconnect thành công
             _connected = true;
             digitalWrite(LED_WIFI_PIN, HIGH);
-            Serial.printf("[WiFi] Reconnected – IP: %s\n",
-                          WiFi.localIP().toString().c_str());
+            Serial.printf("[WiFi] Reconnected – IP: %s\n", WiFi.localIP().toString().c_str());
         }
         return;
     }
 
-    // Mất kết nối
     if (_connected) {
         _connected = false;
         digitalWrite(LED_WIFI_PIN, LOW);

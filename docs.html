@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IoT Device Manager – Tài liệu hướng dẫn</title>
+  <style>
+    :root {
+      --bg: #0a0f1a;
+      --surface: #111827;
+      --surface2: #1e2a3a;
+      --border: #1e3a5f;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-green: #34d399;
+      --accent-violet: #a78bfa;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f87171;
+      --accent-sky: #7dd3fc;
+      --code-bg: #0d1117;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ── LAYOUT ───────────────────────────────────── */
+    .layout { display: flex; min-height: 100vh; }
+
+    /* ── SIDEBAR ──────────────────────────────────── */
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: 260px;
+      height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 24px 0;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .sidebar-logo .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #38bdf8, #34d399);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .sidebar-logo .logo-text { font-size: 14px; font-weight: 700; color: var(--text); }
+    .sidebar-logo .logo-sub  { font-size: 11px; color: var(--muted); }
+
+    .nav-group { margin-bottom: 8px; }
+
+    .nav-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 6px 20px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 20px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .nav-link:hover { background: var(--surface2); color: var(--text); border-left-color: var(--border); }
+    .nav-link.active { background: rgba(56, 189, 248, 0.08); color: var(--accent-blue); border-left-color: var(--accent-blue); }
+    .nav-link .icon { font-size: 16px; width: 20px; text-align: center; }
+
+    /* ── MAIN ─────────────────────────────────────── */
+    .main {
+      margin-left: 260px;
+      flex: 1;
+      padding: 48px 56px;
+      max-width: 960px;
+    }
+
+    /* ── SECTIONS ─────────────────────────────────── */
+    section { margin-bottom: 72px; }
+
+    .section-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    h1 { font-size: 36px; font-weight: 700; color: white; line-height: 1.2; margin-bottom: 16px; }
+    h2 { font-size: 24px; font-weight: 700; color: white; margin-bottom: 14px; }
+    h3 { font-size: 17px; font-weight: 600; color: var(--accent-blue); margin-bottom: 10px; }
+    h4 { font-size: 14px; font-weight: 600; color: var(--accent-green); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    p { color: var(--muted); margin-bottom: 12px; }
+
+    /* ── HERO ─────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, rgba(56,189,248,0.06), rgba(52,211,153,0.04));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 40px;
+      margin-bottom: 48px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(56,189,248,0.1);
+      color: var(--accent-blue);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 99px;
+      border: 1px solid rgba(56,189,248,0.2);
+      margin-bottom: 16px;
+    }
+
+    /* ── ARCHITECTURE DIAGRAM ─────────────────────── */
+    .arch-diagram {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      overflow-x: auto;
+      margin: 20px 0;
+      white-space: pre;
+    }
+
+    .c-blue   { color: #38bdf8; }
+    .c-green  { color: #34d399; }
+    .c-violet { color: #a78bfa; }
+    .c-amber  { color: #fbbf24; }
+    .c-rose   { color: #f87171; }
+    .c-muted  { color: #475569; }
+    .c-white  { color: #f8fafc; }
+
+    /* ── CARDS ────────────────────────────────────── */
+    .card-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin: 20px 0; }
+    .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px;
+    }
+
+    .card-icon { font-size: 22px; margin-bottom: 10px; }
+    .card-title { font-size: 14px; font-weight: 600; color: white; margin-bottom: 6px; }
+    .card-desc  { font-size: 13px; color: var(--muted); }
+
+    .card.blue   { border-top: 3px solid var(--accent-blue);   }
+    .card.green  { border-top: 3px solid var(--accent-green);  }
+    .card.violet { border-top: 3px solid var(--accent-violet); }
+    .card.amber  { border-top: 3px solid var(--accent-amber);  }
+    .card.rose   { border-top: 3px solid var(--accent-rose);   }
+
+    /* ── CODE BLOCKS ──────────────────────────────── */
+    pre, code {
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    }
+
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    .code-block .code-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .code-block .code-header .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+
+    .code-block .code-header .dot.red    { background: #f87171; }
+    .code-block .code-header .dot.yellow { background: #fbbf24; }
+    .code-block .code-header .dot.green  { background: #34d399; }
+
+    .code-block pre { padding: 20px; font-size: 13px; line-height: 1.7; }
+
+    /* ── STEPS ────────────────────────────────────── */
+    .steps { display: flex; flex-direction: column; gap: 0; }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      padding-bottom: 32px;
+      position: relative;
+    }
+
+    .step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 42px;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(52,211,153,0.1));
+      border: 1px solid rgba(56,189,248,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--accent-blue);
+      z-index: 1;
+    }
+
+    .step-content { flex: 1; padding-top: 8px; }
+    .step-title { font-size: 16px; font-weight: 600; color: white; margin-bottom: 8px; }
+
+    /* ── API TABLE ────────────────────────────────── */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+
+    .api-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: var(--surface2);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .api-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid rgba(30,58,95,0.4);
+      color: var(--muted);
+      vertical-align: top;
+    }
+
+    .api-table tr:hover td { background: rgba(56,189,248,0.03); }
+
+    .method {
+      display: inline-block;
+      font-family: monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+
+    .method.GET    { background: rgba(52,211,153,0.12); color: #34d399; }
+    .method.POST   { background: rgba(56,189,248,0.12); color: #38bdf8; }
+    .method.PATCH  { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .method.DELETE { background: rgba(248,113,113,0.12); color: #f87171; }
+
+    .route-path { font-family: monospace; color: white; font-size: 13px; }
+    .route-desc { color: var(--muted); }
+
+    /* ── BADGES ───────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 99px;
+      margin: 2px;
+    }
+
+    .badge.admin    { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .badge.operator { background: rgba(251,191,36,0.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
+    .badge.viewer   { background: rgba(167,139,250,0.12); color: #a78bfa; border: 1px solid rgba(167,139,250,0.2); }
+    .badge.device   { background: rgba(56,189,248,0.10);  color: #38bdf8; border: 1px solid rgba(56,189,248,0.2); }
+
+    /* ── ALERT ────────────────────────────────────── */
+    .alert {
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-left: 4px solid;
+      font-size: 13.5px;
+    }
+
+    .alert.info    { background: rgba(56,189,248,0.06); border-color: var(--accent-blue); color: var(--accent-sky); }
+    .alert.warning { background: rgba(251,191,36,0.06); border-color: var(--accent-amber); color: var(--accent-amber); }
+    .alert.danger  { background: rgba(248,113,113,0.06); border-color: var(--accent-rose); color: var(--accent-rose); }
+    .alert.success { background: rgba(52,211,153,0.06); border-color: var(--accent-green); color: var(--accent-green); }
+
+    /* ── FLOW ─────────────────────────────────────── */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+
+    .flow-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .flow-arrow { color: var(--muted); font-size: 18px; }
+
+    /* ── ENV TABLE ────────────────────────────────── */
+    .env-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+    .env-item { display: flex; gap: 12px; font-size: 13px; align-items: baseline; }
+    .env-key { font-family: monospace; color: var(--accent-blue); flex-shrink: 0; min-width: 160px; }
+    .env-val { color: var(--muted); }
+    .env-required { color: var(--accent-rose); font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
+
+    /* ── DIVIDER ──────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+    /* ── RESPONSIVE ───────────────────────────────── */
+    @media (max-width: 900px) {
+      .sidebar { width: 200px; }
+      .main { margin-left: 200px; padding: 32px 28px; }
+      .card-grid-3 { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 24px 20px; }
+      .card-grid, .card-grid-2, .card-grid-3 { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+
+    /* ── SCROLLBAR ────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🛰️</div>
+      <div>
+        <div class="logo-text">IoT Manager</div>
+        <div class="logo-sub">Tài liệu hướng dẫn</div>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Tổng quan</div>
+      <a href="#overview"      class="nav-link active"><span class="icon">🗺️</span> Giới thiệu</a>
+      <a href="#architecture"  class="nav-link"><span class="icon">🏗️</span> Kiến trúc</a>
+      <a href="#tech-stack"    class="nav-link"><span class="icon">⚙️</span> Công nghệ</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Cài đặt</div>
+      <a href="#prerequisites" class="nav-link"><span class="icon">📋</span> Yêu cầu</a>
+      <a href="#backend-setup" class="nav-link"><span class="icon">🖥️</span> Backend</a>
+      <a href="#frontend-setup"class="nav-link"><span class="icon">🌐</span> Frontend</a>
+      <a href="#firmware-setup"class="nav-link"><span class="icon">💡</span> Firmware</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Chức năng</div>
+      <a href="#feat-auth"     class="nav-link"><span class="icon">🔐</span> Xác thực</a>
+      <a href="#feat-devices"  class="nav-link"><span class="icon">📡</span> Quản lý thiết bị</a>
+      <a href="#feat-data"     class="nav-link"><span class="icon">📊</span> Dữ liệu cảm biến</a>
+      <a href="#feat-audit"    class="nav-link"><span class="icon">📝</span> Audit Log</a>
+      <a href="#feat-users"    class="nav-link"><span class="icon">👥</span> Quản lý user</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">API & Bảo mật</div>
+      <a href="#api-reference" class="nav-link"><span class="icon">📚</span> API Reference</a>
+      <a href="#security"      class="nav-link"><span class="icon">🛡️</span> Bảo mật HMAC</a>
+      <a href="#roles"         class="nav-link"><span class="icon">🎭</span> Phân quyền</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Firmware</div>
+      <a href="#sensor-node"   class="nav-link"><span class="icon">🌡️</span> Sensor Node</a>
+      <a href="#gateway-node"  class="nav-link"><span class="icon">📶</span> Gateway Node</a>
+      <a href="#data-flow"     class="nav-link"><span class="icon">🔄</span> Luồng dữ liệu</a>
+    </div>
+  </nav>
+
+  <!-- ══ MAIN CONTENT ══════════════════════════════════════════════ -->
+  <main class="main">
+
+    <!-- ─── HERO ─────────────────────────────────────────────────── -->
+    <div class="hero">
+      <div class="hero-badge">📡 IoT Device Manager v1.0</div>
+      <h1>Hướng dẫn cài đặt & sử dụng</h1>
+      <p style="font-size:16px; color:#94a3b8; max-width:640px;">
+        Hệ thống quản lý thiết bị IoT đầy đủ: từ firmware ESP32 đọc cảm biến,
+        truyền qua MQTT & HMAC, đến Dashboard web theo dõi thời gian thực.F
+      </p>
+    </div>
+
+    <!-- ─── 1. GIỚI THIỆU ─────────────────────────────────────────── -->
+    <section id="overview">
+      <span class="section-tag">01 — Tổng quan</span>
+      <h2>Hệ thống là gì?</h2>
+      <p>
+        <strong style="color:white">IoT Device Manager</strong> là nền tảng quản lý & giám sát thiết bị IoT
+        theo kiến trúc <em>3 tầng</em>: Firmware phần cứng → Backend REST API → Frontend Dashboard.
+        Toàn bộ giao tiếp giữa thiết bị và server được bảo vệ bằng <strong style="color:#38bdf8">HMAC-SHA256</strong>.
+      </p>
+
+      <div class="card-grid card-grid-3" style="margin-top:24px">
+        <div class="card blue">
+          <div class="card-icon">🌡️</div>
+          <div class="card-title">Sensor Node (ESP32)</div>
+          <div class="card-desc">Đọc nhiệt độ & độ ẩm từ DHT22, ký HMAC và gửi lên MQTT broker mỗi 5 giây.</div>
+        </div>
+        <div class="card green">
+          <div class="card-icon">📶</div>
+          <div class="card-title">Gateway Node (ESP32-S3)</div>
+          <div class="card-desc">Nhận dữ liệu từ MQTT, xác thực, ký HMAC gateway rồi forward lên Backend qua HTTP.</div>
+        </div>
+        <div class="card violet">
+          <div class="card-icon">🖥️</div>
+          <div class="card-title">Backend (Node.js)</div>
+          <div class="card-desc">REST API xác thực HMAC 2 lớp, lưu dữ liệu vào MySQL, ghi audit log.</div>
+        </div>
+        <div class="card amber">
+          <div class="card-icon">🌐</div>
+          <div class="card-title">Frontend (Next.js)</div>
+          <div class="card-desc">Dashboard quản lý thiết bị, xem biểu đồ cảm biến, audit log, quản lý user.</div>
+        </div>
+        <div class="card rose">
+          <div class="card-icon">🛡️</div>
+          <div class="card-title">Bảo mật</div>
+          <div class="card-desc">JWT, HMAC-SHA256, Rate limiting, RBAC 3 cấp, auto-block sau 5 lần thất bại.</div>
+        </div>
+        <div class="card blue">
+          <div class="card-icon">📝</div>
+          <div class="card-title">Audit Log</div>
+          <div class="card-desc">Ghi lại toàn bộ sự kiện: đăng ký thiết bị, nhận dữ liệu, auth thất bại, block thiết bị.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── 2. KIẾN TRÚC ──────────────────────────────────────────── -->
+    <section id="architecture">
+      <span class="section-tag">02 — Kiến trúc</span>
+      <h2>Sơ đồ kiến trúc hệ thống</h2>
+
+      <div class="arch-diagram"><span class="c-muted">┌─────────────────── Môi trường vật lý (LAN) ───────────────────┐</span>
+<span class="c-muted">│</span>                                                               <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">┌──────────────┐</span>     MQTT      <span class="c-green">┌──────────────────┐</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│ Sensor Node  │</span>   ──────────► <span class="c-green">│  Gateway Node    │</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│  (ESP32)     │</span>   topic:      <span class="c-green">│   (ESP32-S3)     │</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│              │</span>   local/      <span class="c-green">│                  │</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│ DHT22 Sensor │</span>   sensors/    <span class="c-green">│ MQTT Subscriber  │</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│ HMAC-SHA256  │</span>   {id}/data   <span class="c-green">│ HMAC Verifier    │</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">└──────────────┘</span>              <span class="c-green">│ HTTP Forwarder   │</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>                               <span class="c-green">└────────┬─────────┘</span>          <span class="c-muted">│</span>
+<span class="c-muted">│</span>                                        <span class="c-muted">│ HTTP POST</span>           <span class="c-muted">│</span>
+<span class="c-muted">└────────────────────────────────────────┼──────────────────────┘</span>
+                                         <span class="c-muted">▼</span>
+<span class="c-muted">┌──────────────────── Cloud / Server ─────────────────────────────┐</span>
+<span class="c-muted">│</span>                                                                  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">┌──────────────────────────────────────────────────────────┐</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│              Backend REST API (Node.js + Express)        │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│                                                          │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/device/data  ◄── validateDevice (HMAC 2 lớp)      │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/devices      ◄── JWT Auth + RBAC                  │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/auth         ◄── bcrypt + Rate Limit               │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/audit-log    ◄── Ghi nhật ký toàn bộ sự kiện      │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">└──────────────────────────────┬───────────────────────────┘</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>                                <span class="c-muted">│</span>                                <span class="c-muted">│</span>
+<span class="c-muted">│</span>      <span class="c-amber">┌──────────────┐</span>          <span class="c-amber">▼</span>                                <span class="c-muted">│</span>
+<span class="c-muted">│</span>      <span class="c-amber">│  MySQL DB    │◄─────────── sensor_data, devices,        │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>      <span class="c-amber">└──────────────┘</span>          <span class="c-amber">users, audit_log</span>                <span class="c-muted">│</span>
+<span class="c-muted">│</span>                                                                  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">┌──────────────────────────────────────────────────────────┐</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│              Frontend Dashboard (Next.js)                │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│                                                          │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│  Dashboard / Devices / Sensor Charts / Audit / Users     │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">└──────────────────────────────────────────────────────────┘</span>  <span class="c-muted">│</span>
+<span class="c-muted">└──────────────────────────────────────────────────────────────────┘</span></div>
+    </section>
+
+    <!--  3. TECH STACK  -->
+    <section id="tech-stack">
+      <span class="section-tag">03 — Công nghệ</span>
+      <h2>Stack công nghệ</h2>
+      <div class="card-grid card-grid-2">
+        <div class="card">
+          <h3>🖥️ Backend</h3>
+          <ul style="color:var(--muted); font-size:13.5px; padding-left:18px; line-height:2.1">
+            <li>Node.js + Express + TypeScript</li>
+            <li>MySQL (connection pool)</li>
+            <li>JWT (jsonwebtoken) – 8h expiry</li>
+            <li>bcrypt (cost 12) - mã hoá mật khẩu</li>
+            <li>Helmet – HTTP security headers</li>
+            <li>express-rate-limit - giới hạn request</li>
+            <li>HMAC-SHA256 (built-in crypto)</li>
+            <li>Morgan – HTTP logger</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>🌐 Frontend</h3>
+          <ul style="color:var(--muted); font-size:13.5px; padding-left:18px; line-height:2.1">
+            <li>Next.js 15 + TypeScript</li>
+            <li>TailwindCSS – styling</li>
+            <li>Lucide React – icons</li>
+            <li>Axios – HTTP client</li>
+            <li>React Context – state management</li>
+            <li>App Router (Next.js)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>💡 Firmware ESP32</h3>
+          <ul style="color:var(--muted); font-size:13.5px; padding-left:18px; line-height:2.1">
+            <li>PlatformIO + Arduino framework</li>
+            <li>DHT22 – cảm biến nhiệt độ/độ ẩm</li>
+            <li>PubSubClient – MQTT client</li>
+            <li>ArduinoJson – JSON encode/decode</li>
+            <li>mbedTLS – tính HMAC-SHA256</li>
+            <li>WiFiClientSecure + HTTPClient</li>
+            <li>NTP sync – đồng bộ thời gian</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>🏗️ Infrastructure</h3>
+          <ul style="color:var(--muted); font-size:13.5px; padding-left:18px; line-height:2.1">
+            <li>Mosquitto MQTT Broker (local LAN)</li>
+            <li>MySQL 8.x</li>
+            <li>Cổng Backend: <code style="color:#38bdf8">3000</code></li>
+            <li>Cổng Frontend: <code style="color:#38bdf8">3001</code></li>
+            <li>MQTT: <code style="color:#38bdf8">1883</code></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!--  4. YÊU CẦU  -->
+    <section id="prerequisites">
+      <span class="section-tag">04 — Cài đặt</span>
+      <h2>Yêu cầu hệ thống</h2>
+
+      <div class="card-grid card-grid-3">
+        <div class="card">
+          <div class="card-icon">🟢</div>
+          <div class="card-title">Node.js</div>
+          <div class="card-desc">v18 hoặc mới hơn. Cài từ <a href="https://nodejs.org" style="color:#38bdf8">nodejs.org</a></div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🐬</div>
+          <div class="card-title">MySQL</div>
+          <div class="card-desc">v8.x. Có thể dùng MySQL Workbench hoặc XAMPP để quản lý</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📡</div>
+          <div class="card-title">Mosquitto</div>
+          <div class="card-desc">MQTT Broker – cài trên máy chủ cùng mạng LAN với ESP32</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔧</div>
+          <div class="card-title">PlatformIO</div>
+          <div class="card-desc">Extension trong VS Code để build & flash firmware ESP32</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🎛️</div>
+          <div class="card-title">ESP32 Hardware</div>
+          <div class="card-desc">Sensor Node: ESP32 DOIT DevKit V1 + DHT22<br>Gateway: ESP32-S3 N16R8</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">💻</div>
+          <div class="card-title">Hệ điều hành</div>
+          <div class="card-desc">Windows 10/11, macOS 12+, Ubuntu 20.04+</div>
+        </div>
+      </div>
+    </section>
+
+    <!--  5. BACKEND SETUP  -->
+    <section id="backend-setup">
+      <h2>🖥️ Cài đặt Backend</h2>
+
+      <div class="steps">
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Tạo Database MySQL</div>
+            <p>Chạy script SQL để tạo database và các bảng cần thiết:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>MySQL</span>
+              </div>
+              <pre><span class="c-blue">CREATE DATABASE</span> iot_manager <span class="c-blue">CHARACTER SET</span> utf8mb4 <span class="c-blue">COLLATE</span> utf8mb4_unicode_ci;
+<span class="c-blue">USE</span> iot_manager;
+
+<span class="c-blue">CREATE TABLE</span> users (
+  id           <span class="c-green">INT AUTO_INCREMENT PRIMARY KEY</span>,
+  username     <span class="c-green">VARCHAR(64) NOT NULL UNIQUE</span>,
+  password_hash <span class="c-green">VARCHAR(255) NOT NULL</span>,
+  role         <span class="c-green">ENUM('admin','operator','viewer') NOT NULL</span>,
+  created_at   <span class="c-green">TIMESTAMP DEFAULT CURRENT_TIMESTAMP</span>,
+  last_login   <span class="c-green">TIMESTAMP NULL</span>
+);
+
+<span class="c-blue">CREATE TABLE</span> devices (
+  id          <span class="c-green">INT AUTO_INCREMENT PRIMARY KEY</span>,
+  device_id   <span class="c-green">VARCHAR(64) NOT NULL UNIQUE</span>,
+  device_name <span class="c-green">VARCHAR(128) NOT NULL</span>,
+  device_type <span class="c-green">ENUM('sensor','gateway') NOT NULL</span>,
+  secret_key  <span class="c-green">VARCHAR(255) NOT NULL</span>,
+  status      <span class="c-green">ENUM('inactive','active','blocked') DEFAULT 'inactive'</span>,
+  location    <span class="c-green">VARCHAR(256) NULL</span>,
+  fail_count  <span class="c-green">INT DEFAULT 0</span>,
+  last_seen   <span class="c-green">TIMESTAMP NULL</span>,
+  created_by  <span class="c-green">INT NULL</span>,
+  created_at  <span class="c-green">TIMESTAMP DEFAULT CURRENT_TIMESTAMP</span>
+);
+
+<span class="c-blue">CREATE TABLE</span> sensor_data (
+  id          <span class="c-green">INT AUTO_INCREMENT PRIMARY KEY</span>,
+  device_id   <span class="c-green">INT NOT NULL</span>,
+  gateway_id  <span class="c-green">INT NOT NULL</span>,
+  payload     <span class="c-green">JSON NOT NULL</span>,
+  received_at <span class="c-green">TIMESTAMP DEFAULT CURRENT_TIMESTAMP</span>
+);
+
+<span class="c-blue">CREATE TABLE</span> audit_log (
+  id         <span class="c-green">INT AUTO_INCREMENT PRIMARY KEY</span>,
+  event_type <span class="c-green">VARCHAR(64) NOT NULL</span>,
+  device_id  <span class="c-green">INT NULL</span>,
+  ip_address <span class="c-green">VARCHAR(64) NULL</span>,
+  user_agent <span class="c-green">TEXT NULL</span>,
+  details    <span class="c-green">JSON NULL</span>,
+  created_at <span class="c-green">TIMESTAMP DEFAULT CURRENT_TIMESTAMP</span>
+);</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Tạo file <code>.env</code></div>
+            <p>Tạo file <code>backend/.env</code> với nội dung sau:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>backend/.env</span>
+              </div>
+              <pre><span class="c-green">DB_HOST</span>=localhost
+<span class="c-green">DB_USER</span>=root
+<span class="c-green">DB_PASS</span>=your_mysql_password
+<span class="c-green">DB_NAME</span>=iot_manager
+<span class="c-amber">JWT_SECRET</span>=your-super-secret-jwt-key-at-least-32-chars-long
+<span class="c-blue">PORT</span>=3000
+<span class="c-violet">FRONTEND_URL</span>=http://localhost:3001</pre>
+            </div>
+            <div class="alert warning">
+              ⚠️ <strong>JWT_SECRET</strong> phải dài ít nhất 32 ký tự. Backend sẽ từ chối khởi động nếu thiếu.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Cài dependencies & seed admin</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>Terminal – thư mục backend/</span>
+              </div>
+              <pre><span class="c-muted"># Cài package</span>
+npm install
+
+<span class="c-muted"># Tạo tài khoản admin mặc định (admin/admin123)</span>
+npm run seed
+
+<span class="c-muted"># Tuỳ chỉnh username/password admin:</span>
+ADMIN_USERNAME=myadmin ADMIN_PASSWORD=MyPass123 npm run seed</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Khởi động Backend</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>Terminal</span>
+              </div>
+              <pre><span class="c-muted"># Development (hot-reload)</span>
+npm run dev
+
+<span class="c-muted"># Production</span>
+npm run build
+npm start</pre>
+            </div>
+            <div class="alert success">✅ Backend chạy tại <strong>http://localhost:3000</strong>. Kiểm tra: <code>GET /api/health</code></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!--  6. FRONTEND SETUP  -->
+    <section id="frontend-setup">
+      <h2>🌐 Cài đặt Frontend</h2>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Cài dependencies</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>Terminal – thư mục frontend/</span>
+              </div>
+              <pre>npm install</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Cấu hình API URL</div>
+            <p>Tạo file <code>frontend/.env.local</code>:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>frontend/.env.local</span>
+              </div>
+              <pre>NEXT_PUBLIC_API_URL=http://localhost:3000</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Khởi động Frontend</div>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>Terminal</span>
+              </div>
+              <pre><span class="c-muted"># Development</span>
+npm run dev
+
+<span class="c-muted"># Production</span>
+npm run build
+npm start</pre>
+            </div>
+            <div class="alert success">✅ Frontend chạy tại <strong>http://localhost:3001</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!--  7. FIRMWARE SETUP  -->
+    <section id="firmware-setup">
+      <h2>💡 Cài đặt Firmware</h2>
+
+      <div class="alert info">
+        ℹ️ Phải đăng ký thiết bị qua API trước để lấy <code>device_id</code> và <code>secret_key</code>,
+        sau đó mới điền vào <code>config.h</code> và flash firmware.
+      </div>
+
+      <div class="steps" style="margin-top:20px">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Mở dự án bằng PlatformIO</div>
+            <p>Mở VS Code → Extensions → cài <strong>PlatformIO IDE</strong>. Sau đó mở thư mục:</p>
+            <ul style="color:var(--muted); padding-left:20px; line-height:2">
+              <li><code>firmware/sensor-node/</code> — cho Sensor Node (ESP32 DOIT)</li>
+              <li><code>firmware/gateway-node/</code> — cho Gateway Node (ESP32-S3)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Đăng ký thiết bị qua API</div>
+            <p>Gọi API để lấy credentials. Thực hiện sau khi Backend đã chạy:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>POST /api/devices/register (cần JWT token)</span>
+              </div>
+              <pre><span class="c-muted"># Đăng nhập để lấy token (qua browser hoặc curl)</span>
+curl -c cookies.txt -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+<span class="c-muted"># Đăng ký Gateway</span>
+curl -b cookies.txt -X POST http://localhost:3000/api/devices/register \
+  -H "Content-Type: application/json" \
+  -d '{"device_name":"Gateway Tầng 1","device_type":"gateway","location":"Tầng 1"}'
+
+<span class="c-muted"># Đăng ký Sensor</span>
+curl -b cookies.txt -X POST http://localhost:3000/api/devices/register \
+  -H "Content-Type: application/json" \
+  -d '{"device_name":"Cảm biến phòng A","device_type":"sensor","location":"Phòng A"}'</pre>
+            </div>
+            <div class="alert warning">⚠️ <code>secret_key</code> chỉ được trả về <strong>một lần duy nhất</strong>. Hãy lưu lại ngay!</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Điền config cho Sensor Node</div>
+            <p>Mở <code>firmware/sensor-node/src/config.h</code> và điền thông tin:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>firmware/sensor-node/src/config.h</span>
+              </div>
+              <pre><span class="c-blue">#define</span> <span class="c-green">DEVICE_ID</span>   <span class="c-amber">"ESP32-SN-ABCD1234"</span>      <span class="c-muted">// device_id từ API</span>
+<span class="c-blue">#define</span> <span class="c-green">SECRET_KEY</span>  <span class="c-amber">"abc123...64-char-hex"</span>    <span class="c-muted">// secret_key từ API</span>
+
+<span class="c-blue">#define</span> <span class="c-green">WIFI_SSID</span>   <span class="c-amber">"TenWifi"</span>
+<span class="c-blue">#define</span> <span class="c-green">WIFI_PASS</span>   <span class="c-amber">"MatKhauWifi"</span>
+
+<span class="c-blue">#define</span> <span class="c-green">MQTT_HOST</span>   <span class="c-amber">"192.168.1.100"</span>           <span class="c-muted">// IP máy chạy Mosquitto</span>
+<span class="c-blue">#define</span> <span class="c-green">MQTT_PORT</span>   1883
+
+<span class="c-blue">#define</span> <span class="c-green">DHT_PIN</span>     4                         <span class="c-muted">// GPIO kết nối DHT22</span>
+<span class="c-blue">#define</span> <span class="c-green">SEND_INTERVAL</span> 5000                   <span class="c-muted">// ms - gửi mỗi 5 giây</span></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Điền config cho Gateway Node</div>
+            <p>Mở <code>firmware/gateway-node/src/config_gw.h</code>:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>firmware/gateway-node/src/config_gw.h</span>
+              </div>
+              <pre><span class="c-blue">#define</span> <span class="c-green">GW_DEVICE_ID</span>   <span class="c-amber">"ESP32-GW-EFGH5678"</span>
+<span class="c-blue">#define</span> <span class="c-green">GW_SECRET_KEY</span>  <span class="c-amber">"xyz789...64-char-hex"</span>
+
+<span class="c-blue">#define</span> <span class="c-green">WIFI_SSID</span>      <span class="c-amber">"TenWifi"</span>
+<span class="c-blue">#define</span> <span class="c-green">WIFI_PASS</span>      <span class="c-amber">"MatKhauWifi"</span>
+
+<span class="c-blue">#define</span> <span class="c-green">MQTT_HOST</span>      <span class="c-amber">"192.168.1.100"</span>
+<span class="c-blue">#define</span> <span class="c-green">BACKEND_URL</span>    <span class="c-amber">"http://192.168.1.100:3000/api/device/data"</span>
+
+<span class="c-muted">// Thêm sensor vào danh sách cho phép:</span>
+<span class="c-blue">static const</span> SensorCredential KNOWN_SENSORS[] = {
+    { <span class="c-amber">"ESP32-SN-ABCD1234"</span>, <span class="c-amber">"abc123...sensor-secret"</span> },
+};</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <div class="step-title">Build & Flash firmware</div>
+            <p>Dùng PlatformIO hoặc lệnh <code>pio</code>:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                <span>Terminal</span>
+              </div>
+              <pre><span class="c-muted"># Build và upload (cắm ESP32 vào USB trước)</span>
+pio run --target upload
+
+<span class="c-muted"># Xem Serial Monitor (115200 baud)</span>
+pio device monitor --baud 115200</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <div class="step-title">Kích hoạt thiết bị</div>
+            <p>Sau khi flash xong, vào Dashboard → Devices → tìm thiết bị → bấm <strong>Unlock</strong>
+            để chuyển trạng thái từ <code>inactive</code> sang <code>active</code>. Thiết bị sẽ bắt đầu gửi dữ liệu.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ─── 8. CHỨC NĂNG AUTH ─────────────────────────────────────── -->
+    <section id="feat-auth">
+      <span class="section-tag">05 — Chức năng</span>
+      <h2>🔐 Xác thực & Đăng nhập</h2>
+
+      <p>Hệ thống dùng JWT cookie-based authentication. Token có hiệu lực 8 giờ.</p>
+
+      <div class="card-grid card-grid-2">
+        <div class="card">
+          <h3>Đăng nhập</h3>
+          <p>Truy cập <code>http://localhost:3001/login</code>, nhập username và password.
+          Server kiểm tra bcrypt và trả JWT cookie HttpOnly.</p>
+          <div class="alert info" style="margin-top:12px; font-size:12.5px">
+            🔒 Rate limit: tối đa <strong>10 lần đăng nhập / 15 phút / IP</strong> để ngăn brute-force.
+          </div>
+        </div>
+        <div class="card">
+          <h3>Đăng xuất</h3>
+          <p>Bấm avatar hoặc nút Logout ở Sidebar. Server sẽ xóa cookie JWT phía client.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:24px">Thông tin đăng nhập mặc định</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span>Sau khi chạy npm run seed</span>
+        </div>
+        <pre>Username: <span class="c-green">admin</span>
+Password: <span class="c-green">admin123</span></pre>
+      </div>
+    </section>
+
+    <!-- ─── 9. CHỨC NĂNG DASHBOARD ───────────────────────────────── -->
+    <section id="feat-devices">
+      <h2>📡 Dashboard & Quản lý thiết bị</h2>
+
+      <h3>Trang Dashboard <code>/dashboard</code></h3>
+      <p>Màn hình tổng quan hiển thị các thống kê thời gian thực:</p>
+
+      <div class="card-grid card-grid-2" style="margin-bottom:24px">
+        <div class="card">
+          <div class="card-icon" style="color:#38bdf8">🖥️</div>
+          <div class="card-title">Total Gateway / Gateway Online</div>
+          <div class="card-desc">Tổng số gateway đã đăng ký và số gateway đang online (gửi dữ liệu trong 60s gần nhất).</div>
+        </div>
+        <div class="card">
+          <div class="card-icon" style="color:#a78bfa">🔌</div>
+          <div class="card-title">Total Sensor / Sensor Online</div>
+          <div class="card-desc">Tổng số cảm biến đã đăng ký và số cảm biến đang online.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon" style="color:#34d399">🏥</div>
+          <div class="card-title">Device Resiliency</div>
+          <div class="card-desc">Bảng tóm tắt sức khỏe hệ thống: tổng, online, cảnh báo.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon" style="color:#f87171">🔴</div>
+          <div class="card-title">Security Alerts</div>
+          <div class="card-desc">Hiển thị các cảnh báo bảo mật gần nhất (mock data + live events).</div>
+        </div>
+      </div>
+
+      <h3>Trang Devices <code>/devices</code></h3>
+      <p>Danh sách toàn bộ thiết bị, phân loại theo tab <strong>Gateway</strong> / <strong>Sensor</strong>.</p>
+
+      <table class="api-table" style="margin-top:12px">
+        <thead>
+          <tr>
+            <th>Hành động</th>
+            <th>Mô tả</th>
+            <th>Quyền yêu cầu</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:white">👁️ View</strong></td>
+            <td class="route-desc">Xem chi tiết thiết bị, biểu đồ cảm biến, thông tin kỹ thuật</td>
+            <td><span class="badge viewer">viewer</span><span class="badge operator">operator</span><span class="badge admin">admin</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#fbbf24">🔒 Lock / Unlock</strong></td>
+            <td class="route-desc">Chặn hoặc mở khóa thiết bị. Thiết bị bị blocked sẽ bị từ chối gửi dữ liệu</td>
+            <td><span class="badge operator">operator</span><span class="badge admin">admin</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f87171">🗑️ Delete</strong></td>
+            <td class="route-desc">Xóa thiết bị và toàn bộ dữ liệu cảm biến liên quan (không thể hoàn tác)</td>
+            <td><span class="badge admin">admin</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#34d399">➕ Add Device</strong></td>
+            <td class="route-desc">Đăng ký thiết bị mới, nhận device_id và secret_key (chỉ hiện 1 lần)</td>
+            <td><span class="badge operator">operator</span><span class="badge admin">admin</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="alert warning" style="margin-top:16px">
+        ⚠️ <strong>Secret key chỉ hiện một lần</strong> ngay sau khi đăng ký.
+        Bấm nút "Copy" và lưu vào <code>config.h</code> ngay, vì sau đó không thể lấy lại.
+      </div>
+
+      <h3 style="margin-top:24px">Chi tiết thiết bị <code>/devices/:id</code></h3>
+      <p>Trang chi tiết hiển thị:</p>
+      <ul style="color:var(--muted); padding-left:20px; line-height:2.2; margin-bottom:16px">
+        <li>Thông tin cơ bản: Device ID, tên, loại, vị trí, trạng thái, fail count</li>
+        <li><strong style="color:white">Biểu đồ cảm biến</strong> – nhiệt độ & độ ẩm theo thời gian (10 bản ghi gần nhất)</li>
+        <li>Lịch sử dữ liệu phân trang (tối đa 200 bản/trang)</li>
+        <li>Trạng thái online/offline theo thời gian thực (last seen &lt; 60s)</li>
+      </ul>
+    </section>
+
+    <!-- ─── 10. DỮ LIỆU CẢM BIẾN ─────────────────────────────────── -->
+    <section id="feat-data">
+      <h2>📊 Dữ liệu cảm biến</h2>
+
+      <p>Thiết bị gửi dữ liệu tự động theo chu kỳ. Payload JSON từ ESP32 chứa:</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span>Payload gửi lên /api/device/data</span>
+        </div>
+        <pre>{
+  <span class="c-blue">"gateway_id"</span>:  <span class="c-amber">"ESP32-GW-EFGH5678"</span>,
+  <span class="c-blue">"gw_timestamp"</span>: 1716192000,
+  <span class="c-blue">"gw_hmac"</span>:     <span class="c-amber">"a1b2c3...hmac-sha256-hex"</span>,
+
+  <span class="c-blue">"sensor_id"</span>:   <span class="c-amber">"ESP32-SN-ABCD1234"</span>,
+  <span class="c-blue">"sn_timestamp"</span>: 1716191999,
+  <span class="c-blue">"sn_hmac"</span>:     <span class="c-amber">"d4e5f6...hmac-sha256-hex"</span>,
+
+  <span class="c-blue">"data"</span>: {
+    <span class="c-green">"temperature"</span>: 28.5,
+    <span class="c-green">"humidity"</span>:    65.2,
+    <span class="c-green">"timestamp"</span>:   <span class="c-amber">"2025-05-21T08:30:00Z"</span>
+  }
+}</pre>
+      </div>
+
+      <h3 style="margin-top:20px">Luồng xử lý dữ liệu</h3>
+      <div class="flow">
+        <div class="flow-box">🌡️ DHT22 đọc</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">HMAC ký sensor</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">MQTT publish</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">Gateway nhận</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">HMAC ký gateway</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">HTTP POST Backend</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">Validate HMAC × 2</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">Lưu MySQL</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">📊 Hiện Dashboard</div>
+      </div>
+    </section>
+
+    <!-- ─── 11. AUDIT LOG ─────────────────────────────────────────── -->
+    <section id="feat-audit">
+      <h2>📝 Audit Log</h2>
+
+      <p>Trang <code>/audit</code> ghi lại toàn bộ sự kiện quan trọng trong hệ thống.
+      Có thể lọc theo loại sự kiện, thiết bị, và khoảng thời gian.</p>
+
+      <table class="api-table">
+        <thead><tr><th>Event Type</th><th>Mô tả</th></tr></thead>
+        <tbody>
+          <tr><td class="c-green" style="font-family:monospace">DATA_RECV</td><td class="route-desc">Gateway gửi dữ liệu cảm biến lên Backend thành công</td></tr>
+          <tr><td class="c-blue" style="font-family:monospace">DEVICE_REGISTER</td><td class="route-desc">Admin/operator đăng ký thiết bị mới</td></tr>
+          <tr><td class="c-amber" style="font-family:monospace">DEVICE_STATUS_CHANGE</td><td class="route-desc">Thay đổi trạng thái thiết bị (active/blocked/inactive)</td></tr>
+          <tr><td class="c-violet" style="font-family:monospace">DEVICE_DELETE</td><td class="route-desc">Xóa thiết bị khỏi hệ thống</td></tr>
+          <tr><td class="c-rose" style="font-family:monospace">GATEWAY_AUTH_FAIL</td><td class="route-desc">Gateway gửi HMAC sai – có thể là tấn công hoặc cấu hình lỗi</td></tr>
+          <tr><td class="c-rose" style="font-family:monospace">SENSOR_AUTH_FAIL</td><td class="route-desc">Sensor HMAC không hợp lệ</td></tr>
+          <tr><td class="c-rose" style="font-family:monospace">DEVICE_BLOCKED</td><td class="route-desc">Thiết bị bị tự động block sau 5 lần auth thất bại</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ─── 12. USERS ─────────────────────────────────────────────── -->
+    <section id="feat-users">
+      <h2>👥 Quản lý người dùng</h2>
+
+      <p>Trang <code>/users</code> chỉ dành cho <span class="badge admin">admin</span>. Cho phép:</p>
+
+      <div class="card-grid card-grid-3">
+        <div class="card green">
+          <h4>Tạo user</h4>
+          <p>Tạo tài khoản <code>operator</code> hoặc <code>viewer</code>.
+          Username 3–32 ký tự, password tối thiểu 6 ký tự.</p>
+        </div>
+        <div class="card amber">
+          <h4>Đổi mật khẩu</h4>
+          <p>Admin có thể đặt lại mật khẩu cho bất kỳ user nào (trừ chính mình cần tự đổi).</p>
+        </div>
+        <div class="card rose">
+          <h4>Xóa user</h4>
+          <p>Xóa operator/viewer. Không thể xóa tài khoản admin hoặc tự xóa chính mình.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ─── 13. API REFERENCE ─────────────────────────────────────── -->
+    <section id="api-reference">
+      <span class="section-tag">06 — API</span>
+      <h2>📚 API Reference</h2>
+
+      <p>Base URL: <code style="color:#38bdf8">http://localhost:3000/api</code></p>
+
+      <h3>Auth</h3>
+      <table class="api-table">
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Mô tả</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method POST">POST</span></td><td class="route-path">/auth/login</td><td class="route-desc">Đăng nhập, nhận JWT cookie</td><td>—</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td class="route-path">/auth/logout</td><td class="route-desc">Đăng xuất, xóa cookie</td><td>—</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/auth/me</td><td class="route-desc">Lấy thông tin user hiện tại</td><td>JWT</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Devices</h3>
+      <table class="api-table">
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Mô tả</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/devices</td><td class="route-desc">Danh sách tất cả thiết bị</td><td>JWT</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td class="route-path">/devices/register</td><td class="route-desc">Đăng ký thiết bị mới</td><td>admin/operator</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/devices/:id</td><td class="route-desc">Chi tiết thiết bị + 10 bản ghi gần nhất</td><td>JWT</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/devices/:id/data</td><td class="route-desc">Lịch sử dữ liệu có phân trang (?page=1&limit=50)</td><td>JWT</td></tr>
+          <tr><td><span class="method PATCH">PATCH</span></td><td class="route-path">/devices/:id/status</td><td class="route-desc">Đổi trạng thái: active/blocked/inactive</td><td>admin/operator</td></tr>
+          <tr><td><span class="method DELETE">DELETE</span></td><td class="route-path">/devices/:id</td><td class="route-desc">Xóa thiết bị và dữ liệu</td><td>admin</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Device Data (từ firmware)</h3>
+      <table class="api-table">
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Mô tả</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method POST">POST</span></td><td class="route-path">/device/data</td><td class="route-desc">Gateway gửi dữ liệu cảm biến (HMAC 2 lớp)</td><td>HMAC</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Dashboard, Audit, Users</h3>
+      <table class="api-table">
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Mô tả</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/dashboard/stats</td><td class="route-desc">Thống kê tổng quan</td><td>JWT</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/audit-log</td><td class="route-desc">Audit log (filter: event_type, device_id, from, to)</td><td>JWT</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/users</td><td class="route-desc">Danh sách users</td><td>admin</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td class="route-path">/users</td><td class="route-desc">Tạo user mới (operator/viewer)</td><td>admin</td></tr>
+          <tr><td><span class="method PATCH">PATCH</span></td><td class="route-path">/users/:id/password</td><td class="route-desc">Đặt lại mật khẩu</td><td>admin</td></tr>
+          <tr><td><span class="method DELETE">DELETE</span></td><td class="route-path">/users/:id</td><td class="route-desc">Xóa user</td><td>admin</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td class="route-path">/health</td><td class="route-desc">Health check API</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!--  14. SECURITY  -->
+    <section id="security">
+      <span class="section-tag">07 — Bảo mật</span>
+      <h2>🛡️ Cơ chế HMAC-SHA256</h2>
+
+      <p>Mỗi request từ thiết bị IoT phải kèm theo <strong>2 chữ ký HMAC</strong>: một của Gateway và một của Sensor.</p>
+
+      <h3>Cách tính HMAC</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span>Thuật toán (C++ / ESP32)</span>
+        </div>
+        <pre><span class="c-muted">// Message = device_id + ":" + unix_timestamp (giây)</span>
+String message = String(DEVICE_ID) + <span class="c-amber">":"</span> + String(unixTimestamp);
+
+<span class="c-muted">// HMAC-SHA256 với secret_key từ API</span>
+mbedtls_md_hmac(MBEDTLS_MD_SHA256, secret_key, message, output);
+
+<span class="c-muted">// Gửi dạng hex string (64 ký tự)</span>
+String hmac_hex = toHexString(output);</pre>
+      </div>
+
+      <h3 style="margin-top:20px">Kiểm tra bảo mật phía Backend</h3>
+      <div class="card-grid card-grid-2">
+        <div class="card rose">
+          <h4>✅ Xác thực timestamp</h4>
+          <p>Timestamp phải trong khoảng <strong>±5 phút</strong> so với thời gian server. Ngăn replay attack.</p>
+        </div>
+        <div class="card rose">
+          <h4>✅ timingSafeEqual</h4>
+          <p>So sánh HMAC bằng <code>crypto.timingSafeEqual()</code> để chống timing attack.</p>
+        </div>
+        <div class="card rose">
+          <h4>✅ Auto-block sau 5 lần thất bại</h4>
+          <p>Thiết bị bị tự động chuyển sang <code>blocked</code> sau 5 lần auth thất bại liên tiếp.</p>
+        </div>
+        <div class="card rose">
+          <h4>✅ NTP Sync bắt buộc</h4>
+          <p>Firmware kiểm tra NTP đã đồng bộ trước khi gửi dữ liệu. Thiếu thời gian chính xác sẽ bỏ qua gửi.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:20px">Các lớp bảo mật khác</h3>
+      <ul style="color:var(--muted); padding-left:20px; line-height:2.3; font-size:14px">
+        <li>🔒 <strong style="color:white">Helmet.js</strong> — HTTP security headers (XSS, clickjacking, MIME sniffing)</li>
+        <li>🔒 <strong style="color:white">CORS</strong> — chỉ chấp nhận request từ <code>FRONTEND_URL</code></li>
+        <li>🔒 <strong style="color:white">JSON body limit</strong> — tối đa 10KB để ngăn DoS payload</li>
+        <li>🔒 <strong style="color:white">Rate limiting</strong> — Login: 10 req/15min; Device data: 60 req/min; API: 100 req/15min</li>
+        <li>🔒 <strong style="color:white">bcrypt cost 12</strong> — mã hóa mật khẩu an toàn với salt</li>
+        <li>🔒 <strong style="color:white">JWT HttpOnly cookie</strong> — không thể đọc từ JavaScript (chống XSS)</li>
+        <li>🔒 <strong style="color:white">Timing-safe login</strong> — chống user enumeration qua timing attack</li>
+      </ul>
+    </section>
+
+    <!--  15. ROLES  -->
+    <section id="roles">
+      <h2>🎭 Phân quyền (RBAC)</h2>
+
+      <p>Hệ thống có 3 cấp độ quyền hạn:</p>
+
+      <table class="api-table">
+        <thead><tr><th>Role</th><th>Xem thiết bị</th><th>Đăng ký/Block</th><th>Xóa thiết bị</th><th>Quản lý user</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge admin">admin</span></td>
+            <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+          </tr>
+          <tr>
+            <td><span class="badge operator">operator</span></td>
+            <td>✅</td><td>✅</td><td>❌</td><td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge viewer">viewer</span></td>
+            <td>✅</td><td>❌</td><td>❌</td><td>❌</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="alert info" style="margin-top:16px">
+        ℹ️ Admin tạo ra chỉ có thể tạo <code>operator</code> và <code>viewer</code>.
+        Không thể tạo tài khoản admin khác qua API (chỉ qua <code>npm run seed</code>).
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!--  16. SENSOR NODE  -->
+    <section id="sensor-node">
+      <span class="section-tag">08 — Firmware</span>
+      <h2>🌡️ Sensor Node (ESP32)</h2>
+
+      <p>Phần cứng: <strong>ESP32 DOIT DevKit V1</strong> + cảm biến DHT22</p>
+
+      <div class="card-grid card-grid-2">
+        <div class="card">
+          <h3>Chức năng</h3>
+          <ul style="color:var(--muted); font-size:13.5px; padding-left:16px; line-height:2.1">
+            <li>Kết nối WiFi tự động reconnect</li>
+            <li>Đồng bộ thời gian qua NTP</li>
+            <li>Đọc nhiệt độ + độ ẩm từ DHT22 mỗi 5s</li>
+            <li>Tính HMAC-SHA256 với secret_key</li>
+            <li>Gửi JSON lên MQTT topic <code>local/sensors/{id}/data</code></li>
+            <li>LED nháy khi gửi thành công (GPIO 2)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Kết nối phần cứng</h3>
+          <div class="code-block" style="margin-top:8px">
+            <pre><span class="c-green">DHT22 DATA</span>  → GPIO 4 (+ 10kΩ pull-up)
+<span class="c-green">DHT22 VCC</span>   → 3.3V
+<span class="c-green">DHT22 GND</span>   → GND
+
+<span class="c-amber">LED xanh</span>     → GPIO 0 (WiFi OK)
+<span class="c-amber">LED đỏ</span>       → GPIO 2 (Send OK, onboard)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert warning" style="margin-top:16px">
+        ⚠️ <strong>GPIO 0</strong> là BOOT pin. Đảm bảo LED không kéo mức xuống GND lúc khởi động
+        (dùng điện trở pull-up, không nối trực tiếp GND).
+      </div>
+    </section>
+
+    <!--  17. GATEWAY NODE  -->
+    <section id="gateway-node">
+      <h2>📶 Gateway Node (ESP32-S3)</h2>
+
+      <p>Phần cứng: <strong>ESP32-S3 N16R8</strong> (16MB Flash, 8MB PSRAM)</p>
+
+      <div class="card-grid card-grid-2">
+        <div class="card">
+          <h3>Chức năng</h3>
+          <ul style="color:var(--muted); font-size:13.5px; padding-left:16px; line-height:2.1">
+            <li>Subscribe MQTT topic <code>local/sensors/+/data</code></li>
+            <li>Xác thực sensor HMAC trước khi forward</li>
+            <li>Ký HMAC gateway vào request</li>
+            <li>HTTP POST lên Backend <code>/api/device/data</code></li>
+            <li>LED báo forward thành công (GPIO 5)</li>
+            <li>Bỏ qua nếu NTP chưa đồng bộ</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Kết nối LED ngoài</h3>
+          <div class="code-block" style="margin-top:8px">
+            <pre><span class="c-muted">⚠️ ESP32-S3 KHÔNG có onboard LED ở GPIO 2</span>
+
+<span class="c-green">LED xanh</span> → GPIO 4 (220Ω → 3.3V) <span class="c-muted">WiFi</span>
+<span class="c-amber">LED vàng</span> → GPIO 5 (220Ω → 3.3V) <span class="c-muted">Forward OK</span>
+
+<span class="c-muted">Tránh: GPIO 0 (BOOT), GPIO 19/20 (USB)</span>
+<span class="c-muted">Tránh: GPIO 48 (RGB LED WS2812B)</span></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!--  18. DATA FLOW  -->
+    <section id="data-flow">
+      <h2>🔄 Luồng dữ liệu đầy đủ</h2>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">①</div>
+          <div class="step-content">
+            <div class="step-title">Sensor đọc & ký HMAC</div>
+            <p>DHT22 trả về <code>temperature</code>, <code>humidity</code>. Sensor lấy Unix timestamp từ NTP,
+            tính <code>HMAC-SHA256("ESP32-SN-xxx:timestamp")</code> với secret_key.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">②</div>
+          <div class="step-content">
+            <div class="step-title">Publish lên MQTT</div>
+            <p>Sensor publish JSON đến topic <code>local/sensors/ESP32-SN-xxx/data</code> trên Mosquitto broker.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">③</div>
+          <div class="step-content">
+            <div class="step-title">Gateway nhận & forward</div>
+            <p>Gateway subscribe wildcard, nhận message, kiểm tra sensor có trong <code>KNOWN_SENSORS[]</code>,
+            ký thêm HMAC gateway, rồi HTTP POST lên Backend.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">④</div>
+          <div class="step-content">
+            <div class="step-title">Backend xác thực HMAC × 2</div>
+            <p>Middleware <code>validateDevice</code> xác thực cả gateway HMAC lẫn sensor HMAC.
+            Nếu thất bại, tăng <code>fail_count</code>. Đến 5 lần → tự động block thiết bị.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">⑤</div>
+          <div class="step-content">
+            <div class="step-title">Lưu database & cập nhật trạng thái</div>
+            <p>Dữ liệu lưu vào bảng <code>sensor_data</code>. Reset <code>fail_count = 0</code>,
+            cập nhật <code>last_seen = NOW()</code> cho cả gateway và sensor. Ghi audit log <code>DATA_RECV</code>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">⑥</div>
+          <div class="step-content">
+            <div class="step-title">Dashboard hiển thị</div>
+            <p>Frontend poll dữ liệu định kỳ, hiển thị biểu đồ nhiệt độ/độ ẩm, trạng thái online/offline
+            (dựa trên last_seen &lt; 60s).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!--  FOOTER  -->
+    <hr class="divider">
+    <div style="text-align:center; color:var(--muted); font-size:13px; padding: 20px 0 40px;">
+      <p>🛰️ <strong style="color:white">IoT Device Manager</strong> — Tài liệu hướng dẫn</p>
+      <p style="margin-top:8px">Backend: Node.js + Express | Frontend: Next.js | Firmware: PlatformIO + Arduino</p>
+      <p style="margin-top:4px; font-size:12px;">Cập nhật lần cuối: 2026-05-21</p>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Active nav link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks  = document.querySelectorAll('.nav-link[href^="#"]');
+
+  function updateActiveLink() {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 120) current = s.id;
+    });
+    navLinks.forEach(l => {
+      l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveLink, { passive: true });
+  updateActiveLink();
+</script>
+
+</body>
+</html>

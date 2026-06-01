@@ -5,51 +5,45 @@
 #include "mqtt_client.h"
 #include "forwarder.h"
 
-// ─── MQTT message callback ─────────────────────────────────────────────────────
+static unsigned long _fwdLedOffAt = 0;
 
 static void onSensorMessage(const char* topic, const char* payload, unsigned int length) {
-    // Kiểm tra điều kiện tối thiểu trước khi xử lý
     if (!ntpIsSynced()) {
-        Serial.println("[MAIN] Bỏ qua – NTP chưa đồng bộ (không thể xác thực timestamp)");
+        Serial.println("[MAIN] Drop – NTP not synced, cannot validate timestamp");
         return;
     }
-    forwardSensorData(topic, payload, length);
-}
 
-// ─── SETUP ────────────────────────────────────────────────────────────────────
+    if (forwardSensorData(topic, payload, length)) {
+        digitalWrite(LED_FWD_PIN, HIGH);
+        _fwdLedOffAt = millis() + 100;
+    }
+}
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
     Serial.println("\n╔══════════════════════════════════╗");
-    Serial.println("║   IoT Gateway Node – Khởi động   ║");
+    Serial.println("║   IoT Gateway Node – Starting    ║");
     Serial.println("╚══════════════════════════════════╝");
     Serial.printf("  Gateway ID : %s\n", GW_DEVICE_ID);
     Serial.printf("  Backend URL: %s\n\n", BACKEND_URL);
 
-    // LED forward thành công (GPIO 2 – onboard LED)
     pinMode(LED_FWD_PIN, OUTPUT);
     digitalWrite(LED_FWD_PIN, LOW);
 
-    // 1. WiFi
     wifiSetup();
-
-    // 2. NTP (cần WiFi)
     ntpSetup();
-
-    // 3. MQTT – subscribe wildcard local/sensors/+/data
     mqttClientSetup(onSensorMessage);
 
-    Serial.println("\n[MAIN] Setup hoàn tất – lắng nghe sensor data...\n");
+    Serial.println("\n[MAIN] Ready – listening for sensor data...\n");
 }
 
-// ─── LOOP ─────────────────────────────────────────────────────────────────────
-
 void loop() {
-    // Duy trì kết nối WiFi
+    if (_fwdLedOffAt && millis() >= _fwdLedOffAt) {
+        digitalWrite(LED_FWD_PIN, LOW);
+        _fwdLedOffAt = 0;
+    }
     wifiMaintain();
-
-    // Duy trì MQTT và xử lý message đến (không có delay – non-blocking)
     mqttClientMaintain();
 }

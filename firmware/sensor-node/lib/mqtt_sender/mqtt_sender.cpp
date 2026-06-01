@@ -6,7 +6,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-static WiFiClient  espClient;
+static WiFiClient   espClient;
 static PubSubClient mqttClient(espClient);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -17,10 +17,9 @@ void mqttSetup() {
     Serial.printf("[MQTT] Broker: %s:%d\n", MQTT_HOST, MQTT_PORT);
 }
 
-// ─── Internal connect ─────────────────────────────────────────────────────────
+// ─── Internal ─────────────────────────────────────────────────────────────────
 
 static bool mqttConnect() {
-    // Client ID duy nhất: "sn-ESP32-SN-XXXXXXXX"
     String clientId = "sn-" + String(DEVICE_ID);
     Serial.printf("[MQTT] Kết nối với id='%s'...", clientId.c_str());
 
@@ -41,7 +40,6 @@ void mqttMaintain() {
         return;
     }
 
-    // Chờ 5s giữa các lần reconnect
     static unsigned long lastAttempt = 0;
     if (millis() - lastAttempt >= 5000) {
         lastAttempt = millis();
@@ -61,14 +59,11 @@ bool mqttPublishSensorData(const SensorData& data) {
         return false;
     }
 
-    // 1. Lấy timestamp hiện tại (Unix seconds)
     unsigned long timestamp = getCurrentTimestamp();
 
-    // 2. Tính HMAC-SHA256: key=SECRET_KEY, message="sensor_id:timestamp"
     String message = String(DEVICE_ID) + ":" + String(timestamp);
     String hmac    = computeHMAC(String(SECRET_KEY), message);
 
-    // 3. Build JSON payload
     StaticJsonDocument<256> doc;
     doc["sensor_id"]    = DEVICE_ID;
     doc["sn_timestamp"] = timestamp;
@@ -78,11 +73,9 @@ bool mqttPublishSensorData(const SensorData& data) {
     sensorData["temperature"] = data.temperature;
     sensorData["humidity"]    = data.humidity;
 
-    // 4. Serialize JSON → char buffer
     char payload[MQTT_BUFFER_SIZE];
     size_t len = serializeJson(doc, payload, sizeof(payload));
 
-    // 5. Publish
     String topic = "local/sensors/" + String(DEVICE_ID) + "/data";
     bool ok = mqttClient.publish(topic.c_str(), payload, false);
 

@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include "config_gw.h"
+#include <Arduino.h>
 #include <WiFi.h>
 
 static bool _connected = false;
@@ -12,7 +13,6 @@ void wifiSetup() {
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     Serial.printf("[WiFi] Connecting to '%s'", WIFI_SSID);
-
     int retries = 0;
     while (WiFi.status() != WL_CONNECTED && retries < 40) {
         delay(500);
@@ -25,7 +25,7 @@ void wifiSetup() {
         digitalWrite(LED_WIFI_PIN, HIGH);
         Serial.printf("\n[WiFi] OK – IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
-        Serial.println("\n[WiFi] FAILED – sẽ thử lại trong loop()");
+        Serial.println("\n[WiFi] FAILED – retrying in loop()");
     }
 }
 
@@ -34,8 +34,7 @@ void wifiMaintain() {
         if (!_connected) {
             _connected = true;
             digitalWrite(LED_WIFI_PIN, HIGH);
-            Serial.printf("[WiFi] Reconnected – IP: %s\n",
-                          WiFi.localIP().toString().c_str());
+            Serial.printf("[WiFi] Reconnected – IP: %s\n", WiFi.localIP().toString().c_str());
         }
         return;
     }
@@ -43,7 +42,13 @@ void wifiMaintain() {
     if (_connected) {
         _connected = false;
         digitalWrite(LED_WIFI_PIN, LOW);
-        Serial.println("[WiFi] Disconnected! Đang reconnect...");
+        Serial.println("[WiFi] Disconnected");
+    }
+
+    static unsigned long lastRetry = 0;
+    if (millis() - lastRetry >= WIFI_RECONNECT_INTERVAL_MS) {
+        lastRetry = millis();
+        Serial.println("[WiFi] Reconnecting...");
         WiFi.reconnect();
     }
 }
