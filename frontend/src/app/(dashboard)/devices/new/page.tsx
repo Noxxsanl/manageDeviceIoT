@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import api from "@/lib/axios";
+import api, { FetchError } from "@/lib/api";
 import { RegisterModal } from "@/components/device/RegisterModal";
 import type { RegisterDeviceResponse } from "@/types/api";
 
@@ -52,8 +52,9 @@ export default function NewDevicePage() {
       setCredentials({ device_id: data.device_id, secret_key: data.secret_key });
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error ?? "Đã có lỗi xảy ra. Vui lòng thử lại.";
+        err instanceof FetchError
+          ? ((err.data as { error?: string })?.error ?? "Đã có lỗi xảy ra. Vui lòng thử lại.")
+          : "Đã có lỗi xảy ra. Vui lòng thử lại.";
       setApiError(msg);
     } finally {
       setSubmitting(false);

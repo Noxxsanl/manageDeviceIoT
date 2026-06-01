@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { isAxiosError } from "axios";
+import { FetchError } from "@/lib/api";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -25,9 +25,10 @@ export default function LoginPage() {
     try {
       await login(username.trim(), password);
     } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 401) {
+      const status = err instanceof FetchError ? err.status : 0;
+      if (status === 401) {
         setError("Sai tên đăng nhập hoặc mật khẩu.");
-      } else if (isAxiosError(err) && err.response?.status === 429) {
+      } else if (status === 429) {
         setError("Quá nhiều lần thử. Vui lòng đợi và thử lại.");
       } else {
         setError("Không thể kết nối đến máy chủ. Vui lòng thử lại.");

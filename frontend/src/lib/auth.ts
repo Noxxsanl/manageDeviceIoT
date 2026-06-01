@@ -1,4 +1,4 @@
-import api from "./axios";
+import api from "./api";
 import type { User } from "@/types/user";
 
 export const AUTH_ROUTES = {

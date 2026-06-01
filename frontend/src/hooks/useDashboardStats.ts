@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import type { DashboardStats } from "@/types/api";
-import api from "@/lib/axios";
+import api from "@/lib/api";
 
 const fetcher = (url: string) => api.get<DashboardStats>(url).then((r) => r.data);
 

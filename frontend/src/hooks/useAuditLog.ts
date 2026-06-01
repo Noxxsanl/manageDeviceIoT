@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import type { AuditLogEntry } from "@/types/api";
-import api from "@/lib/axios";
+import api from "@/lib/api";
 
 export type AuditLogFilters = {
   event_type?: string;

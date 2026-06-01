@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import type { ApiDeviceDetail, ApiDeviceStatus } from "@/types/api";
-import api from "@/lib/axios";
+import api from "@/lib/api";
 
 const fetcher = (url: string) => api.get<ApiDeviceDetail>(url).then((r) => r.data);
 

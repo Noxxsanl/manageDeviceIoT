@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import type { ApiSensorData } from "@/types/api";
-import api from "@/lib/axios";
+import api from "@/lib/api";
 
 type RawResponse = { data: ApiSensorData[] } | ApiSensorData[];
 
