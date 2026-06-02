@@ -1,7 +1,6 @@
 "use client";
 
 import { Server, Cpu, Wifi, Radio } from "lucide-react";
-import { notifications } from "@/mock/notifications";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { useDevices } from "@/contexts/DevicesContext";
 import { useAddDevice } from "@/contexts/AddDeviceContext";
@@ -26,7 +25,6 @@ export default function DashboardPage() {
   return (
     <div className="min-h-[calc(100vh-5rem)] w-full">
       <div className="mb-6 flex flex-col gap-3">
-        <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Dashboard</p>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-semibold text-white">
@@ -77,7 +75,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 grid gap-5 xl:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-800 bg-slate-950/95 p-6">
+        <div className="rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Health overview</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">Device resiliency</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -95,7 +93,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-800 bg-slate-950/95 p-6">
+        <div className="rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Security preview</p>
@@ -105,33 +103,23 @@ export default function DashboardPage() {
               Live
             </span>
           </div>
-          <div className="mt-6 space-y-4">
-            {notifications.map((note) => (
-              <div key={note.id} className="rounded-3xl bg-slate-900/90 p-4 text-sm text-slate-300">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-white">{note.title}</p>
-                  <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{note.time}</span>
-                </div>
-                <p className="mt-2 text-slate-400">{note.description}</p>
+          <div className="mt-6">
+            {alertDevices > 0 ? (
+              <div className="rounded-3xl bg-rose-500/10 p-4 text-sm text-rose-300">
+                <p className="font-semibold">{alertDevices} device(s) under threat</p>
+                <p className="mt-1 text-rose-400/70">Check the Devices page for details.</p>
               </div>
-            ))}
+            ) : (
+              <p className="text-sm text-slate-500">No active threat alerts.</p>
+            )}
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-800 bg-slate-950/95 p-6">
+        <div className="rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Activity</p>
           <h3 className="mt-2 text-2xl font-semibold text-white">Recent events</h3>
-          <div className="mt-6 space-y-4 text-sm text-slate-300">
-            {[
-              { name: "Parking Gate Beacon", event: "Attack detected and mitigation policies triggered." },
-              { name: "Warehouse Sensor", event: "Offline status detected after loss of signal." },
-              { name: "Server Rack Monitor", event: "Stable connection and telemetry flow continues." },
-            ].map(({ name, event }) => (
-              <div key={name} className="rounded-3xl bg-slate-900/90 p-4">
-                <p className="font-semibold text-white">{name}</p>
-                <p className="mt-2 text-slate-400">{event}</p>
-              </div>
-            ))}
+          <div className="mt-6">
+            <p className="text-sm text-slate-500">No recent events to display.</p>
           </div>
         </div>
       </div>

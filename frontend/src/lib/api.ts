@@ -22,7 +22,7 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401 && typeof window !== "undefined") {
+  if (res.status === 401 && typeof window !== "undefined" && !url.includes("/api/auth/login")) {
     window.location.href = "/login";
     return { data: undefined as T };
   }

@@ -2,11 +2,23 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Server, Cpu, Lock, Unlock, Trash2, RefreshCw, Plus, Eye } from "lucide-react";
+import {
+  Server,
+  Cpu,
+  Lock,
+  Unlock,
+  Trash2,
+  RefreshCw,
+  Plus,
+  Eye,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 import { useDeviceList } from "@/hooks/useDeviceList";
 import DeviceStatusBadge from "@/components/device/DeviceStatusBadge";
 import OnlineIndicator from "@/components/device/OnlineIndicator";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { AddDeviceModal } from "@/components/device/AddDeviceModal";
 import type { ApiDevice, ApiDeviceStatus } from "@/types/api";
 
 type Tab = "gateway" | "sensor";
@@ -16,6 +28,8 @@ type PendingAction =
   | { type: "lock"; device: ApiDevice }
   | { type: "unlock"; device: ApiDevice }
   | null;
+
+type Toast = { msg: string; ok: boolean } | null;
 
 function formatLastSeen(lastSeen: string | null): string {
   if (!lastSeen) return "Never";
@@ -31,6 +45,13 @@ export default function DevicesPage() {
   const [activeTab, setActiveTab] = useState<Tab>("gateway");
   const [pending, setPending] = useState<PendingAction>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [toast, setToast] = useState<Toast>(null);
+
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3500);
+  }
 
   const gateways = devices.filter((d) => d.device_type === "gateway");
   const sensors = devices.filter((d) => d.device_type === "sensor");
@@ -42,11 +63,17 @@ export default function DevicesPage() {
     try {
       if (pending.type === "delete") {
         await deleteDevice(pending.device.id);
+        showToast(`"${pending.device.device_name}" deleted successfully.`);
       } else {
         const newStatus: ApiDeviceStatus =
           pending.type === "lock" ? "blocked" : "active";
         await updateStatus(pending.device.id, newStatus);
+        showToast(
+          `Device ${pending.type === "lock" ? "blocked" : "unblocked"} successfully.`
+        );
       }
+    } catch {
+      showToast("Action failed. Please try again.", false);
     } finally {
       setActionLoading(false);
       setPending(null);
@@ -76,7 +103,7 @@ export default function DevicesPage() {
         };
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] w-full">
+    <div className="w-full">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Devices</p>
@@ -85,13 +112,14 @@ export default function DevicesPage() {
             Manage device status, access control and security posture.
           </p>
         </div>
-        <Link
-          href="/devices/new"
+        <button
+          type="button"
+          onClick={() => setAddModalOpen(true)}
           className="inline-flex items-center justify-center gap-2 rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
         >
           <Plus className="h-4 w-4" />
           Add Device
-        </Link>
+        </button>
       </div>
 
       {/* Summary cards */}
@@ -184,7 +212,7 @@ export default function DevicesPage() {
                   <th className="px-4 py-4 font-medium">Status</th>
                   <th className="px-4 py-4 font-medium">Connection</th>
                   <th className="px-4 py-4 font-medium">Last Seen</th>
-                  <th className="px-4 py-4 font-medium">Actions</th>
+                  <th className="px-4 py-4 font-medium">Hành động</th>
                 </tr>
               </thead>
               <tbody>
@@ -197,7 +225,7 @@ export default function DevicesPage() {
                       {device.device_id}
                     </td>
                     <td className="px-4 py-4 font-medium text-white">{device.device_name}</td>
-                    <td className="px-4 py-4 text-slate-400 capitalize">{device.device_type}</td>
+                    <td className="px-4 py-4 capitalize text-slate-400">{device.device_type}</td>
                     <td className="px-4 py-4 text-slate-400">
                       {device.location || <span className="text-slate-600">—</span>}
                     </td>
@@ -222,7 +250,6 @@ export default function DevicesPage() {
                         {device.status === "blocked" ? (
                           <button
                             type="button"
-                            title="Unblock device"
                             onClick={() => setPending({ type: "unlock", device })}
                             className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
                           >
@@ -232,7 +259,6 @@ export default function DevicesPage() {
                         ) : (
                           <button
                             type="button"
-                            title="Block device"
                             onClick={() => setPending({ type: "lock", device })}
                             className="inline-flex items-center gap-1.5 rounded-2xl bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20"
                           >
@@ -242,7 +268,6 @@ export default function DevicesPage() {
                         )}
                         <button
                           type="button"
-                          title="Delete device"
                           onClick={() => setPending({ type: "delete", device })}
                           className="inline-flex items-center gap-1.5 rounded-2xl bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
                         >
@@ -264,10 +289,35 @@ export default function DevicesPage() {
         title={confirmDialog.title}
         description={confirmDialog.description}
         confirmLabel={actionLoading ? "Processing…" : confirmDialog.confirmLabel}
+        cancelLabel="Huỷ"
         danger={confirmDialog.danger}
         onConfirm={handleConfirm}
         onCancel={() => !actionLoading && setPending(null)}
       />
+
+      <AddDeviceModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onSuccess={() => showToast("Device registered successfully.")}
+      />
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold shadow-xl transition ${
+            toast.ok
+              ? "bg-emerald-500 text-slate-950"
+              : "bg-rose-500 text-white"
+          }`}
+        >
+          {toast.ok ? (
+            <CheckCircle className="h-4 w-4 shrink-0" />
+          ) : (
+            <XCircle className="h-4 w-4 shrink-0" />
+          )}
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }

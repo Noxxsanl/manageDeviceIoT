@@ -5,6 +5,7 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -15,6 +16,7 @@ export default function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   danger = false,
   onConfirm,
   onCancel,
@@ -33,7 +35,7 @@ export default function ConfirmDialog({
             onClick={onCancel}
             className="rounded-2xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"

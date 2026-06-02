@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { devices as initialDevices } from "@/mock/devices";
 import type { Device } from "@/types/device";
 
 interface DevicesContextType {
@@ -12,7 +11,7 @@ interface DevicesContextType {
 const DevicesContext = createContext<DevicesContextType | undefined>(undefined);
 
 export function DevicesProvider({ children }: { children: ReactNode }) {
-  const [devices, setDevices] = useState<Device[]>(initialDevices);
+  const [devices, setDevices] = useState<Device[]>([]);
 
   const addDevice = (device: Device) => {
     setDevices((prev) => [...prev, device]);

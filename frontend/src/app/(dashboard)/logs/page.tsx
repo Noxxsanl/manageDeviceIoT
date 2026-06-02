@@ -1,5 +1,4 @@
 import LogTable from "@/components/log/LogTable";
-import { logs } from "@/mock/logs";
 
 export default function LogsPage() {
   return (
@@ -7,7 +6,7 @@ export default function LogsPage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Logs</p>
-          <h1 className="text-4xl font-semibold text-white">Security & event feed</h1>
+          <h1 className="text-4xl font-semibold text-white">Security &amp; event feed</h1>
           <p className="mt-2 text-slate-400">
             View the latest device events, warnings and security notifications in real time.
           </p>
@@ -17,7 +16,7 @@ export default function LogsPage() {
         </button>
       </div>
 
-      <LogTable logs={logs} />
+      <LogTable logs={[]} />
     </div>
   );
 }
