@@ -14,13 +14,16 @@ export type ApiDevice = {
 };
 
 export type RegisterDeviceResponse = {
-  id: number;
-  device_id: string;
-  device_name: string;
-  device_type: ApiDeviceType;
-  status: ApiDeviceStatus;
-  location: string;
-  secret_key: string;
+  success: boolean;
+  device: {
+    id: number;
+    device_id: string;
+    device_name: string;
+    device_type: ApiDeviceType;
+    status: ApiDeviceStatus;
+    location: string | null;
+    secret_key: string;
+  };
 };
 
 export type DashboardStats = {

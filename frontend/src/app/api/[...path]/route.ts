@@ -15,6 +15,12 @@ async function proxy(
     if (!SKIP.has(k)) headers.set(k, v);
   });
 
+  const clientIp =
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown";
+  headers.set("x-forwarded-for", clientIp);
+
   const upstream = await fetch(url, {
     method: req.method,
     headers,

@@ -2,7 +2,7 @@ import useSWR from "swr";
 import type { ApiDevice, ApiDeviceStatus } from "@/types/api";
 import api from "@/lib/api";
 
-const fetcher = (url: string) => api.get<ApiDevice[]>(url).then((r) => r.data);
+const fetcher = (url: string) => api.get<{ devices: ApiDevice[] }>(url).then((r) => r.data.devices);
 
 export function useDeviceList() {
   const { data, error, isLoading, mutate } = useSWR<ApiDevice[]>(

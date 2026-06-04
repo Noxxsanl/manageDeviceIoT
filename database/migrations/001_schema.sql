@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS devices (
   location     VARCHAR(255)    NULL,
   fail_count   TINYINT UNSIGNED NOT NULL DEFAULT 0,
   last_seen    DATETIME        NULL,
+  created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_by   INT UNSIGNED    NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_devices_device_id (device_id),

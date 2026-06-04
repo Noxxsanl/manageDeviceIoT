@@ -61,7 +61,7 @@ export function AddDeviceModal({ open, onClose, onSuccess }: AddDeviceModalProps
         device_type: type,
         location: location.trim() || undefined,
       });
-      setCredentials({ device_id: data.device_id, secret_key: data.secret_key });
+      setCredentials({ device_id: data.device.device_id, secret_key: data.device.secret_key });
     } catch (err: unknown) {
       const msg =
         err instanceof FetchError
