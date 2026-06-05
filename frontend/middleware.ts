@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { AUTH_ROUTES } from "@/lib/auth";
+import { AUTH_ROUTES } from "@/package/services/auth";
 
 const PUBLIC_PATHS: string[] = [AUTH_ROUTES.login];
 
