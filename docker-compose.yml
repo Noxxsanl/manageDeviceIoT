@@ -46,6 +46,12 @@ services:
       - /app/node_modules
     env_file:
       - ./backend/.env
+    environment:
+      # Override host values so Docker always uses service names,
+      # regardless of what DB_HOST/MQTT_HOST are set to in .env
+      - DB_HOST=mysql
+      - MQTT_HOST=mosquitto
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       mysql:
         condition: service_healthy
@@ -67,7 +73,6 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:5000
       - BACKEND_URL=http://backend:5000
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
