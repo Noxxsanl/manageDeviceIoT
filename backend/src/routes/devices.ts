@@ -117,14 +117,18 @@ router.get("/:id/data", verifyJWT, async (req: Request, res: Response): Promise<
     [id]
   );
 
+  // limit/offset are already sanitized to integers above, so inlining them is
+  // safe; mysql2's execute() (prepared statements) throws
+  // "Incorrect arguments to mysqld_stmt_execute" when LIMIT/OFFSET are passed
+  // as placeholders.
   const [dataRows] = await pool.execute<any[]>(
     `SELECT sd.id, sd.device_id, sd.gateway_id, gw.device_id AS gateway_device_id, sd.payload, sd.received_at
      FROM sensor_data sd
      LEFT JOIN devices gw ON sd.gateway_id = gw.id
      WHERE sd.device_id = ?
      ORDER BY sd.received_at DESC
-     LIMIT ? OFFSET ?`,
-    [id, limit, offset]
+     LIMIT ${limit} OFFSET ${offset}`,
+    [id]
   );
 
   res.json({
@@ -203,7 +207,14 @@ router.patch(
       return;
     }
 
-    await pool.execute("UPDATE devices SET status = ? WHERE id = ?", [status, id]);
+    if (status === "active") {
+      await pool.execute(
+        "UPDATE devices SET status = ?, fail_count = 0 WHERE id = ?",
+        [status, id]
+      );
+    } else {
+      await pool.execute("UPDATE devices SET status = ? WHERE id = ?", [status, id]);
+    }
 
     const user = (req as any).user;
     const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() ?? req.socket.remoteAddress ?? null;

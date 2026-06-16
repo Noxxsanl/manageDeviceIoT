@@ -7,6 +7,7 @@ import {
   Cpu,
   Lock,
   Unlock,
+  Power,
   Trash2,
   RefreshCw,
   Plus,
@@ -27,6 +28,7 @@ type PendingAction =
   | { type: "delete"; device: ApiDevice }
   | { type: "lock"; device: ApiDevice }
   | { type: "unlock"; device: ApiDevice }
+  | { type: "activate"; device: ApiDevice }
   | null;
 
 type Toast = { msg: string; ok: boolean } | null;
@@ -68,9 +70,13 @@ export default function Devices() {
         const newStatus: ApiDeviceStatus =
           pending.type === "lock" ? "blocked" : "active";
         await updateStatus(pending.device.id, newStatus);
-        showToast(
-          `Device ${pending.type === "lock" ? "blocked" : "unblocked"} successfully.`
-        );
+        const actionLabel =
+          pending.type === "lock"
+            ? "blocked"
+            : pending.type === "activate"
+            ? "activated"
+            : "unblocked";
+        showToast(`Device ${actionLabel} successfully.`);
       }
     } catch {
       showToast("Action failed. Please try again.", false);
@@ -94,6 +100,13 @@ export default function Devices() {
           description: `Block "${pending?.device.device_name}"? It will be denied access until unlocked.`,
           confirmLabel: "Block",
           danger: true,
+        }
+      : pending?.type === "activate"
+      ? {
+          title: "Activate device",
+          description: `Activate "${pending?.device.device_name}"? It will be allowed to send data to the backend.`,
+          confirmLabel: "Activate",
+          danger: false,
         }
       : {
           title: "Unblock device",
@@ -247,7 +260,16 @@ export default function Devices() {
                           <Eye className="h-3.5 w-3.5" />
                           View
                         </Link>
-                        {device.status === "blocked" ? (
+                        {device.status === "inactive" ? (
+                          <button
+                            type="button"
+                            onClick={() => setPending({ type: "activate", device })}
+                            className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                          >
+                            <Power className="h-3.5 w-3.5" />
+                            Activate
+                          </button>
+                        ) : device.status === "blocked" ? (
                           <button
                             type="button"
                             onClick={() => setPending({ type: "unlock", device })}

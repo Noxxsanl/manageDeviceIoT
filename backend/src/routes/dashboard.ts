@@ -8,10 +8,10 @@ const router = Router();
 router.get("/stats", verifyJWT, async (_req: Request, res: Response): Promise<void> => {
   const [[counts]] = await pool.execute<any[]>(`
     SELECT
-      COALESCE(SUM(device_type = 'gateway'), 0)                                                                        AS total_gateways,
-      COALESCE(SUM(device_type = 'sensor'), 0)                                                                         AS total_sensors,
-      COALESCE(SUM(device_type = 'gateway' AND last_seen IS NOT NULL AND TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60), 0) AS online_gateways,
-      COALESCE(SUM(device_type = 'sensor'  AND last_seen IS NOT NULL AND TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60), 0) AS online_sensors
+      COALESCE(SUM(device_type = 'gateway'), 0)                                                                        AS total_gateway,
+      COALESCE(SUM(device_type = 'sensor'), 0)                                                                         AS total_sensor,
+      COALESCE(SUM(device_type = 'gateway' AND last_seen IS NOT NULL AND TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60), 0) AS gateway_online,
+      COALESCE(SUM(device_type = 'sensor'  AND last_seen IS NOT NULL AND TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60), 0) AS sensor_online
     FROM devices
   `);
 
@@ -20,10 +20,10 @@ router.get("/stats", verifyJWT, async (_req: Request, res: Response): Promise<vo
   );
 
   res.json({
-    total_gateways: Number(counts.total_gateways),
-    total_sensors: Number(counts.total_sensors),
-    online_gateways: Number(counts.online_gateways),
-    online_sensors: Number(counts.online_sensors),
+    total_gateway: Number(counts.total_gateway),
+    total_sensor: Number(counts.total_sensor),
+    gateway_online: Number(counts.gateway_online),
+    sensor_online: Number(counts.sensor_online),
     total_data_points: Number(dataCount.total_data_points),
   });
 });

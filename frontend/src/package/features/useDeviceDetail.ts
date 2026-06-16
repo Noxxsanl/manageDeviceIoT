@@ -1,8 +1,14 @@
 import useSWR from "swr";
-import type { ApiDeviceDetail, ApiDeviceStatus } from "@/package/schema/api";
+import type { ApiDevice, ApiDeviceDetail, ApiDeviceStatus, ApiSensorData } from "@/package/schema/api";
 import api from "@/package/services/api";
 
-const fetcher = (url: string) => api.get<ApiDeviceDetail>(url).then((r) => r.data);
+type RawDeviceDetail = { device: ApiDevice; recent_data: ApiSensorData[] };
+
+const fetcher = (url: string) =>
+  api.get<RawDeviceDetail>(url).then((r) => ({
+    ...r.data.device,
+    recent_data: r.data.recent_data,
+  }));
 
 export function useDeviceDetail(id: string | number) {
   const { data, error, isLoading, mutate } = useSWR<ApiDeviceDetail>(

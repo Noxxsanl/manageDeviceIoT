@@ -197,7 +197,7 @@ export default function DeviceDetail() {
       </div>
 
       {/* Info cards */}
-      <div className="mb-5 rounded-[2rem] border border-slate-800 bg-slate-950/95 p-6">
+      <div className="mb-5 rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
         <p className="mb-4 text-sm uppercase tracking-[0.24em] text-slate-500">Device Info</p>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <InfoCard
@@ -254,7 +254,7 @@ export default function DeviceDetail() {
         <>
           <SensorChart data={sensorData} isLoading={chartLoading} />
 
-          <div className="mt-5 rounded-[2rem] border border-slate-800 bg-slate-950/95 p-6">
+          <div className="mt-5 rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
             <p className="mb-4 text-sm uppercase tracking-[0.24em] text-slate-500">
               Recent Data
             </p>

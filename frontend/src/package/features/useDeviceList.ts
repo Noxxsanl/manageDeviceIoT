@@ -13,12 +13,26 @@ export function useDeviceList() {
 
   const updateStatus = async (id: number, status: ApiDeviceStatus) => {
     await api.patch(`/api/devices/${id}/status`, { status });
-    mutate();
+    await mutate(
+      (current) =>
+        current?.map((device) =>
+          device.id === id
+            ? {
+                ...device,
+                status,
+                fail_count: status === "active" ? 0 : device.fail_count,
+              }
+            : device
+        ),
+      { revalidate: true }
+    );
   };
 
   const deleteDevice = async (id: number) => {
     await api.delete(`/api/devices/${id}`);
-    mutate();
+    await mutate((current) => current?.filter((device) => device.id !== id), {
+      revalidate: true,
+    });
   };
 
   return {

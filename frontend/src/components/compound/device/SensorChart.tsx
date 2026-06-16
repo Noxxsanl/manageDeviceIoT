@@ -90,7 +90,7 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
             <XAxis
               dataKey="time"
@@ -99,10 +99,26 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
               axisLine={{ stroke: "#1e293b" }}
               interval="preserveStartEnd"
             />
+            {/* Separate scale per metric so small fluctuations are visible
+                instead of being flattened by a shared 0-based axis. */}
             <YAxis
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              yAxisId="temperature"
+              domain={["dataMin - 1", "dataMax + 1"]}
+              tickCount={6}
+              tick={{ fill: "#f97316", fontSize: 10 }}
               tickLine={false}
               axisLine={false}
+              width={40}
+            />
+            <YAxis
+              yAxisId="humidity"
+              orientation="right"
+              domain={["dataMin - 1", "dataMax + 1"]}
+              tickCount={6}
+              tick={{ fill: "#38bdf8", fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              width={40}
             />
             <Tooltip
               contentStyle={{
@@ -116,6 +132,7 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
             />
             <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 12 }} />
             <Line
+              yAxisId="temperature"
               type="monotone"
               dataKey="temperature"
               stroke="#f97316"
@@ -126,6 +143,7 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
               connectNulls
             />
             <Line
+              yAxisId="humidity"
               type="monotone"
               dataKey="humidity"
               stroke="#38bdf8"
