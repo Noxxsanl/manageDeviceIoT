@@ -1,5 +1,5 @@
 #include "sensor_reader.h"
-#include "config.h"
+#include "config_2.h"
 #include <DHT.h>
 
 static DHT dht(DHT_PIN, DHT_TYPE);

@@ -1,5 +1,5 @@
 #include "wifi_manager.h"
-#include "config.h"
+#include "config_2.h"
 #include <WiFi.h>
 
 static bool _connected = false;
