@@ -106,7 +106,15 @@ export default function AuditLogTable({ logs }: Props) {
                   )}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                  {log.ip_address ?? <span className="text-slate-600">—</span>}
+                  {log.device_ip ? (
+                    log.device_ip
+                  ) : log.ip_address ? (
+                    <span className="text-slate-500" title="IP của client (không phải thiết bị)">
+                      {log.ip_address}
+                    </span>
+                  ) : (
+                    <span className="text-slate-600">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <JsonDetails details={log.details} />

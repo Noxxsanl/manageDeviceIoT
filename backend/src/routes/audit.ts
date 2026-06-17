@@ -53,6 +53,7 @@ router.get("/", verifyJWT, async (req: Request, res: Response): Promise<void> =>
       d.device_id  AS device_identifier,
       d.device_name,
       a.ip_address,
+      d.last_ip    AS device_ip,
       a.user_agent,
       a.details,
       a.created_at

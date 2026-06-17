@@ -9,7 +9,7 @@
 static WiFiClient   espClient;
 static PubSubClient mqttClient(espClient);
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
+//  Setup 
 
 void mqttSetup() {
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
@@ -17,7 +17,7 @@ void mqttSetup() {
     Serial.printf("[MQTT] Broker: %s:%d\n", MQTT_HOST, MQTT_PORT);
 }
 
-// ─── Internal ─────────────────────────────────────────────────────────────────
+//  Internal 
 
 static bool mqttConnect() {
     String clientId = "sn-" + String(DEVICE_ID);
@@ -68,6 +68,7 @@ bool mqttPublishSensorData(const SensorData& data) {
     doc["sensor_id"]    = DEVICE_ID;
     doc["sn_timestamp"] = timestamp;
     doc["sn_hmac"]      = hmac;
+    doc["sensor_ip"]    = WiFi.localIP().toString();
 
     JsonObject sensorData = doc.createNestedObject("data");
     sensorData["temperature"] = data.temperature;

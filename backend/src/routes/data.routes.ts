@@ -16,7 +16,7 @@ router.post("/", validateDevice, async (req: Request, res: Response): Promise<vo
   const ip = getClientIp(req);
   const userAgent = req.headers["user-agent"] ?? null;
 
-  const { data } = req.body ?? {};
+  const { data, gateway_ip, sensor_ip } = req.body ?? {};
 
   if (data === undefined || data === null || typeof data !== "object" || Array.isArray(data)) {
     res.status(400).json({ error: "MISSING_PAYLOAD_DATA", detail: "Request body must include a 'data' object" });
@@ -73,11 +73,26 @@ router.post("/", validateDevice, async (req: Request, res: Response): Promise<vo
   );
   const receivedAt: Date = sdRows[0]?.received_at ?? new Date();
 
-  // Reset fail_count and update last_seen for both gateway and sensor
+  // Dùng IP do firmware tự báo (gateway_ip / sensor_ip trong body).
+  // Fallback về HTTP client IP nếu firmware cũ chưa gửi field này.
+  const resolvedGwIp  = (typeof gateway_ip === "string" && gateway_ip) ? gateway_ip : ip;
+  const resolvedSnIp  = (typeof sensor_ip  === "string" && sensor_ip)  ? sensor_ip  : null;
+
   await pool.execute(
-    `UPDATE devices SET last_seen = NOW(), fail_count = 0 WHERE id IN (?, ?)`,
-    [gateway.id, sensor.id]
+    `UPDATE devices SET last_seen = NOW(), fail_count = 0, last_ip = ? WHERE id = ?`,
+    [resolvedGwIp, gateway.id]
   );
+  if (resolvedSnIp) {
+    await pool.execute(
+      `UPDATE devices SET last_seen = NOW(), fail_count = 0, last_ip = ? WHERE id = ?`,
+      [resolvedSnIp, sensor.id]
+    );
+  } else {
+    await pool.execute(
+      `UPDATE devices SET last_seen = NOW(), fail_count = 0 WHERE id = ?`,
+      [sensor.id]
+    );
+  }
 
   // Audit log
   await log("DATA_RECV", sensor.id, ip, userAgent, {

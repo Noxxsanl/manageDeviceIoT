@@ -69,6 +69,7 @@ export type AuditLogEntry = {
   device_identifier: string | null;
   device_name: string | null;
   ip_address: string | null;
+  device_ip: string | null;
   user_agent: string | null;
   details: Record<string, unknown> | null;
   created_at: string;

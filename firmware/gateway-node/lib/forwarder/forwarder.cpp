@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include <WiFi.h>
 #include <string.h>
 
 static const char* findSensorSecret(const char* sensor_id) {
@@ -44,6 +45,7 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
     const char*   sensor_id    = sensorDoc["sensor_id"]    | "";
     unsigned long sn_timestamp = sensorDoc["sn_timestamp"] | 0UL;
     const char*   sn_hmac      = sensorDoc["sn_hmac"]      | "";
+    const char*   sensor_ip    = sensorDoc["sensor_ip"]    | "";
     JsonObject    data         = sensorDoc["data"];
 
     if (!sensor_id[0] || !sn_timestamp || !sn_hmac[0] || data.isNull()) {
@@ -86,11 +88,13 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
     // 6. Build forwarded payload
     StaticJsonDocument<768> outDoc;
     outDoc["gateway_id"]   = GW_DEVICE_ID;
+    outDoc["gateway_ip"]   = WiFi.localIP().toString();
     outDoc["gw_timestamp"] = gw_timestamp;
     outDoc["gw_hmac"]      = gw_hmac;
     outDoc["sensor_id"]    = sensor_id;
     outDoc["sn_timestamp"] = sn_timestamp;
     outDoc["sn_hmac"]      = sn_hmac;
+    if (sensor_ip[0]) outDoc["sensor_ip"] = sensor_ip;
     JsonObject outData = outDoc.createNestedObject("data");
     for (JsonPair kv : data) outData[kv.key()] = kv.value();
 
