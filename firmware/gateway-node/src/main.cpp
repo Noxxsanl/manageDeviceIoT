@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 #include "config_gw.h"
 #include "wifi_manager.h"
 #include "ntp_sync.h"
@@ -21,6 +23,7 @@ static void onSensorMessage(const char* topic, const char* payload, unsigned int
 }
 
 void setup() {
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // suppress brownout during WiFi radio startup
     Serial.begin(115200);
     delay(1000);
 
@@ -28,7 +31,7 @@ void setup() {
     Serial.println("║   IoT Gateway Node – Starting    ║");
     Serial.println("╚══════════════════════════════════╝");
     Serial.printf("  Gateway ID : %s\n", GW_DEVICE_ID);
-    Serial.printf("  Backend URL: %s\n\n", BACKEND_URL);
+    Serial.printf("  MQTT Topic : %s\n\n", GATEWAY_DATA_TOPIC);
 
     pinMode(LED_FWD_PIN, OUTPUT);
     digitalWrite(LED_FWD_PIN, LOW);

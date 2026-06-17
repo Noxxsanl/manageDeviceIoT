@@ -67,3 +67,8 @@ void mqttClientMaintain() {
 bool mqttClientIsConnected() {
     return mqttClient.connected();
 }
+
+bool mqttClientPublish(const char* topic, const char* payload, unsigned int length) {
+    if (!mqttClient.connected()) return false;
+    return mqttClient.publish(topic, (const uint8_t*)payload, length, false);
+}

@@ -3,9 +3,9 @@
 #include "hmac_util.h"
 #include "ntp_sync.h"
 #include "sensor_registry.h"
+#include "mqtt_client.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <HTTPClient.h>
 #include <WiFi.h>
 #include <string.h>
 
@@ -98,29 +98,21 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
     JsonObject outData = sensorPayload.createNestedObject("data");
     for (JsonPair kv : data) outData[kv.key()] = kv.value();
 
-    char bodyBuf[768];
+    char bodyBuf[MQTT_BUFFER_SIZE];
     size_t bodyLen = serializeJson(outDoc, bodyBuf, sizeof(bodyBuf));
-    Serial.printf("[FWD] Posting %d bytes to backend\n", (int)bodyLen);
+    Serial.printf("[FWD] Publishing %d bytes to MQTT\n", (int)bodyLen);
 
-    // 7. HTTP POST to backend
-    HTTPClient http;
-    http.begin(BACKEND_URL);
-    http.addHeader("Content-Type", "application/json");
-    http.setTimeout(HTTP_TIMEOUT);
-    int httpCode = http.POST(bodyBuf);
-
-    bool success = false;
-    if (httpCode > 0) {
-        String response = http.getString();
-        if (httpCode == 200) {
-            Serial.println("[FWD] Backend OK (200)");
-            success = true;
-        } else {
-            Serial.printf("[FWD] Backend ERROR (%d) – %s\n", httpCode, response.c_str());
-        }
-    } else {
-        Serial.printf("[FWD] HTTP FAILED: %s\n", http.errorToString(httpCode).c_str());
+    // 7. MQTT publish to backend topic: gateway/<GW_DEVICE_ID>/data
+    if (!mqttClientIsConnected()) {
+        Serial.println("[FWD] MQTT not connected – dropped");
+        return false;
     }
-    http.end();
+
+    bool success = mqttClientPublish(GATEWAY_DATA_TOPIC, bodyBuf, (unsigned int)bodyLen);
+    if (success) {
+        Serial.println("[FWD] MQTT publish OK");
+    } else {
+        Serial.println("[FWD] MQTT publish FAILED");
+    }
     return success;
 }
