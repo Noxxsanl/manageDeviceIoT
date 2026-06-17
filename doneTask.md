@@ -71,20 +71,23 @@ DB_NAME=iot_managerDeviceIoT
 # JWT
 JWT_SECRET=change_this_to_a_long_random_secret_min_32_chars
 
-# MQTT Broker
+# MQTT Broker 2 (Gateway → Backend layer)
+# Local dev: localhost:1884  |  Docker: overridden to mqtt-broker-2:1883 in compose
 MQTT_HOST=localhost
-MQTT_PORT=1883
+MQTT_PORT=1884
 
 # Admin default (seed)
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 ```
 
+> **Cập nhật 2026-06-17:** `MQTT_PORT` đã đổi từ `1883` thành `1884` — Backend kết nối Broker 2 (port 1884). Trong Docker, biến này bị override bởi compose thành `mqtt-broker-2:1883` (internal port).
+
 ---
 
 ### 4. Cập nhật `backend/.env` (dev defaults)
 
-`DB_HOST=mysql` và `MQTT_HOST=mosquitto` trỏ đúng tên service trong Docker Compose (không dùng localhost khi chạy trong container).
+`DB_HOST=mysql` và `MQTT_HOST=mqtt-broker-2` trỏ đúng tên service trong Docker Compose (không dùng localhost khi chạy trong container). `MQTT_PORT=1883` (internal port của Broker 2 container).
 
 ---
 
@@ -104,17 +107,18 @@ Các mục đã có sẵn: `node_modules/`, `.env`, `.env.local`, `dist/`, `.nex
 
 ### 6. Cập nhật `docker-compose.yml`
 
-Bổ sung **2 service còn thiếu** (`mysql` và `mosquitto`) vào file docker-compose.yml hiện có:
+Bổ sung **3 service còn thiếu** (`mysql`, `mqtt-broker-1`, `mqtt-broker-2`) vào file docker-compose.yml hiện có:
 
 **Trước:** chỉ có `backend` + `frontend`
 
-**Sau:** đủ 4 services:
+**Sau:** đủ 5 services _(cập nhật 2026-06-17: tách 1 mosquitto thành 2 broker riêng biệt)_:
 
 | Service | Image | Port | Ghi chú |
 |---|---|---|---|
 | `mysql` | `mysql:8.0` | 3306 | Volume `mysql_data`, mount `database/migrations/` vào `docker-entrypoint-initdb.d` để tự chạy migration |
-| `mosquitto` | `eclipse-mosquitto:2` | 1883 | Mount `mosquitto/mosquitto.conf` |
-| `backend` | Build từ `Dockerfile.dev` | 5000 | `depends_on: mysql (healthy), mosquitto` |
+| `mqtt-broker-1` | `eclipse-mosquitto:2` | 1883:1883 | Broker 1 — Sensor↔Gateway, mount `mosquitto/broker1/mosquitto.conf` |
+| `mqtt-broker-2` | `eclipse-mosquitto:2` | 1884:1883 | Broker 2 — Gateway↔Backend, mount `mosquitto/broker2/mosquitto.conf`, `log_dest topic` cho $SYS |
+| `backend` | Build từ `Dockerfile.dev` | 5000 | `depends_on: mysql (healthy), mqtt-broker-2`, `MQTT_HOST=mqtt-broker-2`, `MQTT_PORT=1883` |
 | `frontend` | Build từ `Dockerfile.dev` | 3000 | `depends_on: backend` |
 
 MySQL được cấu hình **healthcheck** để backend chỉ start sau khi DB sẵn sàng:
@@ -127,13 +131,15 @@ healthcheck:
   retries: 5
 ```
 
-Thêm **3 Docker volumes** named: `mysql_data`, `mosquitto_data`, `mosquitto_logs`
+Thêm **5 Docker volumes** named: `mysql_data`, `mosquitto1_data`, `mosquitto1_logs`, `mosquitto2_data`, `mosquitto2_logs`
 
 ---
 
-### 7. Tạo `mosquitto/mosquitto.conf`
+### 7. Tạo cấu hình Mosquitto — 2 broker riêng biệt
 
-File cấu hình Mosquitto cho môi trường dev:
+_(Cập nhật 2026-06-17: thay thế `mosquitto/mosquitto.conf` đơn bằng 2 file config tách biệt)_
+
+**`mosquitto/broker1/mosquitto.conf`** — Sensor↔Gateway layer:
 
 ```conf
 listener 1883
@@ -146,6 +152,22 @@ persistence true
 persistence_location /mosquitto/data/
 ```
 
+**`mosquitto/broker2/mosquitto.conf`** — Gateway↔Backend layer:
+
+```conf
+listener 1883
+allow_anonymous true
+
+log_type all
+log_dest stdout
+log_dest topic
+
+persistence true
+persistence_location /mosquitto/data/
+```
+
+> `log_dest topic` bật `$SYS/broker/log/N` để `mqttTracker.ts` trích IP gateway từ log kết nối.
+
 ---
 
 ### Checklist hoàn thành Task 1
@@ -155,8 +177,9 @@ persistence_location /mosquitto/data/
 - [x] `backend/.env.example` có đủ tất cả biến môi trường
 - [x] `backend/.env` cấu hình đúng cho Docker dev environment
 - [x] `.gitignore` loại trừ `config.h` và `config_gw.h` firmware
-- [x] `docker-compose.yml` có đủ 4 services với healthcheck
-- [x] `mosquitto/mosquitto.conf` được tạo với listener 1883, allow_anonymous true
+- [x] `docker-compose.yml` có đủ 5 services với healthcheck (2 broker + mysql + backend + frontend)
+- [x] `mosquitto/broker1/mosquitto.conf` — Broker 1 :1883 (Sensor↔Gateway)
+- [x] `mosquitto/broker2/mosquitto.conf` — Broker 2 :1884 (Gateway↔Backend, log_dest topic)
 
 ---
 
@@ -2519,12 +2542,13 @@ File khai báo toàn bộ hằng số cấu hình cho Gateway Node:
 | `GW_DEVICE_ID` | Device ID nhận từ `POST /api/devices/register` (vd: `"ESP32-GW-XXXXXXXX"`) |
 | `GW_SECRET_KEY` | Secret key 64 ký tự hex nhận từ `POST /api/devices/register` |
 | `WIFI_SSID` / `WIFI_PASS` | Thông tin WiFi |
-| `MQTT_HOST` / `MQTT_PORT` | IP và port của MQTT broker |
+| `MQTT_BROKER1_HOST` / `MQTT_BROKER1_PORT` | IP và port của **Broker 1** (Sensor↔Gateway, port **1883**) |
+| `MQTT_BROKER2_HOST` / `MQTT_BROKER2_PORT` | IP và port của **Broker 2** (Gateway↔Backend, port **1884**) |
 | `MQTT_BUFFER_SIZE` | 1024 bytes – buffer cho MQTT payload |
-| `BACKEND_URL` | `http://<ip>:3000/api/device/data` |
-| `HTTP_TIMEOUT` | 10000 ms |
 | `LED_WIFI_PIN` | GPIO 4 – LED ngoài báo WiFi (không dùng GPIO 0 = BOOT) |
 | `LED_FWD_PIN` | GPIO 5 – LED ngoài nháy khi forward thành công |
+
+> **Cập nhật 2026-06-17:** Đã loại bỏ `MQTT_HOST`/`MQTT_PORT`/`BACKEND_URL` (HTTP POST). Thay bằng dual-broker config. Gateway dùng `mqttSubClient` → Broker 1 và `mqttPubClient` → Broker 2.
 
 **Lưu ý quan trọng về GPIO ESP32-S3:**
 - GPIO 0 = BOOT button → **KHÔNG dùng làm LED**
@@ -2596,24 +2620,24 @@ Luồng tính toán:
 
 ---
 
-### 7. Tạo `firmware/gateway-node/src/mqtt_client.h/.cpp`
+### 7. Tạo `firmware/gateway-node/lib/mqtt_client/mqtt_client.h/.cpp`
 
-MQTT client subscribe wildcard để nhận dữ liệu từ mọi sensor:
+**Dual PubSubClient** — 2 kết nối MQTT riêng biệt:
+
+> **Cập nhật 2026-06-17:** Đã tái cấu trúc từ single `mqttClient` thành dual-client để hỗ trợ 2 broker.
 
 #### `mqttClientSetup(cb)`
-- `mqttClient.setServer(MQTT_HOST, MQTT_PORT)`
-- `mqttClient.setBufferSize(1024)`
-- Đăng ký callback `onMqttMessage` → null-terminate payload → gọi user callback
+- `mqttSubClient.setServer(MQTT_BROKER1_HOST, MQTT_BROKER1_PORT)` + đăng ký callback `onMqttMessage`
+- `mqttPubClient.setServer(MQTT_BROKER2_HOST, MQTT_BROKER2_PORT)` — không cần callback
+- Cả 2 client dùng `MQTT_BUFFER_SIZE = 1024`
 
 #### `mqttClientMaintain()`
-- Nếu connected: `mqttClient.loop()` – xử lý MQTT heartbeat (non-blocking)
-- Nếu mất kết nối: reconnect sau 5s throttle, auto re-subscribe wildcard `local/sensors/+/data`
+- **Broker 1 (sub):** nếu connected → `mqttSubClient.loop()`; nếu ngắt → reconnect + re-subscribe `local/sensors/+/data`
+- **Broker 2 (pub):** nếu connected → `mqttPubClient.loop()`; nếu ngắt → reconnect (publish-only, không subscribe)
 
-#### MQTT Wildcard Subscribe:
-```
-Topic: local/sensors/+/data
-```
-Gateway nhận dữ liệu từ **tất cả sensor** qua wildcard `+`.
+#### Interface công khai:
+- `mqttClientIsConnected()` → `mqttPubClient.connected()` (chỉ cần pub path để forward)
+- `mqttClientPublish(topic, payload, len)` → publish qua `mqttPubClient` → Broker 2
 
 ---
 
@@ -2632,19 +2656,25 @@ Module trung tâm – xác thực Sensor HMAC và forward lên Backend:
 | 5 | Xác thực Sensor HMAC bằng constant-time XOR | Log `REJECT – HMAC không hợp lệ` + return |
 | 6 | Tính Gateway HMAC: `HMAC(GW_SECRET, "gw_id:gw_timestamp")` | — |
 | 7 | Build payload đầy đủ 7 field | — |
-| 8 | `HTTP POST /api/device/data` + xử lý response | Log HTTP error code |
-| 9 | HTTP 200 → nháy LED_FWD_PIN + log OK | — |
+| 8 | `mqttPubClient.publish("gateway/GW_ID/data", payload)` → **Broker 2 :1884** | Log MQTT error |
+| 9 | Publish OK → nháy LED_FWD_PIN + log OK | — |
 
-#### Payload gửi lên Backend:
+> **Cập nhật 2026-06-17:** Bước 8 đã đổi từ `HTTP POST /api/device/data` sang MQTT Publish qua `mqttPubClient` (Broker 2). Không còn dùng `HTTPClient` hay `BACKEND_URL`.
+
+#### Payload MQTT publish sang Broker 2 (`gateway/{gw_id}/data`):
 ```json
 {
   "gateway_id":   "ESP32-GW-XXXXXXXX",
+  "gateway_ip":   "192.168.1.101",
   "gw_timestamp": 1716174600,
   "gw_hmac":      "64-char-hex",
-  "sensor_id":    "ESP32-SN-YYYYYYYY",
-  "sn_timestamp": 1716174600,
-  "sn_hmac":      "64-char-hex",
-  "data": { "temperature": 28.5, "humidity": 65.2 }
+  "sensor_payload": {
+    "sensor_id":    "ESP32-SN-YYYYYYYY",
+    "sn_timestamp": 1716174600,
+    "sn_hmac":      "64-char-hex",
+    "sensor_ip":    "192.168.1.100",
+    "data": { "temperature": 28.5, "humidity": 65.2 }
+  }
 }
 ```
 
@@ -2709,12 +2739,12 @@ firmware/gateway-node/
 │   ├── c_cpp_properties.json   # IntelliSense → sdk/esp32s3/, toolchain-xtensa-esp32s3
 │   └── extensions.json
 └── src/
-    ├── config_gw.h             # GW_DEVICE_ID, GW_SECRET_KEY, MQTT, Backend URL, GPIO 4/5
+    ├── config_gw.h             # GW_DEVICE_ID, GW_SECRET_KEY, MQTT_BROKER1/2_HOST/PORT, GPIO 4/5
     ├── wifi_manager.h/.cpp     # WiFi kết nối + auto-reconnect + LED GPIO 4
     ├── ntp_sync.h/.cpp         # NTP UTC+7 + getCurrentTimestamp() + ntpIsSynced()
     ├── hmac_util.h/.cpp        # computeHMAC() dùng mbedtls built-in
-    ├── mqtt_client.h/.cpp      # MQTT subscribe wildcard local/sensors/+/data
-    ├── forwarder.h/.cpp        # Xác thực SN HMAC → tính GW HMAC → HTTP POST Backend
+    ├── mqtt_client.h/.cpp      # dual PubSubClient: mqttSubClient(Broker1) + mqttPubClient(Broker2)
+    ├── forwarder.h/.cpp        # Xác thực SN HMAC → tính GW HMAC → MQTT Publish Broker 2
     └── main.cpp                # setup() + loop() non-blocking
 ```
 
@@ -2727,19 +2757,20 @@ firmware/gateway-node/
 ║   IoT Gateway Node – Khởi động   ║
 ╚══════════════════════════════════╝
   Gateway ID : ESP32-GW-A1B2C3D4
-  Backend URL: http://192.168.1.100:3000/api/device/data
 
 [WiFi] Connecting to 'MyNetwork'......... OK – IP: 192.168.1.106
 [NTP] Syncing......... OK – 2026-05-21 09:00:00 (UTC+7)
-[MQTT] Broker: 192.168.1.100:1883
-[MQTT] Connecting as 'gw-ESP32-GW-A1B2C3D4'... OK
-[MQTT] Subscribed to 'local/sensors/+/data'
+[MQTT-SUB] Broker1: 192.168.1.100:1883
+[MQTT-SUB] Connecting as 'gw-sub-ESP32-GW-A1B2C3D4'... OK
+[MQTT-SUB] Subscribed to 'local/sensors/+/data'
+[MQTT-PUB] Broker2: 192.168.1.100:1884
+[MQTT-PUB] Connecting as 'gw-ESP32-GW-A1B2C3D4'... OK
 [MAIN] Setup hoàn tất – lắng nghe sensor data...
 
-[MQTT] Received on 'local/sensors/ESP32-SN-E5F6G7H8/data' (120 bytes)
+[MQTT-SUB] Received on 'local/sensors/ESP32-SN-E5F6G7H8/data' (120 bytes)
 [FWD] Sensor HMAC OK – 'ESP32-SN-E5F6G7H8'
-[FWD] Payload (310 bytes): {"gateway_id":"ESP32-GW-A1B2C3D4","gw_timestamp":1716174600,...}
-[FWD] Backend OK (200) – {"success":true,...}
+[FWD] Payload (340 bytes): {"gateway_id":"ESP32-GW-A1B2C3D4","gw_timestamp":1716174600,...}
+[MQTT-PUB] Published to 'gateway/ESP32-GW-A1B2C3D4/data' OK
 ```
 
 ---
@@ -2748,12 +2779,15 @@ firmware/gateway-node/
 
 - [x] `platformio.ini` – board `esp32-s3-devkitc-1`, `16MB` flash, `qio_opi` PSRAM, USB CDC flags
 - [x] `partitions_16MB.csv` – partition table 2×OTA app (6.25MB) + SPIFFS (3.375MB)
-- [x] `config_gw.h` – `GW_DEVICE_ID`, `GW_SECRET_KEY`, WiFi, MQTT, Backend URL, `LED_WIFI_PIN=4`, `LED_FWD_PIN=5`, `KNOWN_SENSORS[]`
+- [x] `config_gw.h` – `GW_DEVICE_ID`, `GW_SECRET_KEY`, WiFi, `MQTT_BROKER1_HOST/PORT` (1883), `MQTT_BROKER2_HOST/PORT` (1884), `LED_WIFI_PIN=4`, `LED_FWD_PIN=5`, `KNOWN_SENSORS[]`
+  > _(Cập nhật 2026-06-17: đã thay `MQTT_HOST/PORT` + `BACKEND_URL` bằng dual-broker config)_
 - [x] Không dùng GPIO 0 (BOOT) và GPIO 2 (không có LED trên S3); không dùng GPIO 48 (WS2812B cần NeoPixel lib)
 - [x] `wifi_manager.cpp` – kết nối WiFi, auto-reconnect, LED GPIO 4
 - [x] `ntp_sync.cpp` – `configTime(UTC+7)`, `getCurrentTimestamp()`, `ntpIsSynced()`
 - [x] `hmac_util.cpp` – `computeHMAC()` dùng `mbedtls_md_hmac`, trả hex string 64 ký tự
-- [x] `mqtt_client.cpp` – subscribe wildcard `local/sensors/+/data`, auto-reconnect 5s throttle, non-blocking `mqttClient.loop()`
-- [x] `forwarder.cpp` – parse JSON sensor, tra KNOWN_SENSORS, kiểm tra timestamp ±300s, xác thực SN HMAC constant-time, tính GW HMAC, HTTP POST Backend, nháy LED khi 200 OK
+- [x] `mqtt_client.cpp` – **dual PubSubClient**: `mqttSubClient` → Broker 1 (subscribe `local/sensors/+/data`), `mqttPubClient` → Broker 2 (publish `gateway/{id}/data`), auto-reconnect 5s throttle, non-blocking
+  > _(Cập nhật 2026-06-17: đã tách từ single `mqttClient` thành 2 client riêng biệt)_
+- [x] `forwarder.cpp` – parse JSON sensor, tra KNOWN_SENSORS, kiểm tra timestamp ±300s, xác thực SN HMAC constant-time, tính GW HMAC, **MQTT Publish via Broker 2**, nháy LED khi OK
+  > _(Cập nhật 2026-06-17: bước 8 đổi từ HTTP POST thành `mqttPubClient.publish`)_
 - [x] `main.cpp` – guard NTP trong callback, `loop()` không có `delay` (non-blocking)
 - [x] `.vscode/c_cpp_properties.json` – IntelliSense trỏ đúng `sdk/esp32s3/`, compiler `xtensa-esp32s3-elf-gcc.exe`

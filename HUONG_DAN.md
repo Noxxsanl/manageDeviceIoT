@@ -13,16 +13,18 @@ Browser / ESP32         │                                          │
       │                 │   │          │──────────►│ Frontend │  │
       │                 │   └──────────┘           │ :3000    │  │
       │                 │                          └──────────┘  │
-      │  MQTT :1883 ────┼──────────────────────────► Mosquitto   │
-      │                 │                                         │
-      │                 │                          MySQL :3306    │
+      │  MQTT :1883 ────┼──────────────────────────► Mosquitto 1  │
+      │  MQTT :1884 ────┼──────────────────────────► Mosquitto 2  │
+      │                 │                                          │
+      │                 │                          MySQL :3306     │
       └─────────────────┴─────────────────────────────────────────┘
 ```
 
 **Nginx là điểm vào duy nhất tại cổng 80.**
 - `http://localhost/` → Frontend (Next.js)
 - `http://localhost/api/...` → Backend API (Express)
-- MQTT vẫn dùng cổng `1883` trực tiếp (không qua Nginx)
+- MQTT Broker 1 (Sensor ↔ Gateway) dùng cổng `1883` trực tiếp (không qua Nginx)
+- MQTT Broker 2 (Gateway → Backend) dùng cổng `1884` trực tiếp (không qua Nginx)
 
 ## Tổng quan luồng thao tác
 
@@ -111,7 +113,7 @@ DB_USER=iot_managerIoT
 DB_PASS=iot_managerIoTpassword
 DB_NAME=iot_managerDeviceIoT
 JWT_SECRET=dev_secret_please_change_in_production_min32chars
-MQTT_HOST=mosquitto
+MQTT_HOST=mqtt-broker-2
 MQTT_PORT=1883
 FRONTEND_URL=http://localhost
 ADMIN_USERNAME=admin
@@ -119,7 +121,8 @@ ADMIN_PASSWORD=admin123
 ```
 
 > Khi chạy qua Docker:
-> - `DB_HOST=mysql` và `MQTT_HOST=mosquitto` là tên service nội bộ, **không dùng `localhost`**
+> - `DB_HOST=mysql` và `MQTT_HOST=mqtt-broker-2` là tên service nội bộ, **không dùng `localhost`**
+> - `MQTT_PORT=1883` là cổng nội bộ Docker network; khi chạy local dev thì dùng `MQTT_PORT=1884`
 > - `FRONTEND_URL=http://localhost` trỏ về Nginx (cổng 80), không phải cổng 3000
 
 ### Bước 2.2 — Khởi động toàn bộ hệ thống
@@ -128,14 +131,15 @@ ADMIN_PASSWORD=admin123
 docker compose up -d --build
 ```
 
-Lần đầu mất 3–5 phút để build image. Docker sẽ khởi động 5 service:
+Lần đầu mất 3–5 phút để build image. Docker sẽ khởi động 6 service:
 
 | Service | Vai trò | Cổng bên ngoài |
 |---|---|---|
 | **iot-nginx** | Reverse proxy — điểm vào chính | `80` |
 | **iot-frontend** | Next.js Web App | `3000` (trực tiếp) |
 | **iot-backend** | Express API | `5000` (trực tiếp) |
-| **iot-mosquitto** | MQTT Broker | `1883` |
+| **iot-mqtt-broker-1** | MQTT Broker 1 — Sensor ↔ Gateway | `1883` |
+| **iot-mqtt-broker-2** | MQTT Broker 2 — Gateway → Backend | `1884` |
 | **iot-mysql** | Database MySQL 8.0 | `3308` |
 
 ### Bước 2.3 — Kiểm tra trạng thái
@@ -147,12 +151,13 @@ docker compose ps
 Kết quả mong đợi — tất cả phải `running`:
 
 ```
-NAME            STATUS               PORTS
-iot-nginx       running              0.0.0.0:80->80/tcp
-iot-frontend    running              0.0.0.0:3000->3000/tcp
-iot-backend     running (healthy)    0.0.0.0:5000->5000/tcp
-iot-mosquitto   running              0.0.0.0:1883->1883/tcp
-iot-mysql       running (healthy)    0.0.0.0:3308->3306/tcp
+NAME                STATUS               PORTS
+iot-nginx           running              0.0.0.0:80->80/tcp
+iot-frontend        running              0.0.0.0:3000->3000/tcp
+iot-backend         running (healthy)    0.0.0.0:5000->5000/tcp
+iot-mqtt-broker-1   running              0.0.0.0:1883->1883/tcp
+iot-mqtt-broker-2   running              0.0.0.0:1884->1883/tcp
+iot-mysql           running (healthy)    0.0.0.0:3308->3306/tcp
 ```
 
 Nếu có service nào chưa `running`, đợi thêm 30 giây rồi kiểm tra lại.
@@ -321,9 +326,13 @@ Mở file: `firmware/gateway-node/include/config_gw.h`
 #define WIFI_SSID      "TenMangWifi"            // tên WiFi (chỉ 2.4 GHz)
 #define WIFI_PASS      "MatKhauWifi"
 
-// === IP máy chủ (lấy từ Bước 2.4) ===
-#define MQTT_HOST      "192.168.1.100"
-#define MQTT_PORT      1883
+// === MQTT Broker 1 — Sensor ↔ Gateway (lấy từ Bước 2.4) ===
+#define MQTT_BROKER1_HOST  "192.168.1.100"
+#define MQTT_BROKER1_PORT  1883
+
+// === MQTT Broker 2 — Gateway → Backend (lấy từ Bước 2.4) ===
+#define MQTT_BROKER2_HOST  "192.168.1.100"
+#define MQTT_BROKER2_PORT  1884
 
 // === URL lấy danh sách sensor từ Backend (qua Nginx cổng 80) ===
 #define BACKEND_SENSORS_URL  "http://192.168.1.100/api/device/sensors"

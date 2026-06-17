@@ -154,7 +154,8 @@ async function handleGatewayData(raw: string): Promise<void> {
 
 export function startMqttDataService(): void {
   const host = process.env.MQTT_HOST || "localhost";
-  const port = Number(process.env.MQTT_PORT) || 1883;
+  // Default port 1884: Broker 2 (gateway → backend layer)
+  const port = Number(process.env.MQTT_PORT) || 1884;
   const url  = `mqtt://${host}:${port}`;
 
   const client = mqtt.connect(url, {

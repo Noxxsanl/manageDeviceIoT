@@ -5,13 +5,14 @@
 
 ---
 
-## Tổng quan — 4 service cần chạy
+## Tổng quan — 5 service cần chạy
 
 ```
-Terminal 1: MySQL 8.0        (database, port 3306)
-Terminal 2: Mosquitto MQTT   (broker,   port 1883)
-Terminal 3: Backend Express  (API,      port 5000)
-Terminal 4: Frontend Next.js (UI,       port 3000)
+Terminal 1: MySQL 8.0             (database, port 3306)
+Terminal 2: Mosquitto Broker 1    (Sensor ↔ Gateway, port 1883)
+Terminal 3: Mosquitto Broker 2    (Gateway → Backend, port 1884)
+Terminal 4: Backend Express       (API,      port 5000)
+Terminal 5: Frontend Next.js      (UI,       port 3000)
 ```
 
 ---
@@ -130,51 +131,80 @@ Kết quả mong đợi:
 
 ---
 
-## Bước 3 — Cấu hình và chạy Mosquitto
+## Bước 3 — Cấu hình và chạy Mosquitto (2 Broker)
 
-### Tạo file config cho Windows local
+### Tạo file config cho Broker 1 (Sensor ↔ Gateway, port 1883)
 
-Tạo file mới `mosquitto\mosquitto_local.conf`:
+Tạo file `mosquitto\broker1_local.conf`:
 
 ```powershell
 # Tạo thư mục data nếu chưa có
 New-Item -ItemType Directory -Force -Path "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\data"
 
-# Tạo file config local
+# Tạo file config Broker 1
 @'
 listener 1883
 allow_anonymous true
 log_type all
 log_dest stdout
 persistence true
-persistence_location e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\data\
-'@ | Out-File -Encoding utf8 "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\mosquitto_local.conf"
+persistence_location e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\data\broker1\
+'@ | Out-File -Encoding utf8 "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\broker1_local.conf"
 ```
 
-### Mở Terminal 1 — chạy Mosquitto
+### Tạo file config cho Broker 2 (Gateway → Backend, port 1884)
+
+Tạo file `mosquitto\broker2_local.conf`:
+
+```powershell
+# Tạo file config Broker 2
+@'
+listener 1884
+allow_anonymous true
+log_type all
+log_dest stdout
+persistence true
+persistence_location e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\data\broker2\
+'@ | Out-File -Encoding utf8 "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\broker2_local.conf"
+```
+
+### Mở Terminal 2 — chạy Broker 1 (port 1883)
 
 ```powershell
 & "C:\Program Files\mosquitto\mosquitto.exe" `
-    -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\mosquitto_local.conf" `
+    -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\broker1_local.conf" `
     -v
 ```
 
 Output mong đợi:
 ```
 1749383000: mosquitto version 2.x.x starting
-1749383000: Config loaded from mosquitto_local.conf
-1749383000: Opening ipv6 listen socket on port 1883.
 1749383000: Opening ipv4 listen socket on port 1883.
 1749383000: mosquitto version 2.x.x running
 ```
 
-> Để terminal này **mở suốt** trong quá trình dùng hệ thống. Đừng đóng.
+### Mở Terminal 3 — chạy Broker 2 (port 1884)
+
+```powershell
+& "C:\Program Files\mosquitto\mosquitto.exe" `
+    -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\broker2_local.conf" `
+    -v
+```
+
+Output mong đợi:
+```
+1749383000: mosquitto version 2.x.x starting
+1749383000: Opening ipv4 listen socket on port 1884.
+1749383000: mosquitto version 2.x.x running
+```
+
+> Để **cả hai terminal** này **mở suốt** trong quá trình dùng hệ thống. Đừng đóng.
 
 ---
 
 ## Bước 4 — Cấu hình và chạy Backend
 
-### Mở Terminal 2 — dành riêng cho Backend
+### Mở Terminal 4 — dành riêng cho Backend
 
 ```powershell
 cd e:\WorkSpace\managerDeviceIoT-RBAC\backend
@@ -202,9 +232,9 @@ DB_NAME=iot_managerDeviceIoT
 # JWT (phải >= 32 ký tự)
 JWT_SECRET=local_dev_secret_key_change_in_production_32chars
 
-# MQTT Broker
+# MQTT Broker 2 (Gateway → Backend layer)
 MQTT_HOST=localhost
-MQTT_PORT=1883
+MQTT_PORT=1884
 
 # CORS
 FRONTEND_URL=http://localhost:3000
@@ -215,7 +245,8 @@ ADMIN_PASSWORD=admin123
 '@ | Out-File -Encoding utf8 .env
 ```
 
-> **Quan trọng:** Khi chạy local, `DB_HOST=localhost` và `MQTT_HOST=localhost` (khác với Docker dùng tên service).
+> **Quan trọng:** Khi chạy local, `DB_HOST=localhost` và `MQTT_HOST=localhost` với `MQTT_PORT=1884` (kết nối Broker 2).
+> Khác với Docker: `MQTT_HOST=mqtt-broker-2` và `MQTT_PORT=1883` (cổng nội bộ Docker network).
 
 ### Cài dependencies
 
@@ -243,7 +274,7 @@ Output mong đợi:
 ```
 [ts-node-dev] Starting...
 [DB] Connected to MySQL at localhost:3306
-[MQTT] Connected to broker at localhost:1883
+[MQTT] Connected to broker at localhost:1884
 [Server] Listening on port 5000
 ```
 
@@ -260,7 +291,7 @@ curl http://localhost:5000/api/health
 
 ## Bước 5 — Cấu hình và chạy Frontend
 
-### Mở Terminal 3 — dành riêng cho Frontend
+### Mở Terminal 5 — dành riêng cho Frontend
 
 ```powershell
 cd e:\WorkSpace\managerDeviceIoT-RBAC\frontend
@@ -344,12 +375,20 @@ try {
     Write-Host "[Frontend]  FAIL" -ForegroundColor Red
 }
 
-# Mosquitto
-$mqtt = Get-NetTCPConnection -LocalPort 1883 -ErrorAction SilentlyContinue
-if ($mqtt) {
-    Write-Host "[Mosquitto] OK — port 1883 đang mở" -ForegroundColor Green
+# Mosquitto Broker 1 (Sensor ↔ Gateway)
+$mqtt1 = Get-NetTCPConnection -LocalPort 1883 -ErrorAction SilentlyContinue
+if ($mqtt1) {
+    Write-Host "[Broker 1]  OK — port 1883 đang mở" -ForegroundColor Green
 } else {
-    Write-Host "[Mosquitto] FAIL — port 1883 chưa mở" -ForegroundColor Red
+    Write-Host "[Broker 1]  FAIL — port 1883 chưa mở" -ForegroundColor Red
+}
+
+# Mosquitto Broker 2 (Gateway → Backend)
+$mqtt2 = Get-NetTCPConnection -LocalPort 1884 -ErrorAction SilentlyContinue
+if ($mqtt2) {
+    Write-Host "[Broker 2]  OK — port 1884 đang mở" -ForegroundColor Green
+} else {
+    Write-Host "[Broker 2]  FAIL — port 1884 chưa mở" -ForegroundColor Red
 }
 ```
 
@@ -374,14 +413,17 @@ Mở trình duyệt:
 ```
 Mỗi lần mở máy muốn chạy hệ thống, làm theo thứ tự này:
 
-[Terminal 1] Mosquitto
-  & "C:\Program Files\mosquitto\mosquitto.exe" -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\mosquitto_local.conf" -v
+[Terminal 2] Mosquitto Broker 1 (Sensor ↔ Gateway, port 1883)
+  & "C:\Program Files\mosquitto\mosquitto.exe" -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\broker1_local.conf" -v
 
-[Terminal 2] Backend
+[Terminal 3] Mosquitto Broker 2 (Gateway → Backend, port 1884)
+  & "C:\Program Files\mosquitto\mosquitto.exe" -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\broker2_local.conf" -v
+
+[Terminal 4] Backend
   cd e:\WorkSpace\managerDeviceIoT-RBAC\backend
   npm run dev
 
-[Terminal 3] Frontend
+[Terminal 5] Frontend
   cd e:\WorkSpace\managerDeviceIoT-RBAC\frontend
   npm run dev
 
@@ -441,9 +483,10 @@ Phải đủ **32 ký tự trở lên**.
 Mosquitto chưa chạy hoặc sai port.
 
 ```powershell
-# Kiểm tra port 1883 có mở không
+# Kiểm tra port 1883 (Broker 1) và 1884 (Broker 2) có mở không
 Get-NetTCPConnection -LocalPort 1883 -ErrorAction SilentlyContinue
-# Nếu không thấy gì → Mosquitto chưa chạy → chạy lại Terminal 1
+Get-NetTCPConnection -LocalPort 1884 -ErrorAction SilentlyContinue
+# Nếu không thấy gì → Mosquitto chưa chạy → chạy lại Terminal 2 và/hoặc Terminal 3
 ```
 
 ### Lỗi Frontend: `Failed to fetch` / API trả về 500

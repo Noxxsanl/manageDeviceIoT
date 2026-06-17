@@ -9,7 +9,7 @@
 
 ```
 ┌─────────────┐    MQTT publish         ┌──────────────────────────┐
-│  DHT22      │ ──────────────────────► │  Mosquitto MQTT Broker   │
+│  DHT22      │ ──────────────────────► │  MQTT Broker 1           │
 │  (cảm biến) │   topic:                │  (Docker, port 1883)     │
 └─────────────┘   local/sensors/        └──────────┬───────────────┘
       │           {DEVICE_ID}/data                 │ subscribe wildcard
@@ -24,7 +24,8 @@
                                                    │ gateway/{gw_id}/data
                                                    ▼
                                         ┌──────────────────────────┐
-                                        │  Mosquitto MQTT Broker   │
+                                        │  MQTT Broker 2           │
+                                        │  (Docker, port 1884)     │
                                         └──────────┬───────────────┘
                                                    │ Backend subscribe
                                                    │ gateway/+/data
@@ -110,7 +111,7 @@ DB_NAME=iot_managerDeviceIoT
 JWT_SECRET=dev_secret_please_change_in_production_min32chars
 
 # MQTT Broker — kết nối qua Docker network, không đổi
-MQTT_HOST=mosquitto
+MQTT_HOST=mqtt-broker-2
 MQTT_PORT=1883
 
 # Tài khoản admin mặc định
@@ -118,8 +119,9 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 ```
 
-> **Lưu ý:** `DB_HOST=mysql` và `MQTT_HOST=mosquitto` là tên **Docker service**, không phải IP.
+> **Lưu ý:** `DB_HOST=mysql` và `MQTT_HOST=mqtt-broker-2` là tên **Docker service**, không phải IP.
 > Backend kết nối nội bộ qua Docker network — **KHÔNG** đổi sang `localhost`.
+> `MQTT_PORT=1883` là cổng nội bộ; khi chạy local dev thì dùng `MQTT_PORT=1884`.
 
 ---
 
@@ -146,12 +148,13 @@ docker compose ps
 **Kết quả mong đợi — tất cả STATUS phải là `running`:**
 
 ```
-NAME              IMAGE                STATUS                  PORTS
-iot-nginx         nginx:alpine         running                 0.0.0.0:80->80/tcp
-iot-frontend      iot-frontend         running                 0.0.0.0:3000->3000/tcp
-iot-backend       iot-backend          running (healthy)       0.0.0.0:5000->5000/tcp
-iot-mosquitto     eclipse-mosquitto:2  running                 0.0.0.0:1883->1883/tcp
-iot-mysql         mysql:8.0            running (healthy)       0.0.0.0:3308->3306/tcp
+NAME                IMAGE                STATUS                  PORTS
+iot-nginx           nginx:alpine         running                 0.0.0.0:80->80/tcp
+iot-frontend        iot-frontend         running                 0.0.0.0:3000->3000/tcp
+iot-backend         iot-backend          running (healthy)       0.0.0.0:5000->5000/tcp
+iot-mqtt-broker-1   eclipse-mosquitto:2  running                 0.0.0.0:1883->1883/tcp
+iot-mqtt-broker-2   eclipse-mosquitto:2  running                 0.0.0.0:1884->1883/tcp
+iot-mysql           mysql:8.0            running (healthy)       0.0.0.0:3308->3306/tcp
 ```
 
 > Nếu `iot-mysql` vẫn đang `starting` → chờ thêm 30 giây rồi kiểm tra lại.
@@ -265,9 +268,13 @@ Mở file: `firmware/gateway-node/include/config_gw.h`
 #define WIFI_SSID      "TenMangWifi"                  // ← Tên WiFi của bạn
 #define WIFI_PASS      "MatKhauWifi"                  // ← Mật khẩu WiFi
 
-// --- MQTT Broker (Mosquitto chạy trong Docker trên máy tính) ---
-#define MQTT_HOST      "192.168.1.50"                 // ← IP máy tính (lấy từ Bước 1)
-#define MQTT_PORT      1883
+// --- MQTT Broker 1 (Sensor ↔ Gateway, subscribe local/sensors/+/data) ---
+#define MQTT_BROKER1_HOST  "192.168.1.50"             // ← IP máy tính (lấy từ Bước 1)
+#define MQTT_BROKER1_PORT  1883
+
+// --- MQTT Broker 2 (Gateway → Backend, publish gateway/{gw_id}/data) ---
+#define MQTT_BROKER2_HOST  "192.168.1.50"             // ← IP máy tính (lấy từ Bước 1)
+#define MQTT_BROKER2_PORT  1884
 
 // --- URL lấy danh sách sensor (qua Nginx cổng 80) ---
 // Dữ liệu cảm biến gửi qua MQTT, không qua HTTP POST
@@ -342,9 +349,11 @@ Output mong đợi sau khi flash thành công:
 [WiFi] Đang kết nối WiFi...
 [WiFi] Kết nối thành công! IP: 192.168.1.100
 [NTP] Đồng bộ thời gian...OK
-[MQTT] Broker: 192.168.1.50:1883
-[MQTT] Connecting... OK
-[MQTT] Subscribed to 'local/sensors/+/data'
+[MQTT-SUB] Broker 1: 192.168.1.50:1883
+[MQTT-SUB] Connecting... OK
+[MQTT-SUB] Subscribed to 'local/sensors/+/data'
+[MQTT-PUB] Broker 2: 192.168.1.50:1884
+[MQTT-PUB] Connecting... OK
 [Registry] Fetching sensor list from backend...
 [Registry] Loaded 1 sensor(s)
 [MAIN] Ready – listening for sensor data...
@@ -512,7 +521,8 @@ docker compose logs -f
 
 # Xem log riêng từng service
 docker compose logs -f backend
-docker compose logs -f mosquitto
+docker compose logs -f mqtt-broker-1
+docker compose logs -f mqtt-broker-2
 docker compose logs -f mysql
 
 # Dừng toàn bộ (giữ dữ liệu)
@@ -601,14 +611,15 @@ docker compose logs backend
 ### ❌ ESP32 không kết nối được MQTT (`rc=-2`)
 
 ```
-Nguyên nhân: MQTT_HOST sai IP
+Nguyên nhân: MQTT_BROKER1_HOST hoặc MQTT_BROKER2_HOST sai IP
 → Kiểm tra lại IP máy tính bằng ipconfig
-→ Sửa MQTT_HOST trong config.h / config_gw.h
+→ Sửa MQTT_BROKER1_HOST / MQTT_BROKER2_HOST trong config_gw.h (Gateway)
+→ Sửa MQTT_HOST trong config.h (Sensor Node — kết nối Broker 1)
 → Flash lại firmware
 → Đảm bảo ESP32 và máy tính cùng mạng WiFi
-→ Kiểm tra firewall Windows không chặn port 1883:
+→ Kiểm tra firewall Windows không chặn port 1883 và 1884:
    Windows Defender Firewall → Advanced Settings
-   → Inbound Rules → New Rule → Port → 1883 → Allow
+   → Inbound Rules → New Rule → Port → 1883, 1884 → Allow
 ```
 
 ---
