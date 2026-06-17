@@ -1,29 +1,3 @@
-# BÁO CÁO ĐỒ ÁN MÔN HỌC
-# AN TOÀN HỆ THỐNG NHÚNG VÀ IoT
-
----
-
-<div align="center">
-
-**TRƯỜNG ĐẠI HỌC**
-**KHOA CÔNG NGHỆ THÔNG TIN**
-
----
-
-**ĐỀ TÀI:**
-
-## HỆ THỐNG QUẢN LÝ THIẾT BỊ IoT
-## CÓ XÁC THỰC VÀ PHÂN QUYỀN TRUY CẬP (RBAC)
-
----
-
-**Sinh viên thực hiện:** Nguyễn Hoàng Đạt — nguyenhoangdat2608@gmail.com
-**Môn học:** An Toàn Hệ Thống Nhúng và IoT
-**Ngày báo cáo:** 16/06/2026
-
-</div>
-
----
 
 ## Mục lục
 
