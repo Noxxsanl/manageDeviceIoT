@@ -10,16 +10,21 @@
 
 ```
 [Sensor Node ESP32]
-      │ MQTT plain TCP (LAN)
+      │ MQTT plain TCP (LAN) — port 1883
       │ topic: local/sensors/{sensor_id}/data
       ▼
+[MQTT Broker 1 — Mosquitto :1883]   ◄── bất kỳ ai trong LAN có thể publish
+      │ subscribe wildcard local/sensors/+/data
+      ▼
 [Gateway Node ESP32]
-      │ HTTP (GET /api/device/sensors — lấy danh sách sensor mỗi 5 phút)
-      │ MQTT plain TCP (LAN → Docker Mosquitto)
+      │ Validate HMAC sensor + whitelist check (cục bộ, không phụ thuộc Backend)
+      │ HTTP GET /api/device/sensors — lấy danh sách sensor mỗi 5 phút
+      │ MQTT plain TCP (LAN → Docker) — port 1884
       │ topic: gateway/{gw_id}/data
       ▼
-[Mosquitto Broker :1883]   ◄── bất kỳ ai trong LAN có thể publish
+[MQTT Broker 2 — Mosquitto :1884]   ◄── bất kỳ ai trong LAN có thể publish lên đây
       │ subscribe gateway/+/data
+      │ log_dest topic ($SYS log IP gateway)
       ▼
 [Backend Express :5000]    ◄── qua Nginx :80, không expose trực tiếp
       │ pool.execute() MySQL
@@ -38,7 +43,7 @@
 | # | Entry Point | Protocol | Lớp | Ghi chú |
 |---|---|---|---|---|
 | E1 | MQTT topic `local/sensors/+/data` | MQTT 1883 | Nội bộ LAN | Sensor → Gateway |
-| E2 | MQTT topic `gateway/+/data` | MQTT 1883 | LAN → Backend | Gateway → Broker |
+| E2 | MQTT topic `gateway/+/data` | MQTT 1884 | LAN → Backend | Gateway → Broker 2 |
 | E3 | `GET /api/device/sensors` | HTTP | LAN → Backend | Gateway fetch sensor list |
 | E4 | `POST /api/device/data` (HTTP fallback) | HTTP | Mạng → Backend | Backup route |
 | E5 | `POST /api/auth/login` | HTTP/Nginx | Internet → Backend | Dashboard login |
@@ -163,15 +168,15 @@ Với HMAC:
 **Mục tiêu**: Attacker publish trực tiếp lên MQTT topic `gateway/ESP32-GW-xxx/data` mà không qua firmware gateway thật.
 
 **Cách tấn công**:
-1. Attacker kết nối MQTT broker port 1883 (không cần authentication vì Mosquitto chưa cấu hình user/password).
-2. Publish payload với `gateway_id` hợp lệ nhưng `gw_hmac` giả.
+1. Attacker kết nối **MQTT Broker 2 port 1884** (không cần authentication vì Mosquitto chưa cấu hình user/password).
+2. Publish payload lên `gateway/{gw_id}/data` với `gateway_id` hợp lệ nhưng `gw_hmac` giả.
 
 **Cơ chế phòng thủ**:
 - Backend verify `gw_hmac` bằng `crypto.timingSafeEqual()`.
 - Gateway bị block sau 5 lần sai.
 - Audit log ghi `GATEWAY_AUTH_FAIL`.
 
-**Điểm yếu nghiêm trọng**: **Mosquitto broker port 1883 không có authentication** — bất kỳ ai trong LAN đều kết nối được và publish/subscribe bất kỳ topic nào. Attacker có thể:
+**Điểm yếu nghiêm trọng**: **Cả 2 MQTT broker đều không có authentication** — bất kỳ ai trong LAN đều kết nối được Broker 1 (:1883) hoặc Broker 2 (:1884) và publish/subscribe bất kỳ topic nào. Attacker nhắm vào Broker 2 có thể:
 - Subscribe `gateway/+/data` để nghe toàn bộ payload (bao gồm `sn_hmac` và `gw_hmac` của request hợp lệ).
 - Cố gắng brute force `gw_hmac` (256-bit → không khả thi, nhưng replay trong 300 giây là có thể).
 
@@ -267,7 +272,7 @@ POST /api/auth/login
 
 **Mục tiêu**: Attacker nghe lén MQTT để thu thập dữ liệu cảm biến, `device_id`, `sn_hmac`, `gw_hmac`.
 
-**Thực hiện**: Kết nối MQTT broker, subscribe `#` (wildcard tất cả topics) hoặc cụ thể `gateway/+/data`.
+**Thực hiện**: Kết nối **MQTT Broker 2 (:1884)**, subscribe `#` (wildcard tất cả topics) hoặc cụ thể `gateway/+/data`. (Broker 1 :1883 lộ `sn_hmac` + nhiệt độ/độ ẩm raw từ sensor.)
 
 **Thông tin lộ ra**:
 - `sensor_id`, `gateway_id` — định danh thiết bị
@@ -278,7 +283,7 @@ POST /api/auth/login
 
 **Thông tin KHÔNG lộ ra**: `secret_key` — không xuất hiện trên wire.
 
-**Điểm yếu**: Mosquitto không có TLS, không có authentication — bất kỳ ai kết nối LAN đều subscribe được.
+**Điểm yếu**: Cả 2 Mosquitto broker không có TLS, không có authentication — bất kỳ ai kết nối LAN đều subscribe được. Kiến trúc 2 broker tách biệt không giải quyết vấn đề sniffing vì cả 2 đều plain text.
 
 ---
 
@@ -322,14 +327,14 @@ POST /api/auth/login
 
 **Thực hiện**:
 ```bash
-# Publish 5 message với gw_hmac sai
-mosquitto_pub -h 192.168.100.139 -t "gateway/ESP32-GW-78867B14/data" \
+# Publish 5 message với gw_hmac sai lên Broker 2 (port 1884)
+mosquitto_pub -h 192.168.100.139 -p 1884 -t "gateway/ESP32-GW-78867B14/data" \
   -m '{"gateway_id":"ESP32-GW-78867B14","gw_timestamp":1718600000,"gw_hmac":"wronghmac..."}'
 ```
 
 **Kết quả**: Sau 5 lần fail → `status = 'blocked'`, gateway thật không gửi dữ liệu được nữa dù HMAC đúng.
 
-**Điểm yếu nghiêm trọng**: Mosquitto không có authentication → attacker trong LAN thực hiện được mà không cần biết `secret_key`. Đây là **DoS vector thực tế** nếu attacker vào được mạng LAN.
+**Điểm yếu nghiêm trọng**: **Broker 2 (:1884)** không có authentication → attacker trong LAN publish lên `gateway/+/data` mà không cần biết `secret_key`. Đây là **DoS vector thực tế** nếu attacker vào được mạng LAN. (Broker 1 cũng có vector tương tự nhắm vào auto-block sensor.)
 
 **Cơ chế phòng thủ**: Audit log ghi `GATEWAY_AUTH_FAIL` với IP — admin có thể phát hiện và mở khóa thủ công.
 
@@ -341,7 +346,7 @@ mosquitto_pub -h 192.168.100.139 -t "gateway/ESP32-GW-78867B14/data" \
 
 **Thực hiện**: Publish liên tục lên `gateway/+/data`. Backend xử lý mỗi message bất đồng bộ (`handleGatewayData`) kèm nhiều database query.
 
-**Cơ chế phòng thủ hiện tại**: `deviceDataLimiter` (60 req/min) chỉ áp dụng cho HTTP `/api/device/data` — **không áp dụng cho luồng MQTT**. Mosquitto nhận message từ bất kỳ MQTT client nào mà không giới hạn.
+**Cơ chế phòng thủ hiện tại**: `deviceDataLimiter` (60 req/min) chỉ áp dụng cho HTTP `/api/device/data` — **không áp dụng cho luồng MQTT**. Broker 2 (:1884) nhận message từ bất kỳ MQTT client nào mà không giới hạn rate.
 
 **Điểm yếu**: Không có rate limit cho MQTT → flood qua MQTT không bị chặn.
 
@@ -533,10 +538,11 @@ Quy trình này thủ công và không có rollout tự động.
 
 ### 8.1 Hạn chế theo thứ tự ưu tiên
 
-**[CRITICAL] Không có authentication cho Mosquitto MQTT Broker**
-- Bất kỳ ai trong LAN đều subscribe được `gateway/+/data` và publish message
-- Dẫn đến: sniffing toàn bộ payload, DoS bằng auto-block, relay attack trong 300 giây
-- Khuyến nghị: Bật password authentication trong `mosquitto.conf`, giới hạn ACL theo client-id
+**[CRITICAL] Không có authentication cho cả 2 Mosquitto MQTT Broker**
+- Broker 1 (:1883): bất kỳ ai subscribe `local/sensors/+/data` → nghe dữ liệu sensor thô; publish giả → tạo tải cho gateway
+- Broker 2 (:1884): bất kỳ ai subscribe `gateway/+/data` → nghe HMAC; publish giả → DoS backend, auto-block gateway/sensor
+- Dẫn đến: sniffing toàn bộ payload 2 lớp, relay attack trong 300 giây, DoS bằng auto-block
+- Khuyến nghị: Bật password authentication trong `broker1/mosquitto.conf` và `broker2/mosquitto.conf`, giới hạn ACL theo client-id pattern
 
 **[CRITICAL] secret_key lưu plain text trong database**
 - Cần plain text để tính HMAC, nhưng nếu DB bị breach toàn bộ key bị lộ
@@ -583,12 +589,12 @@ Quy trình này thủ công và không có rollout tự động.
 ```
 [Attacker] → kết nối WiFi cùng LAN
     ↓
-1. Subscribe MQTT: mosquitto_sub -h 192.168.100.139 -t "gateway/+/data"
+1. Subscribe MQTT Broker 2: mosquitto_sub -h 192.168.100.139 -p 1884 -t "gateway/+/data"
     → Nhận được: { gateway_id, gw_timestamp, gw_hmac, sensor_payload: {...} }
     → Lưu lại gw_hmac hợp lệ kèm gw_timestamp
     
 2. Trong vòng 300 giây kể từ khi nhận:
-   mosquitto_pub -h 192.168.100.139 -t "gateway/ESP32-GW-78867B14/data"
+   mosquitto_pub -h 192.168.100.139 -p 1884 -t "gateway/ESP32-GW-78867B14/data"
    -m '{ "gateway_id": "ESP32-GW-78867B14",
           "gw_timestamp": <timestamp cũ>,
           "gw_hmac": "<hmac cũ copy>",
@@ -621,7 +627,7 @@ Quy trình này thủ công và không có rollout tự động.
 [Attacker] → biết gateway_id (dễ tìm qua MQTT sniffing)
     ↓
 for i in range(5):
-    mosquitto_pub -h 192.168.100.139 -t "gateway/ESP32-GW-78867B14/data"
+    mosquitto_pub -h 192.168.100.139 -p 1884 -t "gateway/ESP32-GW-78867B14/data"
     -m '{"gateway_id":"ESP32-GW-78867B14","gw_timestamp":1718600000,"gw_hmac":"aaaa...fake"}'
 
 → Backend: GATEWAY_AUTH_FAIL ×5 → UPDATE status='blocked'

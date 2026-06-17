@@ -8,7 +8,7 @@
 
 ### Câu 1. Hệ thống gồm những thành phần nào?
 
-Hệ thống gồm 4 thành phần chính: IoT Device, Server, Database và Dashboard. Trong project này, IoT Device được chia thành Sensor Node và Gateway Node. Sensor đọc dữ liệu môi trường, gửi qua MQTT đến Gateway. Gateway kiểm tra sensor, ký thêm HMAC của gateway và forward dữ liệu lên Backend qua MQTT. Backend xử lý xác thực, lưu dữ liệu vào database và Dashboard hiển thị thiết bị, trạng thái, dữ liệu cảm biến và audit log. Toàn bộ hạ tầng chạy trong Docker Compose với 5 service: MySQL, Mosquitto (MQTT Broker), Nginx (reverse proxy), Backend Express và Frontend Next.js.
+Hệ thống gồm 4 thành phần chính: IoT Device, Server, Database và Dashboard. Trong project này, IoT Device được chia thành Sensor Node và Gateway Node. Sensor đọc dữ liệu môi trường, gửi qua **MQTT Broker 1 (:1883)** đến Gateway. Gateway kiểm tra sensor, ký thêm HMAC của gateway và forward dữ liệu lên Backend qua **MQTT Broker 2 (:1884)**. Backend xử lý xác thực, lưu dữ liệu vào database và Dashboard hiển thị thiết bị, trạng thái, dữ liệu cảm biến và audit log. Toàn bộ hạ tầng chạy trong Docker Compose với **6 service**: MySQL, MQTT Broker 1, MQTT Broker 2, Nginx (reverse proxy), Backend Express và Frontend Next.js. Việc tách 2 broker giúp cô lập lớp sensor-gateway khỏi lớp gateway-backend.
 
 ### Câu 2. Vì sao tách Sensor Node và Gateway Node?
 
@@ -180,15 +180,15 @@ Backend trả về lỗi `NOT_FOUND` và ghi audit log xác thực thất bại.
 
 Có. Firmware hiện lưu `device_id`, `secret_key`, WiFi credential và danh sách sensor trong file cấu hình (`firmware/sensor-node/include/config.h`, `firmware/gateway-node/include/config_gw.h`). Nếu attacker trích xuất firmware thành công, `secret_key` có thể bị lộ. Hướng giảm rủi ro: bật **Secure Boot và Flash Encryption** nếu phần cứng hỗ trợ, không commit secret thật vào repo, rotate key khi nghi ngờ bị lộ và hạn chế quyền của mỗi thiết bị.
 
-### Câu 33. MQTT port 1883 có điểm yếu gì?
+### Câu 33. MQTT port 1883 và 1884 có điểm yếu gì?
 
-MQTT port 1883 là MQTT không mã hóa (plain TCP). Dữ liệu MQTT truyền trong mạng LAN có thể bị nghe lén. Nếu triển khai thật, nên dùng **MQTT over TLS** (port 8883), cấu hình username/password hoặc certificate cho broker Mosquitto, và giới hạn topic publish/subscribe theo từng thiết bị. Firmware cần chuyển từ `WiFiClient` sang `WiFiClientSecure`.
+Cả 2 MQTT broker đều chạy plain TCP không mã hóa: **Broker 1 (:1883)** cho lớp Sensor↔Gateway và **Broker 2 (:1884)** cho lớp Gateway→Backend. Dữ liệu truyền trong mạng LAN có thể bị nghe lén. Broker 2 nguy hiểm hơn vì chứa cả `gw_hmac` và `sn_hmac` — attacker trong LAN có thể sniff và replay trong 300 giây. Nếu triển khai thật, nên dùng **MQTT over TLS** (port 8883), cấu hình username/password và ACL cho cả 2 broker, giới hạn topic theo client-id. Firmware cần chuyển từ `WiFiClient` sang `WiFiClientSecure`.
 
 ### Câu 34. Giao tiếp từ gateway lên backend có điểm yếu gì?
 
 Gateway giao tiếp với backend theo **hai kênh khác nhau**:
 
-1. **MQTT** (kênh chính — dữ liệu cảm biến): Gateway publish lên topic `gateway/{gw_id}/data` qua Mosquitto broker. Kênh này plain TCP, chưa có TLS.
+1. **MQTT** (kênh chính — dữ liệu cảm biến): Gateway publish lên topic `gateway/{gw_id}/data` qua **Broker 2 (:1884)**. Kênh này plain TCP, chưa có TLS.
 2. **HTTP** (kổng phụ — lấy danh sách sensor): Gateway gọi `GET /api/device/sensors` để fetch danh sách sensor hợp lệ mỗi 5 phút. URL cấu hình trong `BACKEND_SENSORS_URL` dạng HTTP, chưa mã hóa.
 
 Trong môi trường thật, cả MQTT lẫn HTTP đều cần mã hóa (MQTT TLS port 8883, HTTPS thay vì HTTP) để đảm bảo tính bảo mật và toàn vẹn dữ liệu trên đường truyền.

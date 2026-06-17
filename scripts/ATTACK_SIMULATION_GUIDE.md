@@ -68,7 +68,8 @@ Toi thieu:
 | Backend | `http://localhost:5000` |
 | Backend health | `http://localhost:5000/api/health` |
 | MySQL tren host | `localhost:3308` |
-| Mosquitto MQTT | `localhost:1883` |
+| MQTT Broker 1 (Sensor↔GW) | `localhost:1883` |
+| MQTT Broker 2 (GW→Backend) | `localhost:1884` |
 
 ---
 
@@ -141,7 +142,8 @@ docker compose ps
 Can thay cac container chay:
 
 - `iot-mysql`
-- `iot-mosquitto`
+- `iot-mqtt-broker-1`
+- `iot-mqtt-broker-2`
 - `iot-nginx`
 - `iot-backend`
 - `iot-frontend`
@@ -158,7 +160,8 @@ Kiem tra log neu co loi:
 docker compose logs -f backend
 docker compose logs -f frontend
 docker compose logs -f mysql
-docker compose logs -f mosquitto
+docker compose logs -f mqtt-broker-1
+docker compose logs -f mqtt-broker-2
 ```
 
 Dung toan bo stack:
@@ -180,18 +183,19 @@ docker compose up -d --build
 Dung cach nay khi muon debug code Node/Next truc tiep tren may host. Van co the
 dung Docker chi cho MySQL va Mosquitto, hoac cai MySQL/Mosquitto local rieng.
 
-### 5.1 Chay MySQL va Mosquitto bang Docker
+### 5.1 Chay MySQL va MQTT Broker bang Docker
 
 Neu muon chi dung Docker cho ha tang:
 
 ```powershell
-docker compose up -d mysql mosquitto
+docker compose up -d mysql mqtt-broker-1 mqtt-broker-2
 ```
 
 Voi cach nay, tren host:
 
 - MySQL la `localhost:3308`
-- Mosquitto la `localhost:1883`
+- MQTT Broker 1 (Sensor↔Gateway) la `localhost:1883`
+- MQTT Broker 2 (Gateway→Backend) la `localhost:1884`
 
 ### 5.2 Cau hinh Backend local
 
@@ -209,7 +213,7 @@ DB_NAME=iot_managerDeviceIoT
 JWT_SECRET=local_dev_secret_key_change_in_production_32chars
 
 MQTT_HOST=localhost
-MQTT_PORT=1883
+MQTT_PORT=1884
 
 FRONTEND_URL=http://localhost:3000
 
@@ -344,8 +348,13 @@ Sua cac gia tri:
 #define WIFI_SSID      "ten-wifi"
 #define WIFI_PASS      "mat-khau-wifi"
 
-#define MQTT_HOST      "192.168.1.100"
-#define MQTT_PORT      1883
+// Broker 1 - Subscribe nhan du lieu tu Sensor
+#define MQTT_BROKER1_HOST  "192.168.1.100"
+#define MQTT_BROKER1_PORT  1883
+
+// Broker 2 - Publish du lieu len Backend
+#define MQTT_BROKER2_HOST  "192.168.1.100"
+#define MQTT_BROKER2_PORT  1884
 
 #define BACKEND_URL    "http://192.168.1.100:3000/api/device/data"
 ```
@@ -380,6 +389,8 @@ Ket qua mong doi trong Serial Monitor:
 IoT Gateway Node - Starting
 Gateway ID : ESP32-GW-...
 Backend URL: http://192.168.1.100:3000/api/device/data
+[MQTT-SUB] Broker 1: 192.168.1.100:1883
+[MQTT-PUB] Broker 2: 192.168.1.100:1884
 [MAIN] Ready - listening for sensor data...
 ```
 
@@ -643,9 +654,9 @@ DB_PORT=3308
 Kiem tra:
 
 - ESP32 va may Docker cung mang WiFi.
-- `MQTT_HOST` la IP LAN cua may, khong phai `localhost`.
-- Cong `1883` khong bi firewall chan.
-- Mosquitto container dang chay.
+- `MQTT_BROKER1_HOST` / `MQTT_BROKER2_HOST` la IP LAN cua may, khong phai `localhost`.
+- Cong `1883` (Broker 1) va `1884` (Broker 2) khong bi firewall chan.
+- Ca hai container `iot-mqtt-broker-1` va `iot-mqtt-broker-2` dang chay.
 
 ### Gateway forward fail
 

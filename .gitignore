@@ -15,7 +15,8 @@ npm-debug.log*
 *.log
 
 # Firmware credentials - NEVER commit
-firmware/**/config.h
+firmware/**/config_1.h
+firmware/**/config_2.h
 firmware/**/config_gw.h
 
 # OS

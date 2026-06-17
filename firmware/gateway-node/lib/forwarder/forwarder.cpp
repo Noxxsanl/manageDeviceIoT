@@ -42,36 +42,49 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
     JsonObject    data         = sensorDoc["data"];
 
     if (!sensor_id[0] || !sn_timestamp || !sn_hmac[0] || data.isNull()) {
-        Serial.println("[FWD] Missing required field – dropped");
+        Serial.println("[FWD] REJECT – missing required field (sensor_id/sn_timestamp/sn_hmac/data)");
         return false;
     }
+
+    Serial.printf("[FWD] ┌─ sensor_id   : %s\n", sensor_id);
+    Serial.printf("[FWD] │  sensor_ip   : %s\n", sensor_ip[0] ? sensor_ip : "(not provided)");
+    Serial.printf("[FWD] │  sn_timestamp: %lu\n", sn_timestamp);
+    Serial.print ("[FWD] │  data        :");
+    for (JsonPair kv : data) {
+        Serial.printf("  %s=%.2f", kv.key().c_str(), kv.value().as<float>());
+    }
+    Serial.println();
+    Serial.printf("[FWD] │  sn_hmac     : %.16s...\n", sn_hmac);
 
     // 2. Tra cứu secret từ registry động; lazy-refresh nếu không tìm thấy
     const char* sensorSecret = registryFindSecret(sensor_id);
     if (!sensorSecret && registryNeedsRefresh()) {
-        Serial.printf("[FWD] Unknown sensor '%s', refreshing registry...\n", sensor_id);
+        Serial.printf("[FWD] │  registry    : '%s' not found, refreshing...\n", sensor_id);
         fetchSensorList();
         sensorSecret = registryFindSecret(sensor_id);
     }
     if (!sensorSecret) {
-        Serial.printf("[FWD] REJECT – unknown sensor '%s'\n", sensor_id);
+        Serial.printf("[FWD] └─ REJECT – unknown sensor '%s' (not in registry)\n", sensor_id);
         return false;
     }
+    Serial.printf("[FWD] │  registry    : sensor found in registry\n");
 
     // 3. Timestamp window ±TIMESTAMP_WINDOW_SEC
     unsigned long now = getCurrentTimestamp();
     long timeDiff = (long)now - (long)sn_timestamp;
+    Serial.printf("[FWD] │  gw_now      : %lu  (diff: %+lds, window: ±%ds)\n",
+                  now, timeDiff, TIMESTAMP_WINDOW_SEC);
     if (timeDiff < -TIMESTAMP_WINDOW_SEC || timeDiff > TIMESTAMP_WINDOW_SEC) {
-        Serial.printf("[FWD] REJECT – timestamp out of window (diff=%lds)\n", timeDiff);
+        Serial.printf("[FWD] └─ REJECT – timestamp out of window (diff=%+lds)\n", timeDiff);
         return false;
     }
 
     // 4. Verify sensor HMAC
     if (!verifySensorHMAC(sensor_id, sn_timestamp, sn_hmac, sensorSecret)) {
-        Serial.printf("[FWD] REJECT – invalid HMAC for '%s'\n", sensor_id);
+        Serial.printf("[FWD] └─ REJECT – HMAC mismatch for '%s'\n", sensor_id);
         return false;
     }
-    Serial.printf("[FWD] Sensor HMAC OK – '%s'\n", sensor_id);
+    Serial.printf("[FWD] ├─ HMAC OK – sensor '%s' authenticated\n", sensor_id);
 
     // 5. Sign with gateway HMAC: HMAC-SHA256(GW_SECRET_KEY, "gw_id:gw_timestamp")
     unsigned long gw_timestamp = getCurrentTimestamp();
@@ -79,9 +92,13 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
     snprintf(gwMsg, sizeof(gwMsg), "%s:%lu", GW_DEVICE_ID, gw_timestamp);
     char gw_hmac[65];
     if (!computeHMAC(GW_SECRET_KEY, gwMsg, gw_hmac)) {
-        Serial.println("[FWD] Gateway HMAC computation failed");
+        Serial.println("[FWD] └─ ERROR – gateway HMAC computation failed");
         return false;
     }
+    Serial.printf("[FWD] │  gw_id       : %s\n", GW_DEVICE_ID);
+    Serial.printf("[FWD] │  gw_ip       : %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[FWD] │  gw_timestamp: %lu\n", gw_timestamp);
+    Serial.printf("[FWD] │  gw_hmac     : %.16s...\n", gw_hmac);
 
     // 6. Build forwarded payload – sensor fields nested under sensor_payload
     StaticJsonDocument<768> outDoc;
@@ -100,19 +117,20 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
 
     char bodyBuf[MQTT_BUFFER_SIZE];
     size_t bodyLen = serializeJson(outDoc, bodyBuf, sizeof(bodyBuf));
-    Serial.printf("[FWD] Publishing %d bytes to MQTT\n", (int)bodyLen);
 
     // 7. MQTT publish to backend topic: gateway/<GW_DEVICE_ID>/data
     if (!mqttClientIsConnected()) {
-        Serial.println("[FWD] MQTT not connected – dropped");
+        Serial.println("[FWD] └─ ERROR – MQTT Broker2 not connected, packet dropped");
         return false;
     }
 
+    Serial.printf("[FWD] ├─ publishing %d bytes → %s\n", (int)bodyLen, GATEWAY_DATA_TOPIC);
+
     bool success = mqttClientPublish(GATEWAY_DATA_TOPIC, bodyBuf, (unsigned int)bodyLen);
     if (success) {
-        Serial.println("[FWD] MQTT publish OK");
+        Serial.println("[FWD] └─ MQTT publish OK ✓");
     } else {
-        Serial.println("[FWD] MQTT publish FAILED");
+        Serial.println("[FWD] └─ MQTT publish FAILED ✗");
     }
     return success;
 }

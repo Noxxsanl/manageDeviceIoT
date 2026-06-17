@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "config_1.h"
+#include "config_2.h"
 #include "wifi_manager.h"
 #include "ntp_sync.h"
 #include "sensor_reader.h"
@@ -16,7 +16,7 @@ void setup() {
     delay(1000);
 
     Serial.println("\n╔══════════════════════════════════╗");
-    Serial.println("║   IoT Sensor Node 1 – Khởi động    ║");
+    Serial.println("║   IoT Sensor Node 2 – Khởi động    ║");
     Serial.println("╚══════════════════════════════════╝");
     Serial.printf("  Device ID  : %s\n", DEVICE_ID);
     Serial.printf("  DHT22 Pin  : GPIO %d\n", DHT_PIN);

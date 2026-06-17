@@ -23,7 +23,18 @@ static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     memcpy(buf, payload, copyLen);
     buf[copyLen] = '\0';
 
-    Serial.printf("[MQTT-SUB] Received on '%s' (%u bytes)\n", topic, length);
+    Serial.println("\n[MQTT-SUB] ══════════════════════════════════════════════");
+    Serial.printf("[MQTT-SUB]   topic  : %s\n", topic);
+    Serial.printf("[MQTT-SUB]   size   : %u bytes\n", length);
+    if (length > 0) {
+        unsigned int previewLen = copyLen < 300 ? copyLen : 300;
+        char preview[301];
+        memcpy(preview, buf, previewLen);
+        preview[previewLen] = '\0';
+        Serial.printf("[MQTT-SUB]   payload: %s%s\n", preview, copyLen > 300 ? " ..." : "");
+    }
+    Serial.println("[MQTT-SUB] ──────────────────────────────────────────────");
+
     _userCallback(topic, buf, copyLen);
 }
 

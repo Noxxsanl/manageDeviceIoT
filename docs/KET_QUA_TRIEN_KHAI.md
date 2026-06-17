@@ -21,25 +21,29 @@ Mục tiêu được triển khai thành một hệ thống đầy đủ (full-s
 │                                                                              │
 │   [ESP32 Sensor Node]                    [ESP32 Gateway Node]                │
 │   ┌──────────────────┐                  ┌──────────────────────────┐         │
-│   │ Đọc DHT22 (GPIO4)│                  │ Subscribe MQTT           │         │
+│   │ Đọc DHT22 (GPIO4)│                  │ Subscribe Broker 1 :1883 │         │
 │   │ Tính sn_hmac     │                  │ Verify sensor HMAC       │         │
-│   │ (mbedTLS SHA256) │ ──MQTT──────────►│ Kiểm tra timestamp ±300s │         │
+│   │ (mbedTLS SHA256) │ ─MQTT :1883─────►│ Kiểm tra timestamp ±300s │         │
 │   │ Publish MQTT     │ local/sensors/   │ safeEq64() constant-time │         │
-│   │   /+/data        │                  │ Ký gw_hmac               │         │
-│   └──────────────────┘                  │ Publish MQTT gateway/+   │         │
+│   │ → Broker 1 :1883 │   /+/data        │ Ký gw_hmac               │         │
+│   └──────────────────┘                  │ Publish → Broker 2 :1884 │         │
 │                                         └──────────────────────────┘         │
 └──────────────────────────────────────────────────┬──────────────────────────┘
                                                    │ MQTT gateway/{id}/data
                                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  LỚP HẠ TẦNG (Docker Compose)                                                │
-│                                                                              │
-│  [Eclipse Mosquitto :1883]  ◄──────────────────────────────────────────────  │
-│         │ subscribe gateway/+/data                                            │
-│         ▼                                                                    │
-│  [Nginx :80]  ──/api/*──►  [Backend Express :5000]  ──►  [MySQL :3306]      │
-│               ──/*──────►  [Next.js Frontend :3000]                          │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  LỚP HẠ TẦNG (Docker Compose — 6 services)                                      │
+│                                                                                 │
+│  [Mosquitto Broker 1 :1883]  ◄──── Sensor publish local/sensors/+/data ──────   │
+│         │ subscribe wildcard                                                    │
+│         │ → Gateway Node nhận                                                   │
+│                                                                                 │
+│  [Mosquitto Broker 2 :1884]  ◄──── Gateway publish gateway/+/data ───────────   │
+│         │ subscribe gateway/+/data                                              │
+│         ▼                                                                       │
+│  [Nginx :80]  ──/api/*──►  [Backend Express :5000]  ──►  [MySQL :3306]         │
+│               ──/*──────►  [Next.js Frontend :3000]                             │
+└─────────────────────────────────────────────────────────────────────────────────┘
                                                    │
                                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -55,7 +59,8 @@ Mục tiêu được triển khai thành một hệ thống đầy đủ (full-s
 | Container | Image | Port | Vai trò |
 |-----------|-------|------|---------|
 | `iot-mysql` | mysql:8.0 | 3308:3306 | Cơ sở dữ liệu |
-| `iot-mosquitto` | eclipse-mosquitto:2 | 1883:1883 | MQTT Broker |
+| `iot-mqtt-broker-1` | eclipse-mosquitto:2 | 1883:1883 | MQTT Broker 1 — Sensor ↔ Gateway |
+| `iot-mqtt-broker-2` | eclipse-mosquitto:2 | 1884:1883 | MQTT Broker 2 — Gateway → Backend |
 | `iot-nginx` | nginx:alpine | 80:80 | Reverse proxy — single entry point |
 | `iot-backend` | build `backend/Dockerfile.dev` | 5000:5000 | API server Node.js |
 | `iot-frontend` | build `frontend/Dockerfile.dev` | 3000:3000 | Dashboard Next.js 16 |
