@@ -4,6 +4,19 @@ import { verifyJWT } from "../middleware/verifyJWT";
 
 const router = Router();
 
+// DELETE /api/audit-log/data-recv – xóa toàn bộ log DATA_RECV (admin/operator only)
+router.delete("/data-recv", verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user as { role: string };
+  if (user.role === "viewer") {
+    res.status(403).json({ error: "FORBIDDEN" });
+    return;
+  }
+  const [result] = await (pool as any).execute(
+    "DELETE FROM audit_log WHERE event_type = 'DATA_RECV'"
+  );
+  res.json({ success: true, deleted: result.affectedRows });
+});
+
 // GET /api/audit-log  – filter by event_type, device_id, from, to; sorted DESC
 router.get("/", verifyJWT, async (req: Request, res: Response): Promise<void> => {
   const { event_type, device_id, from, to } = req.query;

@@ -5,6 +5,17 @@ const migrations: { name: string; sql: string }[] = [
     name: "add_last_ip_to_devices",
     sql: "ALTER TABLE devices ADD COLUMN last_ip VARCHAR(45) NULL AFTER last_seen",
   },
+  {
+    name: "trim_sensor_data_to_150_per_sensor",
+    sql: `DELETE FROM sensor_data WHERE id NOT IN (
+      SELECT id FROM (
+        SELECT id,
+               ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY id DESC) AS rn
+        FROM sensor_data
+      ) t
+      WHERE rn <= 150
+    )`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, Search, X } from "lucide-react";
+import { RefreshCw, Search, X, Trash2 } from "lucide-react";
 import { useAuditLog, type AuditLogFilters } from "@/package/features/useAuditLog";
 import AuditLogTable from "@/components/compound/audit/AuditLogTable";
+import api from "@/package/services/api";
 
 const EVENT_TYPES = [
   "AUTH_SUCCESS",
@@ -36,6 +37,18 @@ export default function Audit() {
   );
 
   const { logs, isLoading, isError, refresh } = useAuditLog(filters);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleDeleteDataRecv() {
+    if (!window.confirm("Xóa toàn bộ log DATA_RECV? Hành động này không thể hoàn tác.")) return;
+    setIsDeleting(true);
+    try {
+      await api.delete("/api/audit-log/data-recv");
+      refresh();
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -62,13 +75,23 @@ export default function Audit() {
             Nhật ký bảo mật và sự kiện hệ thống. Tự động làm mới mỗi 30 giây.
           </p>
         </div>
-        <button
-          onClick={() => refresh()}
-          className="inline-flex items-center gap-2 rounded-3xl bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-white"
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-          Làm mới
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleDeleteDataRecv}
+            disabled={isDeleting}
+            className="inline-flex items-center gap-2 rounded-3xl bg-rose-900/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-800/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            {isDeleting ? "Đang xóa…" : "Xóa log DATA_RECV"}
+          </button>
+          <button
+            onClick={() => refresh()}
+            className="inline-flex items-center gap-2 rounded-3xl bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Làm mới
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

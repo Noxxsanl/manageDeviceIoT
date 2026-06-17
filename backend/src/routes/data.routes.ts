@@ -73,6 +73,14 @@ router.post("/", validateDevice, async (req: Request, res: Response): Promise<vo
   );
   const receivedAt: Date = sdRows[0]?.received_at ?? new Date();
 
+  // Giữ chỉ 150 bản ghi gần nhất cho mỗi sensor
+  await pool.execute(
+    `DELETE FROM sensor_data WHERE device_id = ? AND id NOT IN (
+       SELECT id FROM (SELECT id FROM sensor_data WHERE device_id = ? ORDER BY id DESC LIMIT 150) t
+     )`,
+    [sensor.id, sensor.id]
+  );
+
   // Dùng IP do firmware tự báo (gateway_ip / sensor_ip trong body).
   // Fallback về HTTP client IP nếu firmware cũ chưa gửi field này.
   const resolvedGwIp  = (typeof gateway_ip === "string" && gateway_ip) ? gateway_ip : ip;
