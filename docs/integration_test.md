@@ -13,13 +13,17 @@
     ▼
 [ESP32 Gateway Node]
     │  1. Parse JSON từ sensor
-    │  2. Verify sn_hmac locally
+    │  2. Verify sn_hmac locally (whitelist + HMAC#1)
     │  3. Tính gw_hmac = HMAC(GW_SECRET, gw_id:gw_ts)
-    │  4. Build merged payload
-    │  HTTP POST: /api/device/data
+    │  4. Build merged payload (sensor data lồng trong sensor_payload)
+    │  MQTT publish: gateway/{gw_id}/data
     ▼
-[Backend Express – port 3000]
-    │  Middleware validateDevice:
+[Mosquitto Broker] ─── port 1883
+    │
+    │  (Backend subscribe: gateway/+/data)
+    ▼
+[Backend Express – port 5000]  ← mqttDataService.ts
+    │  Xử lý trong MQTT callback:
     │    - Level 1: Verify gw_hmac (lookup GW secret từ DB)
     │    - Level 2: Verify sn_hmac (lookup SN secret từ DB)
     │  Handler: INSERT sensor_data, UPDATE last_seen
@@ -27,7 +31,7 @@
 [MySQL 8.0]
     │
     ▼
-[Next.js Dashboard – port 3001]
+[Next.js Dashboard – port 3000]  (hoặc qua Nginx port 80)
     SWR polling 10s → hiển thị real-time
 ```
 
@@ -36,9 +40,9 @@
 ## Checklist Chuẩn Bị
 
 ### 1. Backend & Database
-- [ ] `docker-compose up -d` → MySQL + Mosquitto + Backend đang chạy
-- [ ] Kiểm tra: `curl http://localhost:3000/api/health` → 200 OK
-- [ ] Đăng nhập Dashboard: `http://localhost:3001` → admin / admin123
+- [ ] `docker compose up -d` → MySQL + Mosquitto + Backend + Frontend + Nginx đang chạy
+- [ ] Kiểm tra: `curl http://localhost:5000/api/health` → `{"status":"ok","db":"connected","mqtt":"connected"}`
+- [ ] Đăng nhập Dashboard: `http://localhost` (qua Nginx) hoặc `http://localhost:3000` → admin / admin123
 
 ### 2. Đăng ký thiết bị
 
@@ -58,23 +62,27 @@ Kích hoạt cả 2 thiết bị: `PATCH /api/devices/:id/status` → `active`
 
 ### 3. Cấu hình Firmware
 
-**Sensor Node** – sửa `firmware/sensor-node/src/config.h`:
+**Sensor Node** – sửa `firmware/sensor-node/include/config.h`:
 ```cpp
 #define DEVICE_ID   "ESP32-SN-XXXXXXXX"   // từ bước đăng ký
 #define SECRET_KEY  "..."                  // từ bước đăng ký
 #define WIFI_SSID   "your-wifi"
 #define WIFI_PASS   "your-pass"
-#define MQTT_HOST   "192.168.x.x"          // IP máy chủ
+#define MQTT_HOST   "192.168.x.x"          // IP máy chủ (LAN)
+#define MQTT_PORT   1883
+#define SEND_INTERVAL 5000
 ```
 
-**Gateway Node** – sửa `firmware/gateway-node/src/config_gw.h`:
+**Gateway Node** – sửa `firmware/gateway-node/include/config_gw.h`:
 ```cpp
 #define GW_DEVICE_ID   "ESP32-GW-XXXXXXXX"
 #define GW_SECRET_KEY  "..."
 #define WIFI_SSID      "your-wifi"
 #define WIFI_PASS      "your-pass"
-#define MQTT_HOST      "192.168.x.x"
-#define BACKEND_URL    "http://192.168.x.x:3000/api/device/data"
+#define MQTT_HOST      "192.168.x.x"       // IP máy chủ (LAN)
+#define MQTT_PORT      1883
+// Gateway lấy danh sách sensor hợp lệ qua HTTP mỗi 5 phút:
+#define BACKEND_SENSORS_URL "http://192.168.x.x/api/device/sensors"
 
 static const SensorCredential KNOWN_SENSORS[] = {
     { "ESP32-SN-XXXXXXXX", "sensor-secret-key" },  // từ bước đăng ký
@@ -117,12 +125,17 @@ pio run --target upload --environment esp32doit-devkit-v1
 
 ### Test 2: Gửi dữ liệu cảm biến
 
-Sau mỗi 5 giây, Sensor Node publish MQTT. Kỳ vọng Gateway:
+Sau mỗi 5 giây, Sensor Node publish MQTT. Kỳ vọng Gateway Serial Monitor:
 ```
 [MQTT] Received on 'local/sensors/ESP32-SN-XXXXXXXX/data' (186 bytes)
 [FWD] Sensor HMAC OK – 'ESP32-SN-XXXXXXXX'
-[FWD] Payload (412 bytes): {"gateway_id":"ESP32-GW-XXXXXXXX",...}
-[FWD] Backend OK (200) – {"success":true,"sensor_id":"ESP32-SN-..."}
+[FWD] Publishing to 'gateway/ESP32-GW-XXXXXXXX/data' (412 bytes)
+[FWD] MQTT publish OK
+```
+
+Kỳ vọng Backend log (docker compose logs backend):
+```
+[mqttData] saved id=N from ESP32-SN-XXXXXXXX via ESP32-GW-XXXXXXXX
 ```
 
 ### Test 3: Kiểm tra Database
@@ -143,7 +156,7 @@ WHERE device_type IN ('sensor', 'gateway');
 
 ### Test 4: Kiểm tra Dashboard real-time
 
-1. Mở `http://localhost:3001`
+1. Mở `http://localhost` (qua Nginx) hoặc `http://localhost:3000`
 2. Vào trang Devices: Gateway và Sensor phải hiển thị **Online** (chấm xanh)
 3. Vào trang chi tiết Sensor: biểu đồ nhiệt độ/độ ẩm tự cập nhật mỗi 10s
 4. Vào trang Audit Log: thấy các event `DATA_RECV`
@@ -163,7 +176,7 @@ Chạy script demo sau khi đã cập nhật credentials vào file:
 ```bash
 chmod +x scripts/attack_demo.sh
 ./scripts/attack_demo.sh \
-    http://localhost:3000 \
+    http://localhost:5000 \
     "ESP32-GW-XXXXXXXX" \
     "gw-secret-key" \
     "ESP32-SN-XXXXXXXX" \
@@ -198,7 +211,7 @@ Phải thấy các event: `GATEWAY_AUTH_FAIL`, `SENSOR_AUTH_FAIL`, `DEVICE_BLOCK
 
 - [ ] Gateway Node firmware build thành công (PlatformIO)
 - [ ] Sensor → MQTT → Gateway: Serial Monitor hiện HMAC OK
-- [ ] Gateway → Backend: HTTP 200 nhận được
+- [ ] Gateway → Backend: MQTT publish thành công, backend log `[mqttData] saved id=N`
 - [ ] Dữ liệu vào MySQL: `sensor_data` có bản ghi mới
 - [ ] Dashboard: thiết bị hiện Online, biểu đồ cập nhật
 - [ ] Hệ thống chạy liên tục ≥ 10 phút không lỗi

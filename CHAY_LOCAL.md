@@ -138,7 +138,7 @@ Tạo file mới `mosquitto\mosquitto_local.conf`:
 
 ```powershell
 # Tạo thư mục data nếu chưa có
-New-Item -ItemType Directory -Force -Path "e:\WorkSpace\managerDeviceIoT\mosquitto\data"
+New-Item -ItemType Directory -Force -Path "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\data"
 
 # Tạo file config local
 @'
@@ -147,15 +147,15 @@ allow_anonymous true
 log_type all
 log_dest stdout
 persistence true
-persistence_location e:\WorkSpace\managerDeviceIoT\mosquitto\data\
-'@ | Out-File -Encoding utf8 "e:\WorkSpace\managerDeviceIoT\mosquitto\mosquitto_local.conf"
+persistence_location e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\data\
+'@ | Out-File -Encoding utf8 "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\mosquitto_local.conf"
 ```
 
 ### Mở Terminal 1 — chạy Mosquitto
 
 ```powershell
 & "C:\Program Files\mosquitto\mosquitto.exe" `
-    -c "e:\WorkSpace\managerDeviceIoT\mosquitto\mosquitto_local.conf" `
+    -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\mosquitto_local.conf" `
     -v
 ```
 
@@ -177,7 +177,7 @@ Output mong đợi:
 ### Mở Terminal 2 — dành riêng cho Backend
 
 ```powershell
-cd e:\WorkSpace\managerDeviceIoT\backend
+cd e:\WorkSpace\managerDeviceIoT-RBAC\backend
 ```
 
 ### Tạo file `.env`
@@ -263,7 +263,7 @@ curl http://localhost:5000/api/health
 ### Mở Terminal 3 — dành riêng cho Frontend
 
 ```powershell
-cd e:\WorkSpace\managerDeviceIoT\frontend
+cd e:\WorkSpace\managerDeviceIoT-RBAC\frontend
 ```
 
 ### Tạo file `.env.local`
@@ -375,14 +375,14 @@ Mở trình duyệt:
 Mỗi lần mở máy muốn chạy hệ thống, làm theo thứ tự này:
 
 [Terminal 1] Mosquitto
-  & "C:\Program Files\mosquitto\mosquitto.exe" -c "e:\WorkSpace\managerDeviceIoT\mosquitto\mosquitto_local.conf" -v
+  & "C:\Program Files\mosquitto\mosquitto.exe" -c "e:\WorkSpace\managerDeviceIoT-RBAC\mosquitto\mosquitto_local.conf" -v
 
 [Terminal 2] Backend
-  cd e:\WorkSpace\managerDeviceIoT\backend
+  cd e:\WorkSpace\managerDeviceIoT-RBAC\backend
   npm run dev
 
 [Terminal 3] Frontend
-  cd e:\WorkSpace\managerDeviceIoT\frontend
+  cd e:\WorkSpace\managerDeviceIoT-RBAC\frontend
   npm run dev
 
 → Mở http://localhost:3000

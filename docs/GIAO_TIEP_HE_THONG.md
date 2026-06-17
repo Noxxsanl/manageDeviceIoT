@@ -5,24 +5,50 @@
 ## 0. Bản đồ thành phần
 
 ```
-┌────────────┐  MQTT (1883, plaintext)   ┌──────────────┐  HTTP POST    ┌─────────────┐
-│ Sensor Node│ ───────────────────────▶ │ Gateway Node  │ ────────────▶ │   Backend    │
-│ (ESP32)    │  publish + HMAC#1         │ (ESP32-S3)    │  + HMAC#2     │ (Express.js) │
-└────────────┘                           └──────────────┘               └──────┬───────┘
-       ▲                                        ▲                              │
-       │ WiFi + NTP                             │ WiFi + NTP                   │ mysql2 (prepared
-       ▼                                        ▼                              ▼  statements)
-   Router/AP                              Mosquitto Broker                 ┌─────────┐
-                                          (container "mosquitto")          │  MySQL  │
-                                                                            └────┬────┘
-                                                                                 │
-        Browser ──▶ Nginx :80 ──▶ /api/* ──▶ Backend :5000 ◀────── REST (SWR, 10s) ┘
+┌────────────┐  MQTT (1883, plaintext)   ┌──────────────┐
+│ Sensor Node│ ───────────────────────▶ │ Mosquitto     │
+│ (ESP32     │  topic: local/sensors/    │ Broker        │
+│  DOIT V1)  │  {id}/data + HMAC#1       │ (container)   │
+└────────────┘                           └──────┬───────┘
+       ▲                                        │ subscribe wildcard
+       │ WiFi + NTP                             │ local/sensors/+/data
+       ▼                                        ▼
+   Router/AP                           ┌──────────────┐
+                                       │ Gateway Node  │
+                                       │ (ESP32        │
+                                       │  DOIT V1)     │
+                                       │ Validate HMAC#1│
+                                       │ Sign HMAC#2   │
+                                       └──────┬───────┘
+                                              │ MQTT Publish
+                                              │ gateway/{gw_id}/data
+                                              ▼
+                                       ┌──────────────┐
+                                       │ Mosquitto     │
+                                       │ Broker        │
+                                       └──────┬───────┘
+                                              │ Backend subscribe
+                                              │ gateway/+/data
+                                              ▼
+                                       ┌─────────────┐
+                                       │   Backend   │
+                                       │ (Express.js)│ ← Verify HMAC#2 + HMAC#1
+                                       └──────┬──────┘
+                                              │ mysql2 (prepared statements)
+                                              ▼
+                                         ┌─────────┐
+                                         │  MySQL  │
+                                         └────┬────┘
+                                              │
+        Browser ──▶ Nginx :80 ──▶ /api/* ──▶ Backend :5000 ◀────── REST (SWR, 10s)
            │                  └──▶ /*    ──▶ Frontend (Next.js) :3000 ──▶ route.ts proxy ──▶ Backend
            ▼
        Dashboard (React) hiển thị devices, sensor_data, audit_log
 ```
 
-5 thành phần chạy độc lập, được Docker Compose kết nối qua network `iot-network` ([docker-compose.yml](../docker-compose.yml)): `mysql`, `mosquitto`, `backend`, `frontend`, `nginx`. Hai firmware (`sensor-node`, `gateway-node`) chạy ngoài Docker, trên ESP32 thật, kết nối vào `mosquitto`/`backend` qua WiFi LAN.
+5 thành phần chạy độc lập, được Docker Compose kết nối qua network `iot-network` ([docker-compose.yml](../docker-compose.yml)): `mysql`, `mosquitto`, `backend`, `frontend`, `nginx`. Hai firmware (`sensor-node`, `gateway-node`) chạy ngoài Docker, trên ESP32 DOIT V1 thật, kết nối vào `mosquitto` qua WiFi LAN.
+
+**Luồng dữ liệu firmware → backend hoàn toàn qua MQTT** (không phải HTTP POST). Gateway publish lên topic `gateway/{gw_id}/data`, backend subscribe topic wildcard `gateway/+/data` qua service `mqttDataService.ts`.
 
 ---
 
@@ -84,27 +110,37 @@ Vòng lặp chính cứ mỗi `SEND_INTERVAL` (mặc định 5000ms) kiểm tra 
 3. **Kiểm tra cửa sổ thời gian** ±`TIMESTAMP_WINDOW_SEC` (300s, [config_gw.h:40](../firmware/gateway-node/include/config_gw.h#L40)) — chống replay (gửi lại gói cũ đã bắt được).
 4. **Verify HMAC của sensor**: gateway tự tính lại `HMAC-SHA256(secret_của_sensor_trong_whitelist, "sensor_id:timestamp")` và so sánh **constant-time** (`safeEq64`, [forwarder.cpp:18-23](../firmware/gateway-node/lib/forwarder/forwarder.cpp#L18-L23)) để tránh timing attack ngay ở firmware.
 5. Nếu hợp lệ → gateway **tự ký thêm chữ ký của chính mình**: `gw_hmac = HMAC-SHA256(GW_SECRET_KEY, "GW_DEVICE_ID:gw_timestamp_mới")` (timestamp này là thời điểm gateway forward, **khác** với `sn_timestamp` của sensor — hai lớp chữ ký, hai mốc thời gian độc lập).
-6. Build payload tổng hợp gồm cả 2 cặp `(id, timestamp, hmac)` + `data` gốc, rồi `HTTPClient` POST tới `BACKEND_URL` ([config_gw.h:23](../firmware/gateway-node/include/config_gw.h#L23)).
+6. Build payload tổng hợp gồm cả 2 cặp `(id, timestamp, hmac)` + `data` gốc (dữ liệu sensor lồng trong field `sensor_payload`), rồi **MQTT publish** lên topic `gateway/<GW_DEVICE_ID>/data` qua Mosquitto broker (hằng số `GATEWAY_DATA_TOPIC` trong [config_gw.h](../firmware/gateway-node/include/config_gw.h)). Backend subscribe wildcard `gateway/+/data` qua `mqttDataService.ts` để nhận gói tin này.
 
 → Gateway đóng vai trò **"bộ lọc biên" (edge filter)**: chặn sớm sensor giả mạo/không quen biết ngay tại lớp mạng cục bộ, trước khi gói tin đi ra Internet/WAN tới backend.
 
 ---
 
-## 4. Gateway Node ⇄ Backend — bắt tay HTTP với double-HMAC (HMAC #2)
+## 4. Gateway Node ⇄ Backend — bắt tay MQTT với double-HMAC (HMAC #2)
 
-### 4.1. Request gửi lên
+### 4.1. Payload MQTT gateway publish
+
+Gateway publish lên topic `gateway/<GW_DEVICE_ID>/data`, backend subscribe `gateway/+/data` qua `mqttDataService.ts`. Cấu trúc JSON payload (xác nhận từ [mqttDataService.ts](../backend/src/services/mqttDataService.ts)):
 
 ```json
 {
-  "gateway_id": "ESP32-GW-11AA22BB", "gw_timestamp": 1750000005, "gw_hmac": "...",
-  "sensor_id": "ESP32-SN-AB12CD34", "sn_timestamp": 1750000000, "sn_hmac": "...",
-  "data": { "temperature": 27.5, "humidity": 61.2 }
+  "gateway_id": "ESP32-GW-11AA22BB",
+  "gw_timestamp": 1750000005,
+  "gw_hmac": "64-char-hex...",
+  "gateway_ip": "192.168.1.x",
+  "sensor_payload": {
+    "sensor_id": "ESP32-SN-AB12CD34",
+    "sn_timestamp": 1750000000,
+    "sn_hmac": "64-char-hex...",
+    "sensor_ip": "192.168.1.x",
+    "data": { "temperature": 27.5, "humidity": 61.2 }
+  }
 }
 ```
 
-`POST /api/device/data` **không cần cookie/JWT** — đây là kênh machine-to-machine riêng, tách hẳn khỏi kênh người dùng Dashboard. Trước khi vào middleware xác thực, request đã đi qua:
+Đây là kênh machine-to-machine riêng qua MQTT (không phải HTTP, không cần cookie/JWT). Backend xử lý gói tin trong callback MQTT của `mqttDataService.ts` — logic xác thực giống middleware `validateDevice` nhưng được gọi trực tiếp trong service MQTT thay vì qua HTTP middleware chain.
 
-- `helmet()` (security headers), `express.json({limit:"10kb"})` (chặn payload khổng lồ), và **rate limiter riêng cho route này**: `deviceDataLimiter` = 60 req/phút/IP ([app.ts:37-44](../backend/src/app.ts#L37-L44)) — khác với `apiLimiter` (100 req/15 phút) áp cho các route quản trị khác, vì thiết bị IoT gửi dữ liệu đều đặn cần ngân sách request cao hơn.
+> **Lưu ý:** HTTP endpoint `POST /api/device/data` vẫn tồn tại trong [data.routes.ts](../backend/src/routes/data.routes.ts) như fallback/testing. Trước khi vào middleware xác thực của endpoint HTTP này, request đã đi qua `helmet()`, `express.json({limit:"10kb"})`, và `deviceDataLimiter` = 60 req/phút/IP ([app.ts:37-44](../backend/src/app.ts#L37-L44)). Nhưng trong vận hành bình thường, firmware **không dùng HTTP POST** — chỉ dùng MQTT.
 
 ### 4.2. `validateDevice` — backend **không tin gateway**, tự verify lại từ đầu
 
@@ -189,8 +225,8 @@ Vì trạng thái online/offline tính bằng `last_seen` (cập nhật mỗi kh
 DHT22 đọc nhiệt độ/độ ẩm
    └─▶ Sensor: ký HMAC#1 (secret sensor) ──▶ MQTT publish (Mosquitto, anonymous)
           └─▶ Gateway: nhận, lọc whitelist nội bộ, verify HMAC#1, ký thêm HMAC#2 (secret gateway)
-                 └─▶ HTTP POST /api/device/data
-                        └─▶ Backend: verify HMAC#2 (DB) → verify HMAC#1 lại (DB, độc lập)
+                 └─▶ MQTT publish topic gateway/{gw_id}/data → Mosquitto
+                        └─▶ Backend (mqttDataService.ts): verify HMAC#2 (DB) → verify HMAC#1 lại (DB, độc lập)
                                → check device_type khớp vai trò → check status='active'
                                   └─▶ INSERT sensor_data + UPDATE last_seen/fail_count
                                          └─▶ MySQL (audit_log ghi song song)

@@ -55,24 +55,35 @@ sensor-node/
 
 ### 2. Đăng ký thiết bị
 
-Gọi API backend để lấy `device_id` và `secret_key`:
+Đăng ký trên Dashboard web hoặc gọi trực tiếp API (cần JWT token):
 
 ```http
 POST /api/devices/register
 Content-Type: application/json
+Cookie: token=<JWT>
 
 {
-  "name": "Sensor phòng khách"
+  "device_name": "Sensor phòng khách",
+  "device_type": "sensor"
 }
 ```
 
-Response:
+Response (201):
 ```json
 {
-  "device_id": "ESP32-SN-ABCD1234",
-  "secret_key": "64-char-hex-string..."
+  "success": true,
+  "device": {
+    "device_id": "ESP32-SN-ABCD1234",
+    "device_name": "Sensor phòng khách",
+    "device_type": "sensor",
+    "status": "inactive",
+    "secret_key": "64-char-hex-string..."
+  }
 }
 ```
+
+> `secret_key` chỉ trả về **một lần duy nhất**. Sao chép và lưu ngay.
+> Sau khi flash firmware, cần **kích hoạt** thiết bị (đổi status → `active`) trên Dashboard.
 
 ### 3. Cấu hình `include/config.h`
 

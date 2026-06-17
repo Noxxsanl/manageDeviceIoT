@@ -316,7 +316,7 @@
   <a class="sb-link sn sub" href="#sn-pub"><span class="dot d-sn"></span>3. Publish & HMAC</a>
 
   <div class="sb-section-label">III. Gateway Node</div>
-  <a class="sb-link gw" href="#gw"><span class="dot d-gw"></span>ESP32-S3 N16R8</a>
+  <a class="sb-link gw" href="#gw"><span class="dot d-gw"></span>ESP32 DOIT V1</a>
   <a class="sb-link gw sub" href="#gw-setup"><span class="dot d-gw"></span>4. setup()</a>
   <a class="sb-link gw sub" href="#gw-loop"><span class="dot d-gw"></span>5. loop() · event-driven</a>
   <a class="sb-link gw sub" href="#gw-cb"><span class="dot d-gw"></span>6. onSensorMessage()</a>
@@ -373,7 +373,7 @@
     <div class="arch-card">
       <div class="ac-bar" style="background:var(--c-gateway);"></div>
       <div class="ac-icon">🔀</div>
-      <h4>Gateway Node</h4><p>ESP32-S3<br/>Validate + Sign</p>
+      <h4>Gateway Node</h4><p>ESP32 DOIT V1<br/>Validate + Sign + MQTT Publish</p>
     </div>
     <div class="arch-card">
       <div class="ac-bar" style="background:var(--c-shared);"></div>
@@ -406,15 +406,16 @@ flowchart LR
     DHT22["🌡️ DHT22\nSensor"]
     SN["⚡ Sensor Node\nESP32 DOIT v1"]
     BROKER["📡 MQTT Broker\nMosquitto"]
-    GW["🔀 Gateway Node\nESP32-S3 N16R8"]
+    GW["🔀 Gateway Node\nESP32 DOIT V1"]
     BE["⚙️ Backend API\nExpress.js :5000"]
-    DB["🗄️ Database"]
+    DB["🗄️ MySQL 8.0"]
     FE["📊 Dashboard\nNext.js :3000"]
 
-    DHT22 -->|"GPIO4"| SN
-    SN -->|"MQTT Publish\nJSON + HMAC-SHA256"| BROKER
+    DHT22 -->|"GPIO4 · 1-Wire"| SN
+    SN -->|"MQTT Publish\nJSON + HMAC-SHA256\nlocal/sensors/{id}/data"| BROKER
     BROKER -->|"MQTT Subscribe\nlocal/sensors/+/data"| GW
-    GW -->|"Validate + Re-sign\nHTTP POST"| BE
+    GW -->|"Validate + Re-sign\nMQTT Publish\ngateway/{gw_id}/data"| BROKER
+    BROKER -->|"MQTT Subscribe\ngateway/+/data"| BE
     BE --> DB --> FE
         </div>
       </div>
@@ -444,33 +445,34 @@ flowchart TB
     end
 
     subgraph BE_LAYER ["⚙️  Lớp Backend"]
-        API["🔧 REST API\nExpress.js · :5000\nGET /api/sensor-data\nGET /api/devices\nPOST /api/device/data"]
+        API["🔧 REST API + MQTT Client\nExpress.js · :5000\nGET /api/devices\nGET /api/devices/:id/data\nGET /api/dashboard/stats"]
     end
 
     subgraph DB_LAYER ["🗄️  Lớp Dữ Liệu"]
-        DB[("🗄️ PostgreSQL\nDevices · SensorData\nGateways · Users")]
+        DB[("🗄️ MySQL 8.0\nDevices · SensorData\nAuditLog · Users")]
     end
 
     subgraph MSG_LAYER ["📡  Lớp Giao Tiếp"]
-        MQTT["📡 MQTT Broker\nMosquitto · :1883\ntopic: local/sensors/+/data"]
+        MQTT["📡 MQTT Broker\nMosquitto · :1883\nlocal/sensors/+/data\ngateway/+/data"]
     end
 
     subgraph FW_LAYER ["🔌  Lớp Firmware — ESP32"]
-        GW["🔀 Gateway Node\nESP32-S3 N16R8\nValidate + Re-sign + HTTP POST"]
-        SN["⚡ Sensor Node\nESP32 DOIT v1\nĐọc DHT22 + Ký HMAC + Publish"]
+        GW["🔀 Gateway Node\nESP32 DOIT V1\nValidate + Re-sign + MQTT Publish"]
+        SN["⚡ Sensor Node\nESP32 DOIT V1\nĐọc DHT22 + Ký HMAC + MQTT Publish"]
     end
 
     subgraph HW_LAYER ["🌡️  Lớp Vật Lý"]
-        DHT["🌡️ DHT22\nNhiệt độ · Độ ẩm\nGPIO4"]
+        DHT["🌡️ DHT22\nNhiệt độ · Độ ẩm\nGPIO4 (1-Wire)"]
     end
 
-    FE  -- "GET /api/sensor-data\nGET /api/devices"            --> API
+    FE  -- "GET /api/devices\nGET /api/devices/:id/data\nGET /api/dashboard/stats" --> API
     API -- "JSON response"                                      --> FE
     API <--> |"SQL INSERT / SELECT"| DB
-    GW  -- "HTTP POST /api/device/data\n{gw_hmac, sn_hmac, data}" --> API
-    SN  -- "MQTT Publish\nJSON + HMAC-SHA256"                  --> MQTT
-    MQTT -- "Subscribe · wildcard +/data"                      --> GW
-    DHT -- "đọc mỗi 5 giây"                                    --> SN
+    API -- "MQTT Subscribe\ngateway/+/data"                    --> MQTT
+    GW  -- "MQTT Publish\ngateway/{gw_id}/data\n{gw_hmac, sn_hmac, data}"  --> MQTT
+    SN  -- "MQTT Publish\nlocal/sensors/{id}/data\nJSON + HMAC-SHA256"      --> MQTT
+    MQTT -- "Subscribe\nlocal/sensors/+/data"                  --> GW
+    DHT -- "1-Wire · đọc mỗi 5 giây"                          --> SN
         </div>
       </div>
     </div>
@@ -501,16 +503,16 @@ flowchart TD
         S1 --> S2 --> S3 --> S4
     end
 
-    subgraph GW_BOX ["🔀 GATEWAY NODE — ESP32-S3 N16R8"]
+    subgraph GW_BOX ["🔀 GATEWAY NODE — ESP32 DOIT V1"]
         direction TB
-        G1["① Subscribe MQTT"]
+        G1["① Subscribe MQTT\nlocal/sensors/+/data"]
         G2["② Validate:\nWhitelist + Timestamp + HMAC"]
         G3["③ Re-sign Gateway HMAC"]
-        G4["④ HTTP POST → Backend"]
+        G4["④ MQTT Publish → gateway/{gw_id}/data"]
         G1 --> G2 --> G3 --> G4
     end
 
-    S4 -->|"📡 MQTT Broker\nlocal/sensors/+/data"| G1
+    S4 -->|"📡 MQTT Broker\nlocal/sensors/{id}/data"| G1
         </div>
       </div>
     </div>
@@ -661,8 +663,8 @@ flowchart TD
   <div class="chapter ch-gw" id="gw" style="margin-top:80px;">
     <div class="chapter-num">III</div>
     <div>
-      <h2>Gateway Node — ESP32-S3 N16R8</h2>
-      <p>MQTT Subscribe · 5-step Validate Pipeline · Re-sign · HTTP POST · LED GPIO5</p>
+      <h2>Gateway Node — ESP32 DOIT V1</h2>
+      <p>MQTT Subscribe · 5-step Validate Pipeline · Re-sign · MQTT Publish → gateway/{gw_id}/data · LED GPIO14/15</p>
     </div>
   </div>
 
@@ -782,7 +784,7 @@ flowchart TD
       <span class="step-num gw-step">7</span>
       <h3>Pipeline Validate & Forward — <code>forwardSensorData()</code></h3>
     </div>
-    <p class="section-desc">Pipeline bảo mật 5 bước. Mỗi bước thất bại đều <code>return false</code> ngay lập tức. Chỉ khi cả 5 bước qua mới gửi HTTP POST.</p>
+    <p class="section-desc">Pipeline bảo mật 5 bước. Mỗi bước thất bại đều <code>return false</code> ngay lập tức. Chỉ khi cả 5 bước qua mới MQTT Publish lên <code>gateway/{gw_id}/data</code>.</p>
     <div class="dcard">
       <div class="dcard-bar bar-gw"></div>
       <div class="dcard-head">
@@ -820,11 +822,11 @@ flowchart TD
         HE["❌ return false\nHMAC mismatch"]
     end
 
-    subgraph P5 ["⑤ Gateway Sign & Forward"]
+    subgraph P5 ["⑤ Gateway Sign & MQTT Publish"]
         G1["gw_ts = getCurrentTimestamp()\ngw_hmac = HMAC-SHA256(\n  GW_SECRET, 'gw_id:gw_ts'\n)"]
-        G2["Build JSON:\n{ gateway_id, gw_ts, gw_hmac,\n  sensor_id, sn_ts, sn_hmac,\n  data }"]
-        G3["HTTP POST → BACKEND_URL\nTimeout: 10s"]
-        G4{"HTTP 200?"}
+        G2["Build JSON:\n{ gateway_id, gw_ts, gw_hmac,\n  gateway_ip, sensor_payload:\n  { sensor_id, sn_ts, sn_hmac, data } }"]
+        G3["PubSubClient.publish(\n  'gateway/GW_ID/data',\n  payload\n)"]
+        G4{"Publish OK?"}
         OK5(["✅ return true"])
         E5(["❌ return false"])
     end
@@ -1067,15 +1069,16 @@ sequenceDiagram
     SN->>SN: sn_hmac = HMAC-SHA256(SECRET_KEY, msg)
     SN->>MQ: Publish {sensor_id, sn_ts, sn_hmac, data}
 
-    Note over GW,API: ══ EVENT: Message đến Gateway ══
+    Note over GW,MQ: ══ EVENT: Message đến Gateway ══
     MQ->>GW: local/sensors/SN-ID/data
     GW->>GW: ① Parse JSON
     GW->>GW: ② Whitelist → findSensorSecret() ✅
     GW->>GW: ③ |now − sn_ts| ≤ 300s ✅
     GW->>GW: ④ safeEq64(sn_hmac, expected) ✅
     GW->>GW: ⑤ gw_hmac = HMAC-SHA256(GW_SECRET, "gw_id:gw_ts")
-    GW->>API: HTTP POST /api/device/data
-    API-->>GW: HTTP 200 OK
+    GW->>MQ: MQTT Publish gateway/GW-ID/data
+    MQ->>API: Backend subscribe → nhận message
+    API->>API: Xác thực 2 lớp HMAC → Lưu DB → Audit Log
     GW->>GW: 💡 Blink LED_FWD 100ms
         </div>
       </div>

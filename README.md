@@ -1,37 +1,106 @@
-# IoT Device Manager
+# IoT Device Manager — RBAC
 
-Hệ thống quản lý thiết bị IoT full-stack: dashboard web, REST API, và firmware ESP32.
+Hệ thống quản lý thiết bị IoT full-stack: dashboard web, REST API, firmware ESP32 và bảo mật RBAC.
 
 ## Kiến trúc hệ thống
 
 ```
-managerDeviceIoT/
-├── frontend/            Next.js 16 + React 19 + TailwindCSS   → :3000
-├── backend/             Express 5 + TypeScript                 → :5000
+managerDeviceIoT-RBAC/
+├── frontend/            Next.js 16 + React 19 + TailwindCSS v4   → :3000
+├── backend/             Express 5 + TypeScript + MySQL            → :5000
 ├── firmware/
-│   ├── gateway-node/    ESP32 nhận dữ liệu từ Sensor → forward về Backend
-│   └── sensor-node/     ESP32 đọc cảm biến → gửi về Gateway
+│   ├── gateway-node/    ESP32 DOIT V1: xác thực + forward qua MQTT
+│   └── sensor-node/     ESP32 DOIT V1: đọc DHT22 + publish MQTT
+├── database/
+│   └── migrations/      Schema MySQL 8.0
+├── mosquitto/           MQTT Broker (Eclipse Mosquitto 2)         → :1883
+├── nginx/               Reverse Proxy                             → :80
+├── docker/              Dockerfile production
 ├── scripts/             Script setup tự động
 │   ├── setup.bat        Windows
 │   └── setup.sh         Linux / macOS / WSL
-└── docker-compose.yml   Development stack
+├── docker-compose.yml        Development stack (5 services)
+└── docker-compose.prod.yml   Production stack
 ```
 
 ---
 
-## Phần 1 — Chạy Backend + Frontend (Docker)
+## Luồng dữ liệu tổng quan
+
+```
+[Sensor Node — ESP32 DOIT V1]
+  └─ Đọc DHT22 mỗi 5 giây
+  └─ Ký HMAC-SHA256(secret_key, "device_id:timestamp")
+  └─ Publish MQTT → topic: local/sensors/{sensor_id}/data
+
+[MQTT Broker — Mosquitto :1883]
+
+[Gateway Node — ESP32 DOIT V1]
+  └─ Subscribe MQTT: local/sensors/+/data
+  └─ Xác thực: whitelist + timestamp ±300s + HMAC
+  └─ Lấy danh sách sensor từ Backend: GET /api/device/sensors
+  └─ Ký lại Gateway HMAC
+  └─ Publish MQTT → topic: gateway/{gw_id}/data
+
+[Backend — Express :5000]
+  └─ Subscribe MQTT: gateway/+/data
+  └─ Xác thực 2 lớp (Gateway HMAC + Sensor HMAC)
+  └─ Lưu vào MySQL → sensor_data
+  └─ Cập nhật last_seen, fail_count
+  └─ Ghi audit_log
+
+[MySQL 8.0 :3308]
+
+[Frontend — Next.js :3000]
+  └─ REST API polling: /api/devices, /api/dashboard/stats
+  └─ Hiển thị dashboard, biểu đồ, lịch sử dữ liệu
+```
+
+---
+
+## Phần 1 — Chạy hệ thống bằng Docker
 
 ### Yêu cầu
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop) đã cài và đang chạy
-- Cổng `3000`, `5000` chưa bị chiếm
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) >= 24.x (đã cài và đang chạy)
+- Cổng `80`, `3000`, `5000`, `1883`, `3308` chưa bị chiếm
 
-### Bước 1.1 — Khởi động hệ thống
+### Bước 1.1 — Tạo file môi trường
 
-**Cách nhanh nhất — dùng script tự động:**
+```bash
+# Windows (PowerShell)
+Copy-Item backend\.env.example backend\.env
+
+# Linux / macOS / WSL
+cp backend/.env.example backend/.env
+```
+
+Nội dung mặc định của `backend/.env` khi chạy Docker:
+
+```env
+PORT=5000
+DB_HOST=mysql
+DB_PORT=3306
+DB_USER=iot_managerIoT
+DB_PASS=iot_managerIoTpassword
+DB_NAME=iot_managerDeviceIoT
+JWT_SECRET=dev_secret_please_change_in_production_min32chars
+MQTT_HOST=mosquitto
+MQTT_PORT=1883
+FRONTEND_URL=http://localhost
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+```
+
+> Khi chạy Docker: `DB_HOST=mysql` và `MQTT_HOST=mosquitto` là tên service nội bộ.
+> `docker-compose.yml` tự override hai giá trị này nên không cần sửa.
+
+### Bước 1.2 — Build và khởi động
+
+**Cách nhanh (script tự động):**
 
 ```bat
-# Windows (CMD hoặc PowerShell)
+# Windows
 scripts\setup.bat
 ```
 
@@ -43,18 +112,14 @@ bash scripts/setup.sh
 **Hoặc thủ công:**
 
 ```bash
-# Bước 1: Copy file môi trường (chỉ cần làm lần đầu)
-cp backend/.env.example backend/.env
-
-# Bước 2: Build và khởi động
 docker compose up -d --build
 ```
 
-Lần đầu chạy sẽ mất 2–5 phút để build image. Các lần sau nhanh hơn.
+Lần đầu mất 3–5 phút để build image. Các lần sau nhanh hơn (dùng cache).
 
 ---
 
-### Bước 1.2 — Kiểm tra trạng thái
+### Bước 1.3 — Kiểm tra trạng thái
 
 ```bash
 docker compose ps
@@ -63,41 +128,47 @@ docker compose ps
 Kết quả mong đợi — tất cả phải `running`:
 
 ```
-NAME             STATUS
-iot_backend      running
-iot_frontend     running
+NAME             STATUS                  PORTS
+iot-nginx        running                 0.0.0.0:80->80/tcp
+iot-frontend     running                 0.0.0.0:3000->3000/tcp
+iot-backend      running (healthy)       0.0.0.0:5000->5000/tcp
+iot-mosquitto    running                 0.0.0.0:1883->1883/tcp
+iot-mysql        running (healthy)       0.0.0.0:3308->3306/tcp
 ```
 
-Nếu một service bị `Exit` → xem log để tìm nguyên nhân:
+Nếu có service bị `Exit`, xem log:
 
 ```bash
 docker compose logs backend
 docker compose logs frontend
+docker compose logs mysql
 ```
 
 ---
 
-### Bước 1.3 — Truy cập hệ thống
+### Bước 1.4 — Truy cập hệ thống
 
 | Dịch vụ | URL |
 |---|---|
-| **Dashboard** | http://localhost:3000 |
+| **Dashboard (qua Nginx)** | http://localhost |
+| **Dashboard (trực tiếp)** | http://localhost:3000 |
 | **Backend API** | http://localhost:5000 |
 | **Health check** | http://localhost:5000/api/health |
+| **MQTT Broker** | mqtt://localhost:1883 |
 
-**Đăng nhập mặc định:**
+**Tài khoản mặc định:**
 
 | Trường | Giá trị |
 |---|---|
 | Username | `admin` |
-| Password | `123456` |
+| Password | `admin123` |
 
 ---
 
-### Bước 1.4 — Test nhanh bằng curl
+### Bước 1.5 — Test nhanh
 
 ```bash
-# Kiểm tra backend còn sống
+# Kiểm tra backend
 curl http://localhost:5000/api/health
 ```
 
@@ -108,47 +179,32 @@ Kết quả mong đợi:
 
 ---
 
-### Dừng hệ thống
-
-```bash
-# Dừng tất cả container, giữ nguyên dữ liệu
-docker compose down
-
-# Dừng riêng từng service
-docker compose stop backend
-docker compose stop frontend
-```
-
----
-
-### Khởi động lại sau khi đã dừng
-
-```bash
-# Chạy lại (không build lại image)
-docker compose up -d
-
-# Build lại image sau khi sửa code
-docker compose up -d --build backend
-docker compose up -d --build frontend
-```
-
----
-
-### Các lệnh Docker hay dùng
+### Lệnh Docker hay dùng
 
 ```bash
 # Xem trạng thái
 docker compose ps
 
-# Xem log realtime tất cả services
+# Log realtime tất cả services
 docker compose logs -f
 
-# Xem log riêng từng service
+# Log từng service
 docker compose logs -f backend
 docker compose logs -f frontend
+docker compose logs -f nginx
 
 # Restart một service
 docker compose restart backend
+
+# Dừng (giữ data)
+docker compose down
+
+# Dừng và xóa toàn bộ data (reset sạch)
+docker compose down -v
+
+# Build lại sau khi sửa code
+docker compose up -d --build backend
+docker compose up -d --build frontend
 ```
 
 **Production build:**
@@ -163,14 +219,16 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ### Yêu cầu
 
-- Node.js >= 20
-- npm >= 10
+- Node.js >= 20, npm >= 10
+- MySQL 8.0 (cài sẵn hoặc dùng Docker chỉ MySQL)
+- Mosquitto MQTT Broker (cài sẵn hoặc dùng Docker chỉ Mosquitto)
 
 ### Backend
 
 ```bash
 cd backend
 cp .env.example .env
+# Sửa .env: DB_HOST=localhost, MQTT_HOST=localhost
 npm install
 npm run dev
 # API chạy tại http://localhost:5000
@@ -187,213 +245,321 @@ npm run dev
 
 ---
 
-## Phần 3 — Cấu hình và Flash ESP32
+## Phần 3 — Cấu hình và Flash Firmware ESP32
 
-> **Tổng quan**: Flash Gateway trước → lấy IP Gateway → Flash Sensor → kiểm tra Dashboard.
+> **Thứ tự bắt buộc**: Đăng ký thiết bị trên Web → Flash Sensor → Flash Gateway.
+> Gateway cần danh sách `device_id` + `secret_key` của Sensor để xác thực.
 
 ### Yêu cầu phần cứng
 
 | Linh kiện | Số lượng |
 |---|---|
-| ESP32 DevKit V1 (30-pin hoặc 38-pin) | 2 |
+| ESP32 DevKit V1 (30-pin) | 2 (1 cho Gateway, 1 cho Sensor) |
 | Cảm biến DHT22 (AM2302) | 1 |
 | Điện trở 10kΩ | 1 |
 | Dây jumper | Vài cái |
-| Cáp USB Micro/Type-C | 2 |
+| Cáp USB Micro-B có data | 2 |
 
-### Sơ đồ kết nối DHT22 → ESP32 Sensor
+### Sơ đồ kết nối DHT22 → ESP32 Sensor Node
 
 ```
-ESP32               DHT22
+ESP32 (DOIT V1)         DHT22 (AM2302)
 ──────────────────────────────────────────────────
-3V3  ────────────── Pin 1 (VCC)     [chân trái nhất]
-GPIO4 ──┬────────── Pin 2 (DATA)    [chân thứ 2]
+3V3  ────────────────── Pin 1 (VCC)   [trái nhất]
+GPIO4 ──┬────────────── Pin 2 (DATA)  [thứ 2]
         │
-       10kΩ
+       10kΩ  (pull-up lên 3V3)
         │
 3V3  ──┘
-GND  ────────────── Pin 4 (GND)     [chân phải nhất]
-                    Pin 3 bỏ trống
+GND  ────────────────── Pin 4 (GND)   [phải nhất]
+                        Pin 3: không nối
 ```
 
-> **Quan trọng**: Điện trở 10kΩ nối từ DATA lên 3V3 (pull-up resistor).
-> Thiếu điện trở này DHT22 sẽ trả về `NaN` liên tục.
+> **Quan trọng**: Điện trở 10kΩ nối từ DATA lên 3V3 là bắt buộc.
+> Thiếu điện trở này DHT22 trả về `NaN` liên tục.
 
 ---
 
 ### Yêu cầu phần mềm — PlatformIO
 
-Firmware dùng **PlatformIO** (không phải Arduino IDE thông thường).
+Firmware dùng **PlatformIO**, không phải Arduino IDE thông thường.
 
 **Cài PlatformIO:**
-- Cách 1 (khuyến nghị): Cài extension **PlatformIO IDE** trong VS Code
-- Cách 2: Cài CLI — xem [docs.platformio.org](https://docs.platformio.org/en/latest/core/installation/index.html)
+- **Cách khuyến nghị**: Cài extension **PlatformIO IDE** trong VS Code
+- **Hoặc CLI**: `pip install platformio` (cần Python >= 3.8)
 
 Sau khi cài, khởi động lại VS Code. PlatformIO tự nhận `platformio.ini` khi mở thư mục firmware.
 
 ---
 
-### Bước 3.1 — Tìm IP máy tính (cần cho Gateway)
+### Bước 3.1 — Xác định IP máy chủ
 
-ESP32 Gateway cần biết IP máy tính để forward dữ liệu về Backend.
+ESP32 cần kết nối đến MQTT Broker và Backend. Lấy IP máy tính đang chạy Docker:
 
 **Windows:**
-
 ```
-Win + R → gõ "cmd" → Enter → gõ lệnh: ipconfig
-
-Tìm dòng "IPv4 Address" dưới adapter WiFi:
-   Wireless LAN adapter Wi-Fi:
-      IPv4 Address. . . . . . : 192.168.1.50   ← ĐÂY LÀ IP CẦN LẤY
+Win + R → "cmd" → ipconfig
+Tìm dòng "IPv4 Address" của adapter WiFi đang dùng
+Ví dụ: 192.168.1.100
 ```
 
 **Linux / macOS:**
-
 ```bash
-# Linux
-ip addr show | grep "inet " | grep -v 127.0.0.1
-
-# macOS
-ipconfig getifaddr en0
+ip addr show | grep "inet " | grep -v 127.0.0.1  # Linux
+ipconfig getifaddr en0                             # macOS
 ```
 
-> **Lưu ý**: Máy tính và 2 ESP32 phải kết nối **cùng một mạng WiFi**.
+> Máy tính và 2 ESP32 phải kết nối **cùng mạng WiFi**.
 
 ---
 
-### Bước 3.2 — Flash ESP32 Gateway
+### Bước 3.2 — Đăng ký thiết bị trên Dashboard
 
-Gateway nhận dữ liệu từ Sensor qua HTTP và forward về Backend.
+Trước khi flash firmware, cần đăng ký thiết bị trên web để lấy credentials.
 
-**3.2.1 — Mở thư mục firmware trong VS Code:**
+1. Truy cập **http://localhost** → đăng nhập (`admin` / `admin123`)
+2. Vào **Devices** → click **"Thêm thiết bị"**
+3. Đăng ký **Gateway Node**: nhập tên, chọn Type = `gateway` → Lưu → **sao chép ngay** `device_id` và `secret_key`
+4. Đăng ký **Sensor Node**: nhập tên, chọn Type = `sensor` → Lưu → **sao chép ngay** `device_id` và `secret_key`
 
-```
-firmware/gateway-node/
-```
-
-**3.2.2 — Sửa file cấu hình** (`src/main.cpp`, phần đầu file):
-
-```cpp
-// ─── CẤU HÌNH NGƯỜI DÙNG ──────────────────────────────────────────
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";     // ← Tên WiFi nhà bạn
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";  // ← Mật khẩu WiFi
-
-// IP máy tính đang chạy Docker backend
-const char* BACKEND_URL = "http://192.168.1.50:5000/api/iot/data"; // ← Sửa IP
-```
-
-**Ví dụ sau khi sửa:**
-
-```cpp
-const char* WIFI_SSID     = "MyHomeWifi";
-const char* WIFI_PASSWORD = "matkhau123";
-const char* BACKEND_URL   = "http://192.168.1.50:5000/api/iot/data";
-```
-
-**3.2.3 — Upload firmware:**
-
-Trong VS Code với PlatformIO:
-```
-Thanh dưới cùng → click biểu tượng → (Upload)
-```
-
-Hoặc dùng CLI:
-```bash
-cd firmware/gateway-node
-pio run --target upload
-```
-
-**3.2.4 — Lấy IP của Gateway:**
-
-Mở **Serial Monitor** (PlatformIO → Serial Monitor, baud rate **115200**), chờ thấy:
-
-```
-[WiFi] Gateway IP: 192.168.1.100
-→ Dùng IP này làm GATEWAY_URL trong firmware sensor
-```
-
-**Ghi lại IP này** — dùng ở bước tiếp theo.
+> `secret_key` chỉ hiển thị **một lần duy nhất** khi đăng ký. Sao chép và lưu ngay.
 
 ---
 
-### Bước 3.3 — Flash ESP32 Sensor
+### Bước 3.3 — Flash Sensor Node (làm trước)
 
-Sensor đọc DHT22 và gửi dữ liệu về Gateway.
-
-**3.3.1 — Mở thư mục firmware:**
-
-```
-firmware/sensor-node/
-```
-
-**3.3.2 — Sửa file cấu hình** (`src/main.cpp`):
+Mở file cấu hình: `firmware/sensor-node/include/config.h`
 
 ```cpp
-// ─── CẤU HÌNH NGƯỜI DÙNG ──────────────────────────────────────────
-#define DHTPIN        4           // GPIO kết nối DATA của DHT22
+// === Device credentials (lấy từ Bước 3.2) ===
+#define DEVICE_ID   "ESP32-SN-XXXXXXXX"    // device_id đã đăng ký
+#define SECRET_KEY  "abcdef1234...."       // secret_key 64 ký tự hex
 
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";     // ← Tên WiFi
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";  // ← Mật khẩu WiFi
-const char* GATEWAY_URL   = "http://192.168.1.100:8080/iot/data"; // ← IP Gateway từ bước 3.2.4
-const char* DEVICE_ID     = "sensor_01";           // ← ID thiết bị
+// === WiFi (chỉ 2.4 GHz) ===
+#define WIFI_SSID   "TenMangWifi"
+#define WIFI_PASS   "MatKhauWifi"
+
+// === MQTT Broker (IP máy chạy Docker từ Bước 3.1) ===
+#define MQTT_HOST   "192.168.1.100"        // IP máy chủ
+#define MQTT_PORT   1883
+
+// === Cảm biến DHT22 ===
+#define DHT_PIN     4                      // GPIO4 (kết nối DATA)
+#define DHT_TYPE    DHT22
+#define SEND_INTERVAL  5000               // gửi mỗi 5 giây
 ```
 
-**3.3.3 — Upload firmware:**
-
+Flash firmware:
 ```bash
 cd firmware/sensor-node
 pio run --target upload
 ```
 
-**3.3.4 — Kiểm tra Serial Monitor của Sensor:**
-
+Kiểm tra Serial Monitor (115200 baud):
 ```
-=== IoT Sensor Node khởi động ===
-Device ID : sensor_01
-Gateway   : http://192.168.1.100:8080/iot/data
-[WiFi] Kết nối thành công! IP: 192.168.1.101
-[DATA] Gửi: {"device_id":"sensor_01","temperature":29.5,"humidity":68.2}
-[HTTP] Response: 200 — Gateway nhận thành công
+[WiFi] Kết nối thành công! IP: 192.168.1.105
+[NTP] Đồng bộ thành công
+[MQTT] Kết nối broker 192.168.1.100:1883
+[MQTT] Publish → local/sensors/ESP32-SN-XXXXXXXX/data
+[MQTT] Gửi thành công
 ```
 
 ---
 
-### Bước 3.4 — Xác nhận Gateway forward dữ liệu
+### Bước 3.4 — Flash Gateway Node (làm sau Sensor)
 
-Serial Monitor của Gateway sẽ hiển thị:
+Mở file cấu hình: `firmware/gateway-node/include/config_gw.h`
 
+```cpp
+// === Gateway credentials (lấy từ Bước 3.2) ===
+#define GW_DEVICE_ID   "ESP32-GW-XXXXXXXX"
+#define GW_SECRET_KEY  "abcdef1234...."
+
+// === WiFi ===
+#define WIFI_SSID   "TenMangWifi"
+#define WIFI_PASS   "MatKhauWifi"
+
+// === MQTT Broker ===
+#define MQTT_HOST   "192.168.1.100"
+#define MQTT_PORT   1883
+
+// === URL lấy danh sách sensor từ Backend (qua Nginx cổng 80) ===
+#define BACKEND_SENSORS_URL  "http://192.168.1.100/api/device/sensors"
+
+// === Danh sách sensor được phép (backup nếu backend chưa sẵn sàng) ===
+static const SensorCredential KNOWN_SENSORS[] = {
+    { "ESP32-SN-XXXXXXXX", "secret_key_64_chars_hex" },
+    // thêm sensor nếu có nhiều hơn
+};
 ```
-[GATEWAY] ← Nhận request từ Sensor
-[VALIDATE] device_id=sensor_01 | temp=29.5°C | hum=68.2%
-[FORWARD] → http://192.168.1.50:5000/api/iot/data
-[FORWARD] Backend response: 200
+
+> Gateway sẽ tự động lấy danh sách sensor từ backend qua `BACKEND_SENSORS_URL` mỗi 5 phút.
+> Danh sách `KNOWN_SENSORS` trong file config là backup, không bắt buộc phải điền đủ.
+
+Flash firmware:
+```bash
+cd firmware/gateway-node
+pio run --target upload
+```
+
+Kiểm tra Serial Monitor (115200 baud):
+```
+╔══════════════════════════════════╗
+║   IoT Gateway Node – Starting    ║
+╚══════════════════════════════════╝
+[WiFi] Kết nối thành công!
+[NTP] Đồng bộ thành công
+[MQTT] Kết nối broker 192.168.1.100:1883
+[MQTT] Subscribe: local/sensors/+/data
+[Registry] Đã lấy danh sách sensor từ backend
+[MAIN] Ready – listening for sensor data...
 ```
 
 ---
 
-### Bước 3.5 — Xem Dashboard
+### Bước 3.5 — Kích hoạt thiết bị trên Dashboard
 
-Mở trình duyệt: **http://localhost:3000**
+Sau khi firmware đã flash và thiết bị đã kết nối, thiết bị có trạng thái `inactive`.
+Cần kích hoạt thủ công:
 
-Dashboard tự cập nhật khi có dữ liệu mới từ thiết bị.
+1. Vào **http://localhost/devices**
+2. Tìm Gateway và Sensor vừa đăng ký
+3. Click **"Kích hoạt"** (đổi status → `active`) cho từng thiết bị
+
+> Thiết bị ở trạng thái `inactive` hoặc `blocked` sẽ bị backend từ chối dữ liệu.
+
+---
+
+### Bước 3.6 — Xác nhận dữ liệu lên Dashboard
+
+Truy cập **http://localhost** → **Dashboard**.
+
+Khi hệ thống hoạt động:
+- Biểu đồ nhiệt độ / độ ẩm cập nhật mỗi 5 giây
+- Trạng thái thiết bị hiển thị **online** (last_seen < 60 giây)
 
 ---
 
 ## Phần 4 — API Documentation
 
-### GET `/api/health` — Kiểm tra trạng thái server
+### Authentication
+
+Tất cả API (trừ `/api/health` và `/api/auth/login`) yêu cầu JWT token trong cookie `token`.
+
+---
+
+### GET `/api/health` — Kiểm tra trạng thái
 
 ```http
 GET http://localhost:5000/api/health
 ```
 
-**Response 200:**
+Response:
+```json
+{ "status": "ok", "message": "Backend running" }
+```
+
+---
+
+### POST `/api/auth/login` — Đăng nhập
+
+```http
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "admin123" }
+```
+
+Response: Set-Cookie `token` (HttpOnly, JWT 8 giờ)
+
+---
+
+### Devices API
+
+| Method | Endpoint | Quyền | Mô tả |
+|--------|----------|-------|-------|
+| `POST` | `/api/devices/register` | admin, operator | Đăng ký thiết bị mới |
+| `GET` | `/api/devices` | Tất cả (đã đăng nhập) | Danh sách thiết bị |
+| `GET` | `/api/devices/:id` | Tất cả | Chi tiết + 10 bản ghi gần nhất |
+| `GET` | `/api/devices/:id/data` | Tất cả | Lịch sử dữ liệu (phân trang) |
+| `PATCH` | `/api/devices/:id/status` | admin, operator | Đổi trạng thái (active/inactive/blocked) |
+| `DELETE` | `/api/devices/:id` | admin | Xóa thiết bị |
+
+**POST `/api/devices/register` — Body:**
 ```json
 {
-  "status": "ok",
-  "message": "Backend running"
+  "device_name": "Sensor phòng khách",
+  "device_type": "sensor",
+  "location": "Phòng khách tầng 1"
 }
 ```
+
+Response (201):
+```json
+{
+  "success": true,
+  "device": {
+    "device_id": "ESP32-SN-A1B2C3D4",
+    "device_name": "Sensor phòng khách",
+    "device_type": "sensor",
+    "status": "inactive",
+    "secret_key": "64-char-hex-string"
+  }
+}
+```
+
+> `secret_key` chỉ trả về **một lần duy nhất**.
+
+---
+
+### Device Data API (dùng cho Firmware)
+
+| Method | Endpoint | Auth | Mô tả |
+|--------|----------|------|-------|
+| `POST` | `/api/device/data` | HMAC | Nhận dữ liệu cảm biến (HTTP fallback) |
+| `GET` | `/api/device/sensors` | Gateway HMAC | Gateway lấy danh sách sensor đang active |
+
+> Luồng chính hiện tại: Gateway gửi dữ liệu qua **MQTT** (`gateway/{gw_id}/data`), không phải HTTP POST.
+> `POST /api/device/data` vẫn hoạt động như fallback hoặc cho mục đích test.
+
+---
+
+### Dashboard API
+
+| Method | Endpoint | Quyền | Mô tả |
+|--------|----------|-------|-------|
+| `GET` | `/api/dashboard/stats` | Tất cả | Thống kê: tổng thiết bị, online, data points |
+
+Response:
+```json
+{
+  "total_gateway": 1,
+  "total_sensor": 2,
+  "gateway_online": 1,
+  "sensor_online": 2,
+  "total_data_points": 1500
+}
+```
+
+---
+
+### Users API (Admin only)
+
+| Method | Endpoint | Quyền | Mô tả |
+|--------|----------|-------|-------|
+| `GET` | `/api/users` | admin | Danh sách user |
+| `POST` | `/api/users` | admin | Tạo user mới |
+| `PATCH` | `/api/users/:id/password` | admin | Đặt lại mật khẩu |
+| `DELETE` | `/api/users/:id` | admin | Xóa user |
+
+---
+
+### Audit Log API
+
+| Method | Endpoint | Quyền | Mô tả |
+|--------|----------|-------|-------|
+| `GET` | `/api/audit-log` | Tất cả | Xem nhật ký bảo mật |
+| `DELETE` | `/api/audit-log/data-recv` | admin, operator | Xóa log dữ liệu cảm biến |
 
 ---
 
@@ -404,6 +570,17 @@ GET http://localhost:5000/api/health
 | Biến | Mặc định | Mô tả |
 |------|----------|-------|
 | `PORT` | `5000` | Port backend lắng nghe |
+| `DB_HOST` | `localhost` | Host MySQL (Docker: `mysql`) |
+| `DB_PORT` | `3306` | Port MySQL |
+| `DB_USER` | `iot_managerIoT` | MySQL username |
+| `DB_PASS` | `iot_managerIoTpassword` | MySQL password |
+| `DB_NAME` | `iot_managerDeviceIoT` | Tên database |
+| `JWT_SECRET` | — | Khóa ký JWT (tối thiểu 32 ký tự) |
+| `MQTT_HOST` | `localhost` | Host MQTT Broker (Docker: `mosquitto`) |
+| `MQTT_PORT` | `1883` | Port MQTT Broker |
+| `FRONTEND_URL` | `http://localhost` | URL frontend (dùng cho CORS) |
+| `ADMIN_USERNAME` | `admin` | Username tài khoản admin mặc định |
+| `ADMIN_PASSWORD` | `admin123` | Password tài khoản admin mặc định |
 
 Tạo từ file mẫu:
 ```bash
@@ -411,3 +588,34 @@ cp backend/.env.example backend/.env
 ```
 
 > File `.env` đã được `.gitignore` — không bao giờ commit file này lên git.
+> Trong production, thay `JWT_SECRET` bằng chuỗi ngẫu nhiên >= 32 ký tự.
+
+---
+
+## Phần 6 — Bảo mật
+
+### Xác thực thiết bị (2 lớp HMAC)
+
+```
+HMAC-SHA256(secret_key, "device_id:unix_timestamp")
+```
+
+- **Lớp 1 — Sensor**: Sensor ký HMAC bằng `SECRET_KEY` riêng
+- **Lớp 2 — Gateway**: Gateway xác thực HMAC của Sensor, rồi ký lại bằng `GW_SECRET_KEY`
+- Backend xác thực cả hai HMAC trước khi lưu dữ liệu
+- Timestamp phải trong cửa sổ ±300 giây (chống replay attack)
+- Sau 5 lần xác thực thất bại: thiết bị tự động bị `blocked`
+
+### Xác thực người dùng
+
+- JWT với thời hạn 8 giờ, lưu trong HttpOnly cookie
+- Mật khẩu băm bằng bcrypt (cost factor 12)
+- Rate limiting: login 10 req/15 phút, device data 60 req/phút
+
+### Phân quyền RBAC
+
+| Role | Quyền |
+|------|-------|
+| `admin` | Toàn quyền (CRUD users, devices, audit log) |
+| `operator` | Đăng ký và quản lý thiết bị, xem audit log |
+| `viewer` | Chỉ xem (dashboard, devices, dữ liệu) |

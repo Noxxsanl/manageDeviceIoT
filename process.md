@@ -13,14 +13,21 @@
 │  (cảm biến) │   topic:                │  (Docker, port 1883)     │
 └─────────────┘   local/sensors/        └──────────┬───────────────┘
       │           {DEVICE_ID}/data                 │ subscribe wildcard
-      │ GPIO 4                                      │ local/sensors/+/data
+      │ GPIO 4 (1-Wire)                             │ local/sensors/+/data
       ▼                                             ▼
 ┌─────────────┐                         ┌──────────────────────────┐
 │  ESP32      │                         │  ESP32 Gateway Node      │
-│  Sensor Node│                         │  (đọc MQTT, forward HTTP)│
+│  Sensor Node│                         │  Validate + Re-sign      │
+│  (DOIT V1)  │                         │  MQTT Publish            │
 └─────────────┘                         └──────────┬───────────────┘
-                                                   │ HTTP POST
-                                                   │ /api/device/data
+                                                   │ MQTT Publish
+                                                   │ gateway/{gw_id}/data
+                                                   ▼
+                                        ┌──────────────────────────┐
+                                        │  Mosquitto MQTT Broker   │
+                                        └──────────┬───────────────┘
+                                                   │ Backend subscribe
+                                                   │ gateway/+/data
                                                    ▼
                                         ┌──────────────────────────┐
                                         │  Backend (Node.js :5000) │
@@ -29,7 +36,8 @@
                                                    │ REST API
                                                    ▼
                                         ┌──────────────────────────┐
-                                        │  Frontend (Next.js :3000)│
+                                        │  Nginx (:80) → Frontend  │
+                                        │  (Next.js :3000)         │
                                         │  Dashboard               │
                                         └──────────────────────────┘
 ```
@@ -138,11 +146,12 @@ docker compose ps
 **Kết quả mong đợi — tất cả STATUS phải là `running`:**
 
 ```
-NAME              IMAGE                STATUS
-iot-mysql         mysql:8.0            running (healthy)
-iot-mosquitto     eclipse-mosquitto:2  running
-iot-backend       iot-backend          running
-iot-frontend      iot-frontend         running
+NAME              IMAGE                STATUS                  PORTS
+iot-nginx         nginx:alpine         running                 0.0.0.0:80->80/tcp
+iot-frontend      iot-frontend         running                 0.0.0.0:3000->3000/tcp
+iot-backend       iot-backend          running (healthy)       0.0.0.0:5000->5000/tcp
+iot-mosquitto     eclipse-mosquitto:2  running                 0.0.0.0:1883->1883/tcp
+iot-mysql         mysql:8.0            running (healthy)       0.0.0.0:3308->3306/tcp
 ```
 
 > Nếu `iot-mysql` vẫn đang `starting` → chờ thêm 30 giây rồi kiểm tra lại.
@@ -241,7 +250,7 @@ GND  ─────────────────── Pin 4 (GND)   [ch
 
 ## Bước 9 — Cấu hình firmware Gateway
 
-Mở file: `firmware/gateway-node/src/config_gw.h`
+Mở file: `firmware/gateway-node/include/config_gw.h`
 
 ```cpp
 // =============================================================
@@ -260,12 +269,14 @@ Mở file: `firmware/gateway-node/src/config_gw.h`
 #define MQTT_HOST      "192.168.1.50"                 // ← IP máy tính (lấy từ Bước 1)
 #define MQTT_PORT      1883
 
-// --- Backend API ---
-#define BACKEND_URL    "http://192.168.1.50:5000/api/device/data"  // ← Sửa IP
+// --- URL lấy danh sách sensor (qua Nginx cổng 80) ---
+// Dữ liệu cảm biến gửi qua MQTT, không qua HTTP POST
+#define BACKEND_SENSORS_URL  "http://192.168.1.50/api/device/sensors"  // ← Sửa IP
 
 // =============================================================
 //  Danh sách Sensor được phép gửi dữ liệu qua Gateway này
-//  Điền thông tin Sensor đã đăng ký (Bước 7.2)
+//  Gateway tự cập nhật từ BACKEND_SENSORS_URL mỗi 5 phút.
+//  Điền ít nhất 1 entry để hoạt động ngay khi backend chưa sẵn sàng.
 // =============================================================
 static const SensorCredential KNOWN_SENSORS[] = {
     { "ESP32-SN-11223344", "11223344aabbcc..." },  // ← device_id và secret_key của Sensor
@@ -323,18 +334,20 @@ Output mong đợi sau khi flash thành công:
 
 ```
 ╔══════════════════════════════════╗
-║   IoT Gateway Node – Khởi động   ║
+║   IoT Gateway Node – Starting    ║
 ╚══════════════════════════════════╝
   Gateway ID : ESP32-GW-A1B2C3D4
-  Backend URL: http://192.168.1.50:5000/api/device/data
+  MQTT Topic : gateway/ESP32-GW-A1B2C3D4/data
 
 [WiFi] Đang kết nối WiFi...
-[WiFi] Kết nối thành công! IP: 192.168.1.100     ← GHI LẠI IP NÀY (không cần dùng)
+[WiFi] Kết nối thành công! IP: 192.168.1.100
 [NTP] Đồng bộ thời gian...OK
 [MQTT] Broker: 192.168.1.50:1883
-[MQTT] Connecting as 'gw-ESP32-GW-A1B2C3D4'... OK
+[MQTT] Connecting... OK
 [MQTT] Subscribed to 'local/sensors/+/data'
-[MAIN] Setup hoàn tất – lắng nghe sensor data...
+[Registry] Fetching sensor list from backend...
+[Registry] Loaded 1 sensor(s)
+[MAIN] Ready – listening for sensor data...
 ```
 
 > Nếu thấy `[MQTT] FAILED (rc=-2)` → kiểm tra lại `MQTT_HOST` trong `config_gw.h` có đúng IP máy tính không.
@@ -346,7 +359,7 @@ Output mong đợi sau khi flash thành công:
 
 ## Bước 12 — Cấu hình firmware Sensor
 
-Mở file: `firmware/sensor-node/src/config.h`
+Mở file: `firmware/sensor-node/include/config.h`
 
 ```cpp
 // =============================================================
@@ -358,15 +371,15 @@ Mở file: `firmware/sensor-node/src/config.h`
 #define SECRET_KEY  "11223344aabbcc..."               // ← secret_key của Sensor
 
 // --- WiFi (cùng mạng với máy tính và Gateway) ---
-#define WIFI_SSID   "TenMangWifi"                    // ← Tên WiFi
+#define WIFI_SSID   "TenMangWifi"                    // ← Tên WiFi (chỉ 2.4 GHz)
 #define WIFI_PASS   "MatKhauWifi"                    // ← Mật khẩu WiFi
 
 // --- MQTT Broker (Mosquitto trên máy tính, giống Gateway) ---
 #define MQTT_HOST   "192.168.1.50"                   // ← IP máy tính (Bước 1)
 #define MQTT_PORT   1883
 
-// --- DHT22 ---
-#define DHT_PIN     4                                // GPIO 4 (không đổi)
+// --- DHT22 (1-Wire, kết nối GPIO 4 + điện trở pull-up 10kΩ lên 3.3V) ---
+#define DHT_PIN     4
 #define DHT_TYPE    DHT22
 
 // --- LED onboard GPIO 2 nháy khi gửi thành công ---
@@ -447,14 +460,14 @@ pio device monitor --baud 115200
 Khi Sensor gửi dữ liệu, Gateway phải hiển thị:
 
 ```
-[MQTT] Received on 'local/sensors/ESP32-SN-11223344/data' (128 bytes)
-[FWD] Xác thực HMAC OK cho sensor 'ESP32-SN-11223344'
-[FWD] → POST http://192.168.1.50:5000/api/device/data
-[FWD] Backend response: 200
+[Forwarder] Received: local/sensors/ESP32-SN-11223344/data
+[Forwarder] Sensor HMAC OK – ESP32-SN-11223344
+[Forwarder] MQTT Publish → gateway/ESP32-GW-A1B2C3D4/data OK
 ```
 
-> Nếu `[FWD] Backend response: 403` → Sensor chưa được thêm vào `KNOWN_SENSORS[]` trong `config_gw.h`.
-> Nếu `[FWD] Backend response: 401` → `secret_key` của Sensor sai → kiểm tra lại `KNOWN_SENSORS[]`.
+> Backend sẽ subscribe MQTT topic `gateway/+/data` và xử lý dữ liệu.
+> Nếu Gateway log không xuất hiện gì sau khi Sensor gửi → kiểm tra `KNOWN_SENSORS[]` trong `config_gw.h` có đúng `device_id` và `secret_key` của Sensor không.
+> Nếu backend log hiện `GATEWAY_AUTH_FAIL` hoặc `SENSOR_AUTH_FAIL` → secret_key bị sai hoặc timestamp lệch quá 300s.
 
 ---
 
@@ -466,17 +479,19 @@ docker compose logs -f backend
 
 Khi có dữ liệu từ Gateway, Backend log hiển thị:
 ```
-POST /api/device/data 200 15ms
+[mqttData] connected, subscribing to gateway/+/data
+[mqttData] saved id=N from ESP32-SN-11223344 via ESP32-GW-A1B2C3D4
 ```
 
 ---
 
 ## Bước 17 — Xem dữ liệu trên Dashboard
 
-Mở trình duyệt: **http://localhost:3000**
+Mở trình duyệt: **http://localhost** (qua Nginx cổng 80) hoặc **http://localhost:3000**
 
-- Dashboard tự cập nhật khi có dữ liệu mới
+- Dashboard tự cập nhật khi có dữ liệu mới (polling 10 giây/lần)
 - Vào mục **Devices** → chọn thiết bị → xem biểu đồ nhiệt độ/độ ẩm theo thời gian
+- Thiết bị hiển thị **Online** khi `last_seen` < 60 giây tính từ hiện tại
 
 ---
 

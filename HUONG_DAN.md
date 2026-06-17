@@ -325,26 +325,28 @@ Mở file: `firmware/gateway-node/include/config_gw.h`
 #define MQTT_HOST      "192.168.1.100"
 #define MQTT_PORT      1883
 
-// === URL Backend API qua Nginx (cổng 80) ===
-#define BACKEND_URL    "http://192.168.1.100/api/iot/data"
-#define HTTP_TIMEOUT   10000
+// === URL lấy danh sách sensor từ Backend (qua Nginx cổng 80) ===
+#define BACKEND_SENSORS_URL  "http://192.168.1.100/api/device/sensors"
+#define HTTP_TIMEOUT         10000
 
-// === Danh sách Sensor được phép gửi qua Gateway này ===
-// Điền TẤT CẢ sensor đã đăng ký ở Bước 3.3
+// === Danh sách Sensor (backup cục bộ — tự động được cập nhật từ backend) ===
+// Gateway sẽ tự fetch danh sách sensor từ BACKEND_SENSORS_URL mỗi 5 phút.
+// Điền ít nhất 1 entry để hoạt động ngay khi backend chưa sẵn sàng.
 static const SensorCredential KNOWN_SENSORS[] = {
-    { "ESP32-SN-001", "f6e5d4c3b2a1...." },
-    // { "ESP32-SN-002", "..." },   // thêm dòng này nếu có sensor 002
+    { "ESP32-SN-XXXXXXXX", "secret_key_64_chars_hex...." },
+    // { "ESP32-SN-YYYYYYYY", "..." },  // thêm dòng nếu có sensor thứ 2
 };
 ```
 
-> `BACKEND_URL` trỏ về **cổng 80 qua Nginx** (`http://IP/api/iot/data`).
-> Nginx tự chuyển tiếp `/api/*` vào backend nội bộ.
+> `BACKEND_SENSORS_URL` trỏ về **cổng 80 qua Nginx** (`http://IP/api/device/sensors`).
+> Gateway dùng endpoint này để lấy danh sách sensor active. Nginx tự chuyển tiếp `/api/*` vào backend.
+> Dữ liệu cảm biến được gửi qua **MQTT** (`gateway/{gw_id}/data`), không qua HTTP POST.
 > Không dùng cổng 3000 (Frontend) hay trực tiếp cổng 5000 trong firmware.
 
-### Bước 5.2 — Kết nối ESP32-S3 N16R8 vào máy tính
+### Bước 5.2 — Kết nối ESP32 DevKit V1 vào máy tính
 
-- Dùng cáp **USB-C** có data
-- Cắm vào cổng **USB-C** trên board (USB CDC, không cần driver thêm)
+- Dùng cáp **Micro-USB** có data (không phải cáp sạc thường)
+- Cắm vào cổng Micro-USB trên board
 
 ### Bước 5.3 — Kiểm tra cổng COM
 
@@ -352,7 +354,7 @@ static const SensorCredential KNOWN_SENSORS[] = {
 [System.IO.Ports.SerialPort]::GetPortNames()
 ```
 
-Nếu không thấy cổng COM mới: tải driver tại https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
+Nếu không thấy cổng COM mới: tải driver CP210x tại https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
 
 ### Bước 5.4 — Flash firmware Gateway
 
@@ -367,9 +369,9 @@ Chỉ định cổng COM nếu cần:
 pio run --target upload --upload-port COM6
 ```
 
-**Flash thất bại → vào chế độ BOOT thủ công (ESP32-S3):**
-1. Giữ nút **BOOT** trên board
-2. Rút và cắm lại cáp USB
+**Flash thất bại → vào chế độ BOOT thủ công (ESP32 DevKit V1):**
+1. Giữ nút **BOOT** (hoặc IO0)
+2. Bấm nút **EN** (Reset) rồi thả ngay
 3. Thả nút **BOOT**
 4. Chạy lại lệnh upload ngay lập tức
 
@@ -383,12 +385,22 @@ pio device monitor --baud 115200
 Output mong đợi:
 
 ```
-[WiFi] Kết nối thành công! IP: 192.168.1.106
-[MQTT] Đã kết nối tới broker 192.168.1.100:1883
-[MQTT] Subscribe: sensor/+/data
-[GW] Nhận dữ liệu từ ESP32-SN-001
-[GW] HMAC hợp lệ, chuyển tiếp lên Backend...
-[GW] HTTP 200 OK
+╔══════════════════════════════════╗
+║   IoT Gateway Node – Starting    ║
+╚══════════════════════════════════╝
+  Gateway ID : ESP32-GW-XXXXXXXX
+[WiFi] Kết nối thành công!
+[NTP] Đồng bộ thành công
+[MQTT] Kết nối broker 192.168.1.100:1883
+[MQTT] Subscribe: local/sensors/+/data
+[Registry] Đã lấy danh sách sensor từ backend (N sensor)
+[MAIN] Ready – listening for sensor data...
+```
+
+Khi Gateway nhận được dữ liệu từ Sensor:
+```
+[Forwarder] Nhận từ local/sensors/ESP32-SN-XXXXXXXX/data
+[Forwarder] HMAC hợp lệ, publish lên gateway/ESP32-GW-XXXXXXXX/data
 ```
 
 ---
@@ -435,8 +447,8 @@ docker compose logs -f backend
 docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_managerDeviceIoT
 
 # Trong MySQL shell:
-SELECT * FROM sensor_data ORDER BY created_at DESC LIMIT 10;
-SELECT device_id, type, status FROM devices;
+SELECT * FROM sensor_data ORDER BY received_at DESC LIMIT 10;
+SELECT device_id, device_type, status FROM devices;
 ```
 
 ---
@@ -537,7 +549,7 @@ Nguyên nhân thường gặp:
 |---|---|
 | `No serial ports found` | Kiểm tra cáp (phải có data), thử cổng USB khác |
 | `Connection refused` | Vào chế độ BOOT thủ công (xem Bước 4.4 hoặc 5.4) |
-| ESP32-S3 không nhận diện | Cài driver CP210x hoặc CH340 |
+| ESP32 không nhận diện | Cài driver CP210x hoặc CH340 |
 | Cổng COM xuất hiện rồi biến mất | Đổi cáp USB khác |
 
 ### ESP32 không kết nối WiFi
@@ -550,13 +562,13 @@ Nguyên nhân thường gặp:
 
 Kiểm tra theo thứ tự:
 
-1. Serial Monitor Sensor báo `HTTP 200 OK` chưa?
-2. Serial Monitor Gateway báo `HTTP 200 OK` chưa?
-3. `MQTT_HOST` có đúng IP máy chủ chưa?
-4. `BACKEND_URL` trong `config_gw.h` có đúng định dạng `http://IP/api/iot/data` chưa?
-5. `device_id` trong firmware có khớp với đã đăng ký trên web chưa?
-6. Sensor có trong `KNOWN_SENSORS` của Gateway chưa?
-7. Thiết bị có bị **blocked** trên web không? → Devices → mở khoá
+1. Serial Monitor Sensor có dòng `[MQTT] Publish → local/sensors/...` không?
+2. Serial Monitor Gateway có dòng `[Forwarder] publish lên gateway/...` không?
+3. `MQTT_HOST` trong cả hai firmware có đúng IP máy chủ không?
+4. `BACKEND_SENSORS_URL` trong `config_gw.h` có đúng định dạng `http://IP/api/device/sensors` không?
+5. `device_id` trong firmware có khớp với đã đăng ký trên web không?
+6. Sensor có trong `KNOWN_SENSORS` của Gateway (hoặc đã được backend trả về qua sensors endpoint) không?
+7. Thiết bị có ở trạng thái `active` không? (inactive và blocked đều bị từ chối) → Devices → Kích hoạt
 
 ```powershell
 # Xem request từ Gateway có vào đến Nginx không
@@ -606,7 +618,8 @@ pio device monitor --baud 115200
 
 # 3. Sửa config Gateway (điền KNOWN_SENSORS) → Flash Gateway
 #    file: firmware\gateway-node\include\config_gw.h
-#    BACKEND_URL = "http://192.168.1.100/api/iot/data"   ← qua Nginx cổng 80
+#    BACKEND_SENSORS_URL = "http://192.168.1.100/api/device/sensors"  ← qua Nginx cổng 80
+#    MQTT_HOST = "192.168.1.100"   ← dữ liệu gửi qua MQTT, không qua HTTP POST
 cd firmware\gateway-node
 pio run --target upload
 pio device monitor --baud 115200

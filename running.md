@@ -1,6 +1,6 @@
 # Hướng Dẫn Chạy Hệ Thống
 
-Hệ thống gồm 4 thành phần: **MySQL** · **Mosquitto (MQTT)** · **Backend (Node.js)** · **Frontend (Next.js)**
+Hệ thống gồm 5 service Docker: **MySQL** · **Mosquitto (MQTT)** · **Backend (Node.js)** · **Frontend (Next.js)** · **Nginx (Reverse Proxy)**
 
 ---
 
@@ -60,20 +60,22 @@ docker compose ps
 Kết quả mong đợi – tất cả `STATUS` phải là `running`:
 
 ```
-NAME              STATUS
-iot-mysql         running (healthy)
-iot-mosquitto     running
-iot-backend       running
-iot-frontend      running
+NAME              STATUS                  PORTS
+iot-nginx         running                 0.0.0.0:80->80/tcp
+iot-frontend      running                 0.0.0.0:3000->3000/tcp
+iot-backend       running (healthy)       0.0.0.0:5000->5000/tcp
+iot-mosquitto     running                 0.0.0.0:1883->1883/tcp
+iot-mysql         running (healthy)       0.0.0.0:3308->3306/tcp
 ```
 
 ### Bước 5 – Truy cập
 
 | Dịch vụ | URL |
 |---|---|
-| **Dashboard (Frontend)** | http://localhost:3000 |
+| **Dashboard (qua Nginx)** | http://localhost |
+| **Dashboard (trực tiếp)** | http://localhost:3000 |
 | **Backend API** | http://localhost:5000/api/health |
-| **MySQL** | localhost:3306 |
+| **MySQL (từ host)** | localhost:3308 |
 | **MQTT Broker** | localhost:1883 |
 
 **Tài khoản đăng nhập mặc định:**
@@ -202,9 +204,10 @@ docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_m
 ## Thứ Tự Khởi Động (Tự Động Khi Dùng Docker)
 
 ```
-MySQL (healthy) ──► Backend ──► Frontend
+MySQL (healthy) ──► Backend ──► Frontend ──► Nginx
 Mosquitto ────────► Backend
 ```
+Nginx là điểm vào duy nhất tại cổng 80: `/api/*` → Backend, `/*` → Frontend.
 
 Backend sẽ chờ MySQL healthy trước khi start (healthcheck 10s interval, 5 retries).
 
@@ -232,18 +235,15 @@ docker compose up --build -d
 
 Port 3306 đang bị chiếm bởi MySQL đang chạy sẵn trên máy.
 
-**Cách 1 – Đổi port mapping (không cần tắt MySQL local):**
+**Cách 1 – Dùng port map đã có sẵn:**
 
-Sửa `docker-compose.yml`, đổi port MySQL từ `3306:3306` thành `3307:3306`:
-
+`docker-compose.yml` đã cấu hình MySQL map ra port `3308` (không phải 3306):
 ```yaml
 ports:
   - "3308:3306"
 ```
-
-Sau đó chạy lại `docker compose up -d`.
-Backend vẫn kết nối qua `mysql:3306` (internal Docker network), không bị ảnh hưởng.
-Kết nối từ ngoài (DBeaver, TablePlus): dùng port `3307`.
+Backend kết nối qua `mysql:3306` nội bộ (không ảnh hưởng).
+Kết nối từ ngoài (DBeaver, TablePlus): dùng port `3308` để tránh xung đột.
 
 **Cách 2 – Tắt MySQL local:**
 

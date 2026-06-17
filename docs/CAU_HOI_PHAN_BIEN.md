@@ -1,190 +1,232 @@
-# Cau hoi phan bien va goi y tra loi
+# Câu hỏi phản biện và gợi ý trả lời
 
-De tai: He thong quan ly thiet bi IoT va phan quyen truy cap
+Đề tài: Hệ thống quản lý thiết bị IoT và phân quyền truy cập
 
-## 1. Kien truc he thong
+---
 
-### Cau 1. He thong gom nhung thanh phan nao?
+## 1. Kiến trúc hệ thống
 
-He thong gom 4 thanh phan chinh: IoT Device, Server, Database va Dashboard. Trong project nay, IoT Device duoc chia thanh sensor node va gateway node. Sensor doc du lieu moi truong, gui qua MQTT den gateway. Gateway kiem tra sensor, ky them HMAC cua gateway va forward du lieu len backend. Backend xu ly xac thuc, luu du lieu vao database va dashboard hien thi thiet bi, trang thai, du lieu cam bien va audit log.
+### Câu 1. Hệ thống gồm những thành phần nào?
 
-### Cau 2. Vi sao tach sensor node va gateway node?
+Hệ thống gồm 4 thành phần chính: IoT Device, Server, Database và Dashboard. Trong project này, IoT Device được chia thành Sensor Node và Gateway Node. Sensor đọc dữ liệu môi trường, gửi qua MQTT đến Gateway. Gateway kiểm tra sensor, ký thêm HMAC của gateway và forward dữ liệu lên Backend qua MQTT. Backend xử lý xác thực, lưu dữ liệu vào database và Dashboard hiển thị thiết bị, trạng thái, dữ liệu cảm biến và audit log. Toàn bộ hạ tầng chạy trong Docker Compose với 5 service: MySQL, Mosquitto (MQTT Broker), Nginx (reverse proxy), Backend Express và Frontend Next.js.
 
-Tach sensor va gateway giup mo phong kien truc IoT thuc te hon. Sensor chi can gui du lieu noi bo qua MQTT, gateway dong vai tro trung gian kiem tra sensor hop le va day du lieu len server. Cach nay giup server khong phai giao tiep truc tiep voi tung sensor trong mang noi bo, dong thoi them mot lop kiem tra truoc khi du lieu vao backend.
+### Câu 2. Vì sao tách Sensor Node và Gateway Node?
 
-### Cau 3. Gateway co vai tro bao mat gi?
+Tách sensor và gateway giúp mô phỏng kiến trúc IoT thực tế hơn. Sensor chỉ cần gửi dữ liệu nội bộ qua MQTT trong mạng LAN, gateway đóng vai trò trung gian kiểm tra sensor hợp lệ và đẩy dữ liệu lên server. Cách này giúp server không phải giao tiếp trực tiếp với từng sensor trong mạng nội bộ, đồng thời thêm một lớp kiểm tra trước khi dữ liệu vào backend.
 
-Gateway khong chi forward du lieu ma con kiem tra whitelist sensor, kiem tra timestamp, kiem tra HMAC cua sensor, sau do moi ky them HMAC cua gateway de gui len backend. Backend van kiem tra lai ca gateway va sensor, tao thanh co che xac thuc hai lop.
+### Câu 3. Gateway có vai trò bảo mật gì?
 
-### Cau 4. Vi sao backend van kiem tra sensor HMAC neu gateway da kiem tra roi?
+Gateway không chỉ forward dữ liệu mà còn thực hiện xác thực cục bộ: kiểm tra whitelist sensor (dynamic registry từ backend, refresh mỗi 5 phút; fallback về `KNOWN_SENSORS[]` trong firmware), kiểm tra timestamp trong cửa sổ ±300 giây và kiểm tra HMAC của sensor bằng `safeEq64()` — hàm constant-time chống timing attack. Sau khi sensor pass, gateway mới ký thêm HMAC của mình (`gw_hmac`) và gửi payload lồng ghép lên backend qua MQTT topic `gateway/{gw_id}/data`. Backend vẫn xác thực lại cả gateway lẫn sensor độc lập, tạo thành cơ chế xác thực hai lớp.
 
-Vi gateway co the bi loi, bi cau hinh sai hoac bi tan cong. Backend la lop bao ve cuoi cung nen khong tin hoan toan vao gateway. Backend phai tu xac minh lai sensor_id, sn_timestamp va sn_hmac truoc khi luu du lieu.
+### Câu 4. Vì sao backend vẫn kiểm tra sensor HMAC nếu gateway đã kiểm tra rồi?
 
-### Cau 5. Neu gateway bi chiem quyen thi attacker co the lam gi?
+Vì gateway có thể bị lỗi, bị cấu hình sai hoặc bị tấn công. Backend là lớp bảo vệ cuối cùng nên không tin hoàn toàn vào gateway. Backend phải tự xác minh lại `sensor_id`, `sn_timestamp` và `sn_hmac` — dùng `crypto.timingSafeEqual()` — trước khi lưu dữ liệu. Ngay cả khi gateway bị compromise, attacker vẫn cần `secret_key` của sensor để tạo HMAC hợp lệ vượt qua backend.
 
-Neu gateway bi chiem quyen va attacker lay duoc secret key cua gateway, attacker co the tao request hop le o lop gateway. Tuy nhien backend van yeu cau HMAC cua sensor hop le, nen attacker van can secret key cua sensor neu muon gia mao sensor. Neu attacker lay duoc ca gateway secret va sensor secret thi co the gia mao du lieu, vi vay can bao ve firmware, secret key va co co che rotate/revoke key khi bi lo.
+### Câu 5. Nếu gateway bị chiếm quyền thì attacker có thể làm gì?
 
-## 2. Xac thuc thiet bi
+Nếu gateway bị chiếm quyền và attacker lấy được `secret_key` của gateway, attacker có thể tạo request hợp lệ ở lớp gateway. Tuy nhiên backend vẫn yêu cầu HMAC của sensor hợp lệ (Level 2), nên attacker vẫn cần `secret_key` của sensor nếu muốn giả mạo sensor. Nếu attacker lấy được cả gateway secret và sensor secret thì có thể giả mạo dữ liệu, vì vậy cần bảo vệ firmware, secret key và có cơ chế rotate/revoke key khi bị lộ.
 
-### Cau 6. De bai yeu cau gui device_id + token + data, nhung code dung HMAC. Giai thich nhu the nao?
+---
 
-Trong project nay, token/secret key khong duoc gui truc tiep len server. Thay vao do, moi thiet bi co device_id va secret_key. Khi gui du lieu, thiet bi tao HMAC bang secret_key tren chuoi device_id:timestamp. HMAC dong vai tro bang chung rang thiet bi biet secret key, nhung khong lam lo secret key tren duong truyen.
+## 2. Xác thực thiết bị
 
-### Cau 7. Vi sao khong gui secret_key truc tiep moi lan gui du lieu?
+### Câu 6. Đề bài yêu cầu gửi `device_id + token + data`, nhưng code dùng HMAC. Giải thích như thế nào?
 
-Neu gui secret_key truc tiep, attacker chi can nghe len duong truyen mot lan la co the lay duoc key va gia mao thiet bi. Dung HMAC giup server xac thuc thiet bi ma secret_key khong xuat hien trong request.
+Trong project này, `token` / `secret_key` không được gửi trực tiếp lên server. Thay vào đó, mỗi thiết bị có `device_id` và `secret_key`. Khi gửi dữ liệu, thiết bị tạo HMAC bằng `secret_key` trên chuỗi `device_id:timestamp`. HMAC đóng vai trò bằng chứng rằng thiết bị biết `secret_key`, nhưng không làm lộ `secret_key` trên đường truyền. Đây là cơ chế mạnh hơn so với gửi token tĩnh, vì mỗi lần gửi có timestamp khác nhau nên HMAC cũng khác nhau — kẻ tấn công bắt được request cũ không thể dùng lại.
 
-### Cau 8. HMAC duoc tao nhu the nao?
+### Câu 7. Vì sao không gửi `secret_key` trực tiếp mỗi lần gửi dữ liệu?
 
-Sensor tao HMAC bang cong thuc:
+Nếu gửi `secret_key` trực tiếp, attacker chỉ cần nghe lén đường truyền một lần là có thể lấy được key và giả mạo thiết bị. Dùng HMAC giúp server xác thực thiết bị mà `secret_key` không xuất hiện trong request — ngay cả khi toàn bộ gói tin bị bắt, attacker cũng không thể tách `secret_key` từ HMAC.
 
-```text
+### Câu 8. HMAC được tạo như thế nào?
+
+Sensor tạo HMAC bằng công thức:
+
+```
 HMAC-SHA256(sensor_secret_key, "sensor_id:sn_timestamp")
 ```
 
-Gateway tao HMAC bang cong thuc:
+Gateway tạo HMAC bằng công thức:
 
-```text
+```
 HMAC-SHA256(gateway_secret_key, "gateway_id:gw_timestamp")
 ```
 
-Backend tinh lai HMAC bang secret_key trong database va so sanh voi HMAC trong request.
+Cả hai firmware đều dùng thư viện **mbedTLS** (built-in ESP32 Arduino SDK) để tính HMAC — `firmware/sensor-node/lib/hmac_util/hmac_util.cpp` và `firmware/gateway-node/lib/hmac_util/hmac_util.cpp`. Backend tính lại HMAC bằng `secret_key` trong database và so sánh với HMAC trong request bằng `crypto.timingSafeEqual()` (`backend/src/services/hmacService.ts`).
 
-### Cau 9. Timestamp co tac dung gi?
+### Câu 9. Timestamp có tác dụng gì?
 
-Timestamp giup chong replay attack. Backend chi chap nhan timestamp nam trong cua so thoi gian 300 giay. Neu attacker lay mot request cu va gui lai sau khi het cua so thoi gian, backend se tu choi voi loi timestamp expired.
+Timestamp giúp chống replay attack. Cửa sổ thời gian hợp lệ là **±300 giây**, được kiểm tra ở **ba điểm độc lập**:
+- **Gateway firmware** (`firmware/gateway-node/lib/forwarder/forwarder.cpp`): kiểm tra `sn_timestamp` của sensor trước khi forward
+- **Backend Level 1** (`backend/src/services/hmacService.ts`): kiểm tra `gw_timestamp` của gateway
+- **Backend Level 2** (`backend/src/services/hmacService.ts`): kiểm tra lại `sn_timestamp` của sensor
 
-### Cau 10. Neu attacker replay request trong vong 300 giay thi sao?
+Nếu attacker lấy một request cũ và gửi lại sau khi hết cửa sổ thời gian, backend sẽ từ chối với lỗi `TIMESTAMP_EXPIRED`.
 
-Hien tai he thong giam rui ro replay bang timestamp window, nhung chua chan tuyet doi replay trong cung cua so 300 giay. De chan tot hon, co the them nonce, message id hoac luu timestamp/sequence number gan nhat cua moi thiet bi de tu choi request lap lai.
+### Câu 10. Nếu attacker replay request trong vòng 300 giây thì sao?
 
-### Cau 11. Neu secret key bi lo thi diem yeu la gi?
+Hiện tại hệ thống giảm rủi ro replay bằng timestamp window, nhưng chưa chặn tuyệt đối replay trong cùng cửa sổ 300 giây. Để chặn tốt hơn, có thể thêm **nonce** — một số ngẫu nhiên chỉ dùng một lần — server lưu nonce đã dùng và từ chối request trùng nonce. Hoặc lưu timestamp gần nhất của mỗi thiết bị và từ chối request có timestamp nhỏ hơn hoặc bằng lần trước.
 
-Neu secret key bi lo, attacker co the tao HMAC hop le va gia mao thiet bi. Khi do server khong phan biet duoc dau la thiet bi that va dau la attacker, vi ca hai deu co cung secret key. Giai phap la revoke/rotate secret key, block thiet bi, cap lai key moi va bao ve firmware de giam nguy co bi trich xuat key.
+### Câu 11. Nếu secret key bị lộ thì điểm yếu là gì?
 
-### Cau 12. Secret key duoc cap phat nhu the nao?
+Nếu `secret_key` bị lộ, attacker có thể tạo HMAC hợp lệ và giả mạo thiết bị. Khi đó server không phân biệt được đâu là thiết bị thật và đâu là attacker, vì cả hai đều có cùng `secret_key`. Giải pháp là revoke/rotate `secret_key`, block thiết bị, cấp lại key mới và bảo vệ firmware để giảm nguy cơ bị trích xuất key.
 
-Khi admin hoac operator dang ky thiet bi qua API register, backend sinh device_id va secret_key ngau nhien. Secret key chi duoc tra ve mot lan trong response dang ky, sau do khong hien thi lai tren dashboard.
+### Câu 12. Secret key được cấp phát như thế nào?
 
-### Cau 13. Neu nguoi dung quen luu secret key thi lam sao?
+Khi admin hoặc operator đăng ký thiết bị qua API `/api/devices/register`, backend sinh `device_id` và `secret_key` ngẫu nhiên bằng `crypto.randomBytes(32).toString("hex")` — tạo ra chuỗi 64 ký tự hex. `secret_key` **chỉ được trả về một lần duy nhất** trong response đăng ký, sau đó không có endpoint nào cho phép xem lại. Người quản trị phải copy và nạp vào firmware ngay lúc đó.
 
-Do secret key chi tra ve mot lan, neu quen luu thi nen tao co che cap lai key moi thay vi hien thi lai key cu. Cach an toan hon la rotate secret key: server sinh secret moi, vo hieu hoa secret cu, sau do nguoi quan tri nap secret moi vao firmware.
+### Câu 13. Nếu người dùng quên lưu secret key thì làm sao?
 
-## 3. Kiem soat truy cap va RBAC
+Do `secret_key` chỉ trả về một lần, nếu quên lưu thì nên tạo cơ chế cấp lại key mới thay vì hiển thị lại key cũ. Cách an toàn hơn là **rotate secret key**: server sinh secret mới, vô hiệu hóa secret cũ, sau đó người quản trị nạp secret mới vào firmware. Hệ thống hiện tại chưa có endpoint rotate — cần đăng ký lại thiết bị nếu mất key.
 
-### Cau 14. RBAC trong he thong duoc ap dung o dau?
+---
 
-RBAC duoc ap dung cho cac API quan tri cua dashboard. Nguoi dung dang nhap bang JWT cookie, sau do middleware requireRole kiem tra role. He thong co cac role admin, operator va viewer.
+## 3. Kiểm soát truy cập và RBAC
 
-### Cau 15. Admin, operator va viewer khac nhau nhu the nao?
+### Câu 14. RBAC trong hệ thống được áp dụng ở đâu?
 
-Admin co quyen cao nhat, co the tao user, xoa user, dang ky thiet bi, doi trang thai va xoa thiet bi. Operator co the dang ky thiet bi va doi trang thai thiet bi. Viewer chu yeu xem danh sach, chi tiet thiet bi, dashboard va log.
+RBAC được áp dụng cho các API quản trị của dashboard. Người dùng đăng nhập bằng username/password, nhận JWT được set vào HttpOnly cookie. Mỗi request đến API protected phải đi qua middleware `verifyJWT` (`backend/src/middleware/verifyJWT.ts`) để xác thực JWT, sau đó qua `requireRole(...roles)` (`backend/src/middleware/rbac.ts`) để kiểm tra role. Hệ thống có ba role: `admin`, `operator` và `viewer`.
 
-### Cau 16. Vi sao API gui du lieu cua thiet bi khong dung JWT?
+### Câu 15. Admin, operator và viewer khác nhau như thế nào?
 
-Thiet bi IoT thuong la firmware nho, khong phu hop voi flow dang nhap web nhu user dashboard. Thay vao do, thiet bi duoc xac thuc bang device_id, timestamp va HMAC dua tren secret key rieng cua thiet bi.
+- **Admin**: Toàn quyền — tạo/xóa user, đăng ký thiết bị, kích hoạt/khóa/xóa thiết bị, xem và xóa audit log. Không thể xóa chính mình và không thể xóa tài khoản `admin` khác.
+- **Operator**: Đăng ký thiết bị, kích hoạt/khóa thiết bị, xem dữ liệu và xóa log `DATA_RECV`. Không thể xóa thiết bị hay quản lý user.
+- **Viewer**: Chỉ xem — danh sách thiết bị, chi tiết thiết bị, dữ liệu cảm biến, dashboard và audit log. Không thể thực hiện bất kỳ thao tác ghi nào.
 
-### Cau 17. Thiet bi inactive, active va blocked khac nhau nhu the nao?
+### Câu 16. Vì sao API gửi dữ liệu của thiết bị không dùng JWT?
 
-Inactive la thiet bi moi dang ky nhung chua duoc phep gui du lieu. Active la thiet bi hop le va duoc phep gui du lieu. Blocked la thiet bi bi khoa do quan tri vien/operator khoa thu cong hoac do xac thuc sai nhieu lan.
+Thiết bị IoT thường là firmware nhỏ, không phù hợp với flow đăng nhập web như user dashboard — không có browser, không lưu được cookie, không thực hiện được OAuth flow. Thay vào đó, thiết bị được xác thực bằng `device_id`, `timestamp` và `HMAC` dựa trên `secret_key` riêng của thiết bị. Cơ chế này phù hợp với tài nguyên phần cứng hạn chế và không yêu cầu session.
 
-### Cau 18. He thong xu ly thiet bi sai token/HMAC nhu the nao?
+### Câu 17. Thiết bị inactive, active và blocked khác nhau như thế nào?
 
-Neu gateway hoac sensor gui HMAC sai, backend ghi audit log, tang fail_count neu tim thay thiet bi trong database. Khi fail_count dat nguong 5 lan, backend chuyen trang thai thiet bi sang blocked va tu choi cac request tiep theo.
+- **inactive**: Thiết bị mới đăng ký, chưa được phép gửi dữ liệu. Trạng thái mặc định khi tạo mới.
+- **active**: Thiết bị hợp lệ và được phép gửi dữ liệu. `fail_count` được reset về 0 khi chuyển sang active.
+- **blocked**: Thiết bị bị khóa — do admin/operator khóa thủ công, hoặc do `fail_count` đạt ngưỡng 5 lần xác thực sai. Thiết bị bị blocked bị từ chối hoàn toàn cho đến khi được mở khóa thủ công.
 
-## 4. Dashboard va trang thai thiet bi
+### Câu 18. Hệ thống xử lý thiết bị sai token/HMAC như thế nào?
 
-### Cau 19. Dashboard hien thi online/offline dua tren co che nao?
+Nếu gateway hoặc sensor gửi HMAC sai, backend ghi audit log (`GATEWAY_AUTH_FAIL` hoặc `SENSOR_AUTH_FAIL`) và tăng `fail_count` nếu tìm thấy thiết bị trong database. Khi `fail_count` đạt ngưỡng 5 (`BLOCK_THRESHOLD = 5`), backend chuyển trạng thái thiết bị sang `blocked`, ghi event `DEVICE_BLOCKED` vào audit log và từ chối tất cả request tiếp theo cho đến khi admin/operator mở khóa. Cơ chế này áp dụng cho cả luồng MQTT (`mqttDataService.ts`) lẫn HTTP fallback (`validateDevice.ts`).
 
-Backend cap nhat last_seen khi gateway va sensor gui du lieu hop le. Dashboard coi thiet bi la online neu last_seen khong null va thoi gian tu last_seen den hien tai nho hon 60 giay. Neu qua 60 giay khong co du lieu hop le moi, thiet bi duoc xem la offline.
+---
 
-### Cau 20. Active va online co giong nhau khong?
+## 4. Dashboard và trạng thái thiết bị
 
-Khong. Active la trang thai quyen truy cap, nghia la thiet bi duoc phep gui du lieu. Online la trang thai ket noi duoc suy ra tu last_seen. Mot thiet bi co the active nhung offline neu no duoc phep gui du lieu nhung hien tai khong ket noi hoac khong gui du lieu.
+### Câu 19. Dashboard hiển thị online/offline dựa trên cơ chế nào?
 
-### Cau 21. Dashboard co the hien thi sai so lieu thong ke khong?
+Backend cập nhật `last_seen` cho cả gateway lẫn sensor mỗi khi nhận dữ liệu hợp lệ. Dashboard coi thiết bị là **online** nếu `last_seen` không null và `TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60`. Ngưỡng 60 giây phù hợp với chu kỳ gửi dữ liệu 5 giây của sensor — nếu mất kết nối, sau 60 giây sẽ chuyển sang offline. Tính toán này thực hiện ở backend mỗi lần query, không lưu cột `is_online` vào database.
 
-Co mot diem can luu y trong code hien tai: backend tra ve cac field total_gateways, total_sensors, online_gateways, online_sensors, nhung frontend dang doc total_gateway, total_sensor, gateway_online, sensor_online. Neu chua sua mapping nay, dashboard co the hien thi 0 du DB co du lieu.
+### Câu 20. Active và online có giống nhau không?
 
-### Cau 22. Dashboard bao ve API quan tri nhu the nao?
+Không. **Active** là trạng thái quyền truy cập — thiết bị được phép gửi dữ liệu. **Online** là trạng thái kết nối được suy ra từ `last_seen` — thiết bị đang thực sự giao tiếp. Một thiết bị có thể `active` nhưng `offline` (được phép gửi nhưng hiện không kết nối), hoặc `blocked` nhưng từng online (bị khóa sau khi đã hoạt động). Cả hai trạng thái được hiển thị riêng biệt trên trang Devices của dashboard.
 
-Dashboard goi API backend bang cookie JWT httpOnly. Backend dung middleware verifyJWT de kiem tra token. Cac API nhay cam nhu dang ky thiet bi, doi trang thai, xoa thiet bi hoac quan ly user se kiem tra them role bang RBAC.
+### Câu 21. Dashboard có thể hiển thị sai số liệu thống kê không?
 
-## 5. Database va luu tru
+Không, với codebase hiện tại. Backend trả về đúng tên field `total_gateway`, `total_sensor`, `gateway_online`, `sensor_online` và `total_data_points` (`backend/src/routes/dashboard.ts`). Frontend đọc đúng các field này qua type `DashboardStats` (`frontend/src/package/schema/api.ts`) và render bằng `stats?.total_gateway`, `stats?.gateway_online`, v.v. (`frontend/src/containers/Dashboard/index.tsx`). Tên field giữa backend và frontend khớp hoàn toàn, không có mismatch.
 
-### Cau 23. Database gom cac bang chinh nao?
+### Câu 22. Dashboard bảo vệ API quản trị như thế nào?
 
-Database gom users, devices, sensor_data, device_tokens va audit_log. Bang users luu tai khoan dashboard. Bang devices luu device_id, secret_key, device_type, status, fail_count va last_seen. Bang sensor_data luu du lieu cam bien. Bang audit_log luu su kien bao mat va quan tri.
+Dashboard gọi API backend bằng cookie JWT HttpOnly — trình duyệt tự gửi cookie mà JavaScript không đọc được (chống XSS). Backend dùng middleware `verifyJWT` để kiểm tra token. Các API nhạy cảm như đăng ký thiết bị, đổi trạng thái, xóa thiết bị hoặc quản lý user sẽ kiểm tra thêm role bằng `requireRole(...)`. Ngoài ra có CORS giới hạn origin frontend, Helmet cho security headers và rate limit cho login/API.
 
-### Cau 24. Vi sao secret_key dang duoc luu trong bang devices?
+---
 
-Backend can secret_key de tinh lai HMAC va so sanh voi request cua thiet bi. Trong phien ban hien tai, secret_key duoc luu de server co the xac thuc HMAC. Khi trien khai that, nen bao ve database tot hon, co the ma hoa secret at rest hoac dung co che quan ly khoa rieng.
+## 5. Database và lưu trữ
 
-### Cau 25. Bang device_tokens dung de lam gi?
+### Câu 23. Database gồm các bảng chính nào?
 
-Bang device_tokens co trong schema nhung luong chinh hien tai dang dung secret_key va HMAC. Bang nay co the duoc xem la phan mo rong cho co che token co han su dung, revoke token hoac rotate token trong cac phien ban sau.
+Database gồm 5 bảng: `users`, `devices`, `sensor_data`, `device_tokens` và `audit_log`.
+- `users`: Tài khoản dashboard với role `admin/operator/viewer`, password hash bcrypt.
+- `devices`: `device_id` (UNIQUE), `secret_key`, `device_type`, `status`, `fail_count`, `last_seen`, `last_ip`, `created_by`.
+- `sensor_data`: Dữ liệu cảm biến với foreign key cascade cả `device_id` (sensor) lẫn `gateway_id` (gateway).
+- `device_tokens`: Schema đã có nhưng chưa được sử dụng bởi bất kỳ route nào — dự phòng cho cơ chế token dài hạn.
+- `audit_log`: Sự kiện bảo mật và quản trị với 7 event types.
 
-### Cau 26. Audit log giup ich gi trong threat model?
+### Câu 24. Vì sao `secret_key` đang được lưu trong bảng devices?
 
-Audit log ghi cac su kien nhu dang ky thiet bi, nhan du lieu, xac thuc gateway/sensor that bai, block thiet bi va thay doi trang thai. Nho do nguoi quan tri co the truy vet IP, user agent, device_id va ly do loi khi co hanh vi tan cong hoac truy cap trai phep.
+Backend cần `secret_key` để tính lại HMAC và so sánh với request của thiết bị — đây là yêu cầu kỹ thuật của cơ chế HMAC (không thể hash `secret_key` vì cần key gốc để tính). Trong phiên bản hiện tại, `secret_key` được lưu plain text. Khi triển khai thật, nên bảo vệ database tốt hơn, có thể mã hóa cột `secret_key` ở mức storage hoặc dùng cơ chế quản lý khóa riêng (KMS).
+
+### Câu 25. Bảng `device_tokens` dùng để làm gì?
+
+Bảng `device_tokens` có trong schema nhưng **chưa có route nào đọc hoặc ghi vào bảng này** trong codebase hiện tại. Bảng này được chuẩn bị cho cơ chế token có thời hạn sử dụng, revoke token hoặc rotate token — thay thế cho việc dùng `secret_key` trực tiếp. Luồng chính hiện tại vẫn dùng HMAC-SHA256 với `secret_key`.
+
+### Câu 26. Audit log giúp ích gì trong threat model?
+
+Audit log ghi các sự kiện: `DEVICE_REGISTER`, `DEVICE_STATUS_CHANGE`, `DEVICE_DELETE`, `DATA_RECV`, `GATEWAY_AUTH_FAIL`, `SENSOR_AUTH_FAIL`, `DEVICE_BLOCKED`. Nhờ đó người quản trị có thể truy vết IP, user_agent, device_id và lý do lỗi khi có hành vi tấn công hoặc truy cập trái phép. Audit log được ghi không đồng bộ — lỗi ghi log không bao giờ làm crash luồng chính.
+
+---
 
 ## 6. Threat model
 
-### Cau 27. He thong chong gia mao thiet bi nhu the nao?
+### Câu 27. Hệ thống chống giả mạo thiết bị như thế nào?
 
-He thong khong chi dua vao device_id vi device_id co the bi doan hoac bi sao chep. Moi request phai co HMAC hop le duoc tao tu secret_key rieng cua thiet bi. Neu attacker chi biet device_id ma khong biet secret_key thi khong tao duoc HMAC hop le.
+Hệ thống không chỉ dựa vào `device_id` vì `device_id` có thể bị đoán hoặc bị sao chép. Mỗi request phải có HMAC hợp lệ được tạo từ `secret_key` riêng của thiết bị. Nếu attacker chỉ biết `device_id` mà không biết `secret_key` thì không tạo được HMAC hợp lệ. Ngoài ra còn có timestamp window ±300 giây chống replay, kiểm tra `device_type` chống thiết bị đóng giả sai vai trò, và auto-block sau 5 lần sai chống brute force.
 
-### Cau 28. He thong chong truy cap trai phep API dashboard nhu the nao?
+### Câu 28. Hệ thống chống truy cập trái phép API dashboard như thế nào?
 
-API dashboard yeu cau JWT cookie hop le. Cac thao tac quan tri yeu cau role phu hop. Ngoai ra backend co CORS gioi han origin frontend, helmet cho security headers va rate limit cho login/API.
+API dashboard yêu cầu JWT cookie hợp lệ. Các thao tác quản trị yêu cầu role phù hợp qua `requireRole(...)`. Ngoài ra backend có CORS giới hạn origin frontend, Helmet cho security headers, rate limit cho login và API, giới hạn body size 10KB và sử dụng prepared statements chống SQL injection.
 
-### Cau 29. Rate limit co tac dung gi?
+### Câu 29. Rate limit có tác dụng gì?
 
-Rate limit giup giam tan cong brute force va DoS co ban. Login bi gioi han 10 request trong 15 phut moi IP. API gui data cua thiet bi bi gioi han 60 request moi phut moi IP. Cac API quan tri khac bi gioi han 100 request trong 15 phut moi IP.
+Rate limit giúp giảm tấn công brute force và DoS cơ bản. Login bị giới hạn **10 request trong 15 phút** mỗi IP (`authLimiter`). API gửi data của thiết bị bị giới hạn **60 request mỗi phút** mỗi IP (`deviceDataLimiter`). Các API quản trị khác bị giới hạn **100 request trong 15 phút** mỗi IP (`apiLimiter`). Khi vượt ngưỡng, server trả về lỗi `TOO_MANY_REQUESTS`.
 
-### Cau 30. Neu attacker biet device_id nhung khong biet secret key thi sao?
+### Câu 30. Nếu attacker biết `device_id` nhưng không biết secret key thì sao?
 
-Attacker khong the tao HMAC hop le, nen backend se tu choi request voi loi HMAC_MISMATCH. Neu device_id ton tai, fail_count cua thiet bi co the tang va thiet bi co the bi block sau nhieu lan sai.
+Attacker không thể tạo HMAC hợp lệ, nên backend sẽ từ chối request với lỗi `HMAC_MISMATCH`. Nếu `device_id` tồn tại trong database, `fail_count` của thiết bị sẽ tăng sau mỗi lần sai và thiết bị có thể bị block sau 5 lần — bảo vệ thêm một lớp chống attacker thử nhiều HMAC khác nhau.
 
-### Cau 31. Neu attacker gui device_id khong ton tai thi sao?
+### Câu 31. Nếu attacker gửi `device_id` không tồn tại thì sao?
 
-Backend tra ve loi NOT_FOUND va ghi audit log xac thuc that bai. Tuy nhien vi khong co device trong database nen khong co fail_count cua device nao de tang. Co the mo rong bang cach thong ke theo IP hoac theo device_id gia mao de phat hien scan/brute force.
+Backend trả về lỗi `NOT_FOUND` và ghi audit log xác thực thất bại. Tuy nhiên vì không có device trong database nên không có `fail_count` của device nào để tăng. Có thể mở rộng bằng cách thống kê theo IP hoặc theo `device_id` giả mạo để phát hiện scan/brute force.
 
-### Cau 32. Neu attacker lay duoc firmware thi co nguy hiem khong?
+### Câu 32. Nếu attacker lấy được firmware thì có nguy hiểm không?
 
-Co. Firmware hien luu device_id, secret_key, WiFi credential va danh sach sensor trong file cau hinh. Neu attacker trich xuat firmware thanh cong, secret key co the bi lo. Huong giam rui ro la bat secure boot/flash encryption neu phan cung ho tro, khong commit secret that vao repo, rotate key khi nghi ngo bi lo va han che quyen cua moi thiet bi.
+Có. Firmware hiện lưu `device_id`, `secret_key`, WiFi credential và danh sách sensor trong file cấu hình (`firmware/sensor-node/include/config.h`, `firmware/gateway-node/include/config_gw.h`). Nếu attacker trích xuất firmware thành công, `secret_key` có thể bị lộ. Hướng giảm rủi ro: bật **Secure Boot và Flash Encryption** nếu phần cứng hỗ trợ, không commit secret thật vào repo, rotate key khi nghi ngờ bị lộ và hạn chế quyền của mỗi thiết bị.
 
-### Cau 33. MQTT port 1883 co diem yeu gi?
+### Câu 33. MQTT port 1883 có điểm yếu gì?
 
-MQTT port 1883 thuong la MQTT khong ma hoa. Neu trien khai that, nen dung MQTT over TLS, cau hinh username/password hoac certificate cho broker, va gioi han topic publish/subscribe theo tung device.
+MQTT port 1883 là MQTT không mã hóa (plain TCP). Dữ liệu MQTT truyền trong mạng LAN có thể bị nghe lén. Nếu triển khai thật, nên dùng **MQTT over TLS** (port 8883), cấu hình username/password hoặc certificate cho broker Mosquitto, và giới hạn topic publish/subscribe theo từng thiết bị. Firmware cần chuyển từ `WiFiClient` sang `WiFiClientSecure`.
 
-### Cau 34. HTTP tu gateway len backend co diem yeu gi?
+### Câu 34. Giao tiếp từ gateway lên backend có điểm yếu gì?
 
-Firmware gateway dang cau hinh BACKEND_URL dang HTTP. Trong moi truong that, HTTP co the bi nghe len hoac bi sua doi goi tin. Nen dung HTTPS de dam bao tinh bao mat va toan ven du lieu tren duong truyen.
+Gateway giao tiếp với backend theo **hai kênh khác nhau**:
 
-## 7. Cau hoi bat loi code/demo
+1. **MQTT** (kênh chính — dữ liệu cảm biến): Gateway publish lên topic `gateway/{gw_id}/data` qua Mosquitto broker. Kênh này plain TCP, chưa có TLS.
+2. **HTTP** (kổng phụ — lấy danh sách sensor): Gateway gọi `GET /api/device/sensors` để fetch danh sách sensor hợp lệ mỗi 5 phút. URL cấu hình trong `BACKEND_SENSORS_URL` dạng HTTP, chưa mã hóa.
 
-### Cau 35. Neu dashboard hien thi thong ke bang 0 du da co thiet bi thi nguyen nhan co the la gi?
+Trong môi trường thật, cả MQTT lẫn HTTP đều cần mã hóa (MQTT TLS port 8883, HTTPS thay vì HTTP) để đảm bảo tính bảo mật và toàn vẹn dữ liệu trên đường truyền.
 
-Nguyen nhan co the do mismatch ten field giua backend va frontend. Backend tra total_gateways, total_sensors, online_gateways, online_sensors, nhung frontend lai doc total_gateway, total_sensor, gateway_online, sensor_online. Can dong bo lai ten field o frontend hoac backend.
+---
 
-### Cau 36. Neu them sensor moi thi gateway co tu nhan khong?
+## 7. Câu hỏi bắt lỗi code/demo
 
-Chua. Gateway hien co whitelist KNOWN_SENSORS trong firmware. Khi them sensor moi, can them device_id va secret_key vao danh sach nay va nap lai firmware, hoac mo rong gateway de lay whitelist tu server.
+### Câu 35. Nếu dashboard hiển thị thống kê bằng 0 dù đã có thiết bị thì nguyên nhân có thể là gì?
 
-### Cau 37. He thong co the xoa du lieu sensor khi xoa device khong?
+Tên field giữa backend và frontend trong codebase hiện tại đã khớp: backend trả về `total_gateway`, `total_sensor`, `gateway_online`, `sensor_online`, `total_data_points` — frontend đọc đúng các tên này. Nếu dashboard hiển thị 0, nguyên nhân có thể là: JWT cookie hết hạn hoặc không hợp lệ khiến request trả về 401, backend chưa khởi động hoặc không kết nối được database, hoặc chưa có thiết bị nào ở trạng thái `active` nên `gateway_online`/`sensor_online` đúng là 0. Cần kiểm tra Network tab trong browser DevTools để xem response thực tế từ `/api/dashboard/stats`.
 
-Co. Schema co foreign key ON DELETE CASCADE cho sensor_data tham chieu devices. Route delete device cung xoa sensor_data va device_tokens lien quan truoc khi xoa device.
+### Câu 36. Nếu thêm sensor mới thì gateway có tự nhận không?
 
-### Cau 38. Vi sao secret_key chi hien thi mot lan khi dang ky thiet bi?
+**Có.** Gateway đã có cơ chế **dynamic sensor registry** (`firmware/gateway-node/lib/sensor_registry/sensor_registry.cpp`): tự động fetch danh sách sensor từ `GET /api/device/sensors` mỗi **5 phút** (`SENSOR_REGISTRY_TTL_MS = 300000ms`). Ngoài ra, khi gặp `sensor_id` chưa có trong registry, gateway còn thực hiện **lazy refresh** — fetch ngay lập tức mà không cần đợi hết TTL.
 
-De giam nguy co lo bi mat. Neu dashboard cho xem lai secret_key bat ky luc nao, tai khoan bi chiem quyen co the lay toan bo key cua thiet bi. Tra ve mot lan buoc nguoi quan tri luu key dung quy trinh va neu mat thi cap lai key moi.
+Quy trình: đăng ký sensor mới trên dashboard → kích hoạt → gateway nhận sensor mới trong lần refresh tiếp theo (tối đa 5 phút) hoặc ngay lập tức nếu sensor đó đã publish data.
 
-### Cau 39. He thong da co chong SQL injection chua?
+`KNOWN_SENSORS[]` trong `config_gw.h` chỉ là **fallback tĩnh** khi backend không phản hồi — không phải cơ chế chính.
 
-Backend dung query co tham so voi pool.execute va placeholder, vi vay cac input nhu username, device_id, id, status khong duoc noi chuoi truc tiep vao SQL. Day la cach giam nguy co SQL injection.
+### Câu 37. Hệ thống có thể xóa dữ liệu sensor khi xóa device không?
 
-### Cau 40. Diem han che lon nhat cua he thong hien tai la gi?
+Có. Schema có foreign key `ON DELETE CASCADE` cho bảng `sensor_data` tham chiếu `devices`. Route delete device (`backend/src/routes/devices.ts`) cũng tự xóa `sensor_data` và `device_tokens` liên quan trước khi xóa device row, đảm bảo không có orphaned data. Sự kiện xóa được ghi vào `audit_log` với event `DEVICE_DELETE` kèm thông tin người thực hiện.
 
-Mot so han che gom: chua co rotate/revoke secret key hoan chinh, chua chan replay tuyet doi trong cua so 300 giay, MQTT/HTTP trong firmware chua ma hoa theo cau hinh demo, whitelist sensor tren gateway con tinh va secret key trong firmware co nguy co bi lo neu thiet bi bi chiem quyen vat ly.
+### Câu 38. Vì sao `secret_key` chỉ hiển thị một lần khi đăng ký thiết bị?
 
+Để giảm nguy cơ lộ bí mật. Nếu dashboard cho xem lại `secret_key` bất kỳ lúc nào, tài khoản bị chiếm quyền có thể lấy toàn bộ key của thiết bị. Trả về một lần buộc người quản trị lưu key đúng quy trình và nếu mất thì phải cấp lại key mới — không thể lấy lại key cũ.
+
+### Câu 39. Hệ thống đã có chống SQL injection chưa?
+
+Có. Backend dùng query có tham số với `pool.execute(sql, [params])` và placeholder `?` cho tất cả input — username, `device_id`, id, status không được nối chuỗi trực tiếp vào SQL. Đây là prepared statements, giúp database engine phân biệt rõ câu lệnh SQL và dữ liệu người dùng, ngăn chặn SQL injection.
+
+### Câu 40. Điểm hạn chế lớn nhất của hệ thống hiện tại là gì?
+
+Một số hạn chế chính:
+- Chưa có cơ chế rotate/revoke `secret_key` — phải đăng ký lại thiết bị nếu key bị lộ.
+- Chưa chặn tuyệt đối replay trong cùng cửa sổ 300 giây (không có nonce).
+- MQTT và HTTP sensor list chưa mã hóa (plain TCP/HTTP) — phù hợp LAN nội bộ, chưa đủ cho internet.
+- `secret_key` lưu plain text trong database — cần bảo vệ DB tốt hoặc mã hóa at-rest.
+- `device_tokens` table đã có trong schema nhưng chưa được triển khai.
+- Config firmware (`config.h`, `config_gw.h`) chứa credentials thực đang được track bởi Git.

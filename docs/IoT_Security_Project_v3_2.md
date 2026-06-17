@@ -9,7 +9,7 @@
 |**Thông tin chung**|**Giá trị**|
 | :- | :- |
 |**Tên đề tài**|Hệ thống quản lý thiết bị IoT và phân quyền truy cập|
-|**Phần cứng Edge**|2 con ESP32 DevKit – Sensor Node & 1 con ESP32-S3 N16R8 Gateway Node|
+|**Phần cứng Edge**|2 con ESP32 DOIT DevKit V1 – Sensor Node & Gateway Node|
 |**Backend**|Node.js + Express + MQTT (Mosquitto)|
 |**Database**|MySQL 8.0|
 |**Frontend**|Next.js 14 + Tailwind CSS|
@@ -138,7 +138,7 @@ Hệ thống có 3 luồng chính. Mọi trường hợp triển khai (test hay 
 - Nạp firmware vào ESP32 bằng Arduino IDE
 
 ### **Luồng 2 – Kết Nối, Xác Thực & Gửi Dữ Liệu Qua Gateway (mọi trường hợp)**
-`  `┌─────────────┐   ①MQTT local    ┌─────────────┐   ③HTTPS POST  ┌─────────────┐
+`  `┌─────────────┐   ①MQTT local    ┌─────────────┐   ③MQTT Publish ┌─────────────┐
 
 `  `│   ESP32     │ ────────────────► │   ESP32     │ ─────────────► │   BACKEND   │
 
@@ -166,7 +166,7 @@ Hệ thống có 3 luồng chính. Mọi trường hợp triển khai (test hay 
 - Gateway subscribe MQTT topic local/sensors/+/data (wildcard) để nhận dữ liệu từ mọi Sensor Node
 - Gateway xác thực HMAC của Sensor Node bằng danh sách sensor credentials được cấu hình sẵn (hoặc truy vấn Backend lần đầu). Nếu HMAC sai → bỏ qua, ghi log
 - Nếu Sensor hợp lệ: Gateway tính HMAC của chính mình: HMAC(GW\_SECRET, gw\_id:gw\_timestamp) rồi đóng gói toàn bộ payload gốc của Sensor
-- Gateway POST lên Backend: { gateway\_id, gw\_timestamp, gw\_hmac, sensor\_payload: { sensor\_id, sn\_timestamp, sn\_hmac, data: {temp, hum} } }
+- Gateway **MQTT publish** lên topic `gateway/<GW_DEVICE_ID>/data`: { gateway\_id, gw\_timestamp, gw\_hmac, gateway\_ip, sensor\_payload: { sensor\_id, sn\_timestamp, sn\_hmac, sensor\_ip, data: {temp, hum} } }. Backend subscribe `gateway/+/data` qua `mqttDataService.ts`.
 - Backend xác thực HMAC của Gateway trước (cấp 1): tra cứu GW secret\_key → tính lại HMAC → timingSafeEqual(). Sai → 401, ghi audit\_log GATEWAY\_AUTH\_FAIL
 - Backend xác thực HMAC của Sensor Node tiếp theo (cấp 2): tra cứu SN secret\_key → tính lại HMAC → timingSafeEqual(). Sai → 401, ghi audit\_log SENSOR\_AUTH\_FAIL
 - Nếu cả hai hợp lệ: INSERT sensor\_data (kèm gateway\_id), UPDATE last\_seen cho cả SN và GW, fail\_count về 0 → trả 200 OK
@@ -259,8 +259,8 @@ Hệ thống có 3 luồng chính. Mọi trường hợp triển khai (test hay 
 |**Message Broker**|MQTT Broker|Mosquitto 2.x|Nhẹ, open source, hỗ trợ TLS, chuẩn IoT|
 |**Backend**|REST API Server|Node.js 20 + Express 4|Async I/O phù hợp IoT, npm ecosystem phong phú|
 |**Database**|Relational DB|MySQL 8.0|Phổ biến, JSON column support, ổn định|
-|**Frontend**|Web Dashboard|Next.js 14 + Tailwind CSS|SSR/CSR linh hoạt, App Router, UI nhanh đẹp|
-|**Real-time**|Live Updates|SWR polling / WebSocket|Cập nhật trạng thái thiết bị không cần reload|
+|**Frontend**|Web Dashboard|Next.js 16 + Tailwind CSS|SSR/CSR linh hoạt, App Router, UI nhanh đẹp|
+|**Real-time**|Live Updates|SWR polling (10s interval) — WebSocket chưa triển khai|Cập nhật trạng thái thiết bị không cần reload|
 |**Bảo mật**|Auth & Crypto|HMAC-SHA256 + JWT + bcrypt|Xác thực thiết bị + admin, đủ chuẩn cho lab|
 
 ## **1.4. Chi Tiết Các Package Cần Cài**

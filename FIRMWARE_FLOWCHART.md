@@ -11,17 +11,18 @@
 ```mermaid
 flowchart LR
     DHT22["🌡️ DHT22\nSensor"]
-    SN["⚡ Sensor Node\nESP32 DOIT v1"]
-    BROKER["📡 MQTT Broker\nMosquitto"]
-    GW["🔀 Gateway Node\nESP32-S3 N16R8"]
+    SN["⚡ Sensor Node\nESP32 DOIT V1"]
+    BROKER["📡 MQTT Broker\nMosquitto :1883"]
+    GW["🔀 Gateway Node\nESP32 DOIT V1"]
     BE["⚙️ Backend API\nExpress.js :5000"]
-    DB["🗄️ Database\nPostgreSQL"]
+    DB["🗄️ Database\nMySQL 8.0"]
     FE["📊 Dashboard\nNext.js :3000"]
 
-    DHT22 -->|"GPIO4 · I2C"| SN
-    SN -->|"MQTT Publish\nJSON + HMAC-SHA256\ntopic: local/sensors/+/data"| BROKER
-    BROKER -->|"MQTT Subscribe\nwildcard: +/data"| GW
-    GW -->|"Validate → Re-sign\nHTTP POST /api/device/data"| BE
+    DHT22 -->|"GPIO4 · 1-Wire"| SN
+    SN -->|"MQTT Publish\nJSON + HMAC-SHA256\ntopic: local/sensors/{id}/data"| BROKER
+    BROKER -->|"MQTT Subscribe\nwildcard: local/sensors/+/data"| GW
+    GW -->|"Validate → Re-sign\nMQTT Publish: gateway/{gw_id}/data"| BROKER
+    BROKER -->|"MQTT Subscribe\nwildcard: gateway/+/data"| BE
     BE --> DB --> FE
 ```
 
@@ -36,33 +37,34 @@ flowchart TB
     end
 
     subgraph BE_LAYER ["⚙️ Lớp Backend"]
-        API["🔧 REST API\nExpress.js · :5000\n/api/devices\n/api/device/data\n/api/sensor-data"]
+        API["🔧 REST API + MQTT Client\nExpress.js · :5000\n/api/devices\n/api/devices/:id/data\n/api/dashboard/stats"]
     end
 
     subgraph DB_LAYER ["🗄️ Lớp Dữ Liệu"]
-        DB[("🗄️ PostgreSQL\nDevices · SensorData\nGateways · Users")]
+        DB[("🗄️ MySQL 8.0\nDevices · SensorData\nAuditLog · Users")]
     end
 
     subgraph MSG_LAYER ["📡 Lớp Giao Tiếp"]
-        MQTT["📡 MQTT Broker\nMosquitto · :1883\ntopic: local/sensors/+/data"]
+        MQTT["📡 MQTT Broker\nMosquitto · :1883\nlocal/sensors/+/data\ngateway/+/data"]
     end
 
     subgraph FW_LAYER ["🔌 Lớp Firmware — ESP32"]
-        GW["🔀 Gateway Node\nESP32-S3 N16R8\nValidate + Re-sign"]
-        SN["⚡ Sensor Node\nESP32 DOIT v1\nĐọc cảm biến + Ký HMAC"]
+        GW["🔀 Gateway Node\nESP32 DOIT V1\nValidate + Re-sign → MQTT Publish"]
+        SN["⚡ Sensor Node\nESP32 DOIT V1\nĐọc DHT22 + Ký HMAC + MQTT Publish"]
     end
 
     subgraph HW_LAYER ["🌡️ Lớp Vật Lý"]
         DHT["🌡️ DHT22\nNhiệt độ · Độ ẩm"]
     end
 
-    FE     -- "GET /api/sensor-data\nGET /api/devices"        --> API
+    FE     -- "GET /api/devices\nGET /api/devices/:id/data\nGET /api/dashboard/stats" --> API
     API    -- "JSON response"                                  --> FE
     API   <-- "SQL Query / INSERT"                            --> DB
-    GW     -- "HTTP POST /api/device/data\n{gw_hmac, sn_hmac, data}" --> API
-    SN     -- "MQTT Publish\nJSON + HMAC-SHA256"              --> MQTT
-    MQTT   -- "Subscribe · wildcard"                          --> GW
-    DHT    -- "GPIO4 · đọc mỗi 5s"                           --> SN
+    API    -- "MQTT Subscribe\ngateway/+/data"                --> MQTT
+    GW     -- "MQTT Publish\ngateway/{gw_id}/data\n{gw_hmac, sn_hmac, data}" --> MQTT
+    SN     -- "MQTT Publish\nlocal/sensors/{id}/data\nJSON + HMAC-SHA256"    --> MQTT
+    MQTT   -- "Subscribe\nlocal/sensors/+/data"               --> GW
+    DHT    -- "GPIO4 · 1-Wire · đọc mỗi 5s"                  --> SN
 ```
 
 ---
@@ -80,12 +82,12 @@ flowchart TD
         S1 --> S2 --> S3 --> S4
     end
 
-    subgraph GW_BOX ["🔀 GATEWAY NODE (ESP32-S3 N16R8)"]
+    subgraph GW_BOX ["🔀 GATEWAY NODE (ESP32 DOIT V1)"]
         direction TB
-        G1["① Subscribe MQTT"]
+        G1["① Subscribe MQTT: local/sensors/+/data"]
         G2["② Validate: Whitelist + Timestamp + HMAC"]
         G3["③ Re-sign Gateway HMAC"]
-        G4["④ HTTP POST → Backend"]
+        G4["④ MQTT Publish → gateway/{gw_id}/data"]
         G1 --> G2 --> G3 --> G4
     end
 
@@ -173,7 +175,7 @@ flowchart TD
 
 ---
 
-## III. GATEWAY NODE (ESP32-S3 N16R8)
+## III. GATEWAY NODE (ESP32 DOIT V1)
 
 ### III.1 Khởi Động — setup()
 
@@ -225,7 +227,7 @@ flowchart TD
     IN3 --> CHK_NTP
     CHK_NTP -->|"❌ Chưa"| DROP --> END3
     CHK_NTP -->|"✅ Đã"| FWD --> RES3
-    RES3 -->|"true (HTTP 200)"| LED_ON --> END3
+    RES3 -->|"true (MQTT OK)"| LED_ON --> END3
     RES3 -->|"false"| LOG_F --> END3
 ```
 
@@ -260,11 +262,11 @@ flowchart TD
         HE["❌ return false\n(HMAC mismatch)"]
     end
 
-    subgraph P5 ["⑤ Gateway Sign & Forward"]
+    subgraph P5 ["⑤ Gateway Sign & MQTT Publish"]
         G1["gw_ts = getCurrentTimestamp()\ngw_hmac = HMAC-SHA256(\n  GW_SECRET, 'gw_id:gw_ts'\n)"]
-        G2["Build output JSON:\n{ gateway_id, gw_ts, gw_hmac,\n  sensor_id, sn_ts, sn_hmac,\n  data }"]
-        G3["HTTP POST → BACKEND_URL\nTimeout: 10s"]
-        G4{"HTTP 200?"}
+        G2["Build output JSON:\n{ gateway_id, gw_ts, gw_hmac,\n  gateway_ip, sensor_payload:\n  { sensor_id, sn_ts, sn_hmac,\n    data } }"]
+        G3["PubSubClient.publish(\n  'gateway/GW_ID/data',\n  payload\n)"]
+        G4{"Publish OK?"}
         OK5(["✅ return true"])
         ERR5(["❌ return false"])
     end
@@ -278,7 +280,7 @@ flowchart TD
     T3 -->|"✅ OK"| H1 --> H2
     H2 -->|"❌"| HE
     H2 -->|"✅"| G1 --> G2 --> G3 --> G4
-    G4 -->|"✅ 200"| OK5
+    G4 -->|"✅ OK"| OK5
     G4 -->|"❌"| ERR5
 ```
 
@@ -405,15 +407,16 @@ sequenceDiagram
     SN->>SN: sn_hmac = HMAC-SHA256(SECRET_KEY, msg)
     SN->>MQ: Publish {sensor_id, sn_ts, sn_hmac, data}
 
-    Note over GW,API: ══ EVENT: Message đến Gateway ══
+    Note over GW,MQ: ══ EVENT: Message đến Gateway ══
     MQ->>GW: local/sensors/SN-ID/data
     GW->>GW: ① Parse JSON
     GW->>GW: ② findSensorSecret → Whitelist OK
     GW->>GW: ③ |now − sn_ts| <= 300s → OK
     GW->>GW: ④ safeEq64(sn_hmac, expected) → OK
     GW->>GW: ⑤ gw_hmac = HMAC-SHA256(GW_SECRET, "gw_id:gw_ts")
-    GW->>API: HTTP POST /api/device/data
-    API-->>GW: HTTP 200 OK
+    GW->>MQ: MQTT Publish gateway/GW-ID/data
+    MQ->>API: Backend subscribe gateway/+/data
+    API->>API: Xác thực HMAC (2 lớp) → Lưu DB → Audit Log
     GW->>GW: 💡 Blink LED_FWD 100ms
 ```
 
@@ -426,6 +429,6 @@ sequenceDiagram
 | **HMAC-SHA256** | Cả hai | Ký/xác minh payload với secret key 256-bit | Giả mạo dữ liệu |
 | **Timestamp Window ±300s** | Gateway | Từ chối message cũ hơn 5 phút | Replay Attack |
 | **Constant-Time Compare** | Gateway | `safeEq64()` — không dừng sớm | Timing Attack |
-| **Sensor Whitelist** | Gateway | `KNOWN_SENSORS[]` tĩnh trong firmware | Thiết bị giả mạo |
+| **Sensor Whitelist** | Gateway | `KNOWN_SENSORS[]` cục bộ + dynamic fetch từ `/api/device/sensors` mỗi 5 phút | Thiết bị giả mạo |
 | **Dual Signature** | Gateway | Gửi cả sn_hmac + gw_hmac lên backend | Giả mạo gateway |
 | **Unique Keys** | Cả hai | Mỗi thiết bị có secret key riêng từ server | Blast radius khi lộ key |
