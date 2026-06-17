@@ -16,7 +16,7 @@ Hệ thống là một nền tảng IoT đầy đủ (full-stack) cho phép:
 - Hiển thị trạng thái thiết bị và biểu đồ cảm biến theo thời gian thực trên Dashboard Next.js
 - Phân quyền truy cập theo vai trò (Role-Based Access Control — RBAC) với 3 cấp: `admin`, `operator`, `viewer`
 
-Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 5 service (`docker-compose.yml`).
+Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 6 service (`docker-compose.yml`), bao gồm 2 MQTT broker độc lập.
 
 ---
 
@@ -29,7 +29,7 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 5 servic
     │  MQTT publish: local/sensors/{sensor_id}/data
     │  Payload: { sensor_id, sn_timestamp, sn_hmac, sensor_ip, data:{temperature,humidity} }
     ▼
-[Eclipse Mosquitto Broker] ── port 1883
+[MQTT Broker 1 — Eclipse Mosquitto :1883]   ← Lớp Sensor ↔ Gateway
     │
     │  (wildcard subscribe: local/sensors/+/data)
     ▼
@@ -39,9 +39,9 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 5 servic
     │  3. Verify sn_hmac cục bộ (HMAC#1)
     │  4. Tính gw_hmac = HMAC(GW_SECRET, gw_id:gw_ts)
     │  5. Build payload lồng ghép (sensor_payload)
-    │  MQTT publish: gateway/{gw_id}/data
+    │  MQTT publish: gateway/{gw_id}/data → Broker 2 :1884
     ▼
-[Eclipse Mosquitto Broker] ── port 1883
+[MQTT Broker 2 — Eclipse Mosquitto :1884]   ← Lớp Gateway → Backend
     │
     │  (Backend subscribe: gateway/+/data)
     ▼
@@ -66,7 +66,8 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 5 servic
 | Container | Image | Port host:container | Vai trò |
 |-----------|-------|---------------------|---------|
 | `iot-mysql` | mysql:8.0 | 3308:3306 | Cơ sở dữ liệu |
-| `iot-mosquitto` | eclipse-mosquitto:2 | 1883:1883 | MQTT Broker |
+| `iot-mqtt-broker-1` | eclipse-mosquitto:2 | 1883:1883 | MQTT Broker 1 — Sensor ↔ Gateway |
+| `iot-mqtt-broker-2` | eclipse-mosquitto:2 | 1884:1883 | MQTT Broker 2 — Gateway → Backend |
 | `iot-nginx` | nginx:alpine | 80:80 | Reverse proxy (single entry point) |
 | `iot-backend` | build từ `backend/Dockerfile.dev` | 5000:5000 | API server |
 | `iot-frontend` | build từ `frontend/Dockerfile.dev` | 3000:3000 | Dashboard |
@@ -82,7 +83,7 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 5 servic
 | Backend | Node.js + Express + TypeScript | — |
 | Database | MySQL 8.0 | 5 bảng, tự động migrate khi khởi động |
 | Frontend | Next.js 16 | SWR polling, Recharts |
-| Container | Docker Compose | 5 service |
+| Container | Docker Compose | 6 service (2 MQTT broker độc lập) |
 | Proxy | Nginx alpine | `/api/*` → backend, `/*` → frontend |
 
 ---
@@ -428,9 +429,9 @@ Chi tiết từng bước end-to-end mỗi 5 giây:
     │  2. Lấy unix timestamp từ NTP
     │  3. Tính sn_hmac = HMAC-SHA256(SECRET_KEY, "DEVICE_ID:timestamp")
     │  4. Build JSON payload (xem mẫu ở mục 3.1.1)
-    │  5. mqttClient.publish("local/sensors/ESP32-SN-XXXX/data", payload)
+    │  5. mqttClient.publish("local/sensors/ESP32-SN-XXXX/data", payload) → Broker 1 :1883
     ▼
-[Mosquitto Broker — port 1883]
+[MQTT Broker 1 — Mosquitto :1883]   ← Sensor ↔ Gateway layer
     ▼
 [Gateway Node — firmware/gateway-node/lib/forwarder/forwarder.cpp]
     │  Callback onSensorMessage() được kích hoạt:
@@ -440,9 +441,9 @@ Chi tiết từng bước end-to-end mỗi 5 giây:
     │  4. Tính lại sn_hmac từ sensor secret, so sánh bằng safeEq64()
     │  5. Tính gw_hmac = HMAC-SHA256(GW_SECRET_KEY, "GW_ID:gw_timestamp")
     │  6. Build payload lồng ghép (sensor_payload)
-    │  7. mqttClient.publish("gateway/ESP32-GW-XXXX/data", forwardedPayload)
+    │  7. mqttClient.publish("gateway/ESP32-GW-XXXX/data", forwardedPayload) → Broker 2 :1884
     ▼
-[Mosquitto Broker — port 1883]
+[MQTT Broker 2 — Mosquitto :1884]   ← Gateway → Backend layer
     ▼
 [Backend mqttDataService.ts]
     │  (Xem luồng xác thực chi tiết ở mục 4.2)
@@ -493,7 +494,7 @@ Frontend hiển thị:
 | 9 | Biểu đồ dữ liệu cảm biến theo thời gian thực | Đã triển khai | SWR 10s, Recharts, filter 1h/6h/24h |
 | 10 | Trạng thái online/offline thiết bị | Đã triển khai | `TIMESTAMPDIFF < 60s`, refresh 10s |
 | 11 | Audit log đầy đủ | Đã triển khai | 4 event types, filter, export |
-| 12 | Đóng gói Docker Compose | Đã triển khai | 5 service, Nginx entry point |
+| 12 | Đóng gói Docker Compose | Đã triển khai | 6 service (2 MQTT broker), Nginx entry point |
 | 13 | Giới hạn lưu trữ dữ liệu (max 150/sensor) | Đã triển khai | Auto-cleanup trong `mqttDataService.ts` |
 | 14 | Rate limiting API | Đã triển khai | 3 mức giới hạn khác nhau |
 | 15 | Quản lý người dùng (CRUD) | Đã triển khai | Admin tạo/xóa/đổi mật khẩu |
@@ -516,8 +517,8 @@ Dựa trên cấu trúc hiện tại của hệ thống, các phần sau đây c
 - Mục đích: Cho phép thiết bị xác thực bằng long-lived token thay vì HMAC per-request.
 
 ### 6.2. MQTT TLS/SSL
-- Hiện tại Mosquitto (`mosquitto/mosquitto.conf`) chạy plain TCP port 1883.
-- Cần bổ sung: Cấu hình TLS cert trong Mosquitto, cập nhật firmware để dùng WiFiClientSecure.
+- Hiện tại cả 2 broker chạy plain TCP: Broker 1 (`mosquitto/broker1/mosquitto.conf` :1883) và Broker 2 (`mosquitto/broker2/mosquitto.conf` :1884).
+- Cần bổ sung: Cấu hình TLS cert trong cả 2 file mosquitto.conf, cập nhật firmware để dùng WiFiClientSecure.
 
 ### 6.3. Realtime WebSocket
 - Frontend hiện dùng SWR polling 10 giây. Có thể nâng cấp lên WebSocket (Socket.io hoặc ws native) để giảm latency.

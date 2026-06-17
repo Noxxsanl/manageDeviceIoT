@@ -342,7 +342,7 @@ Hệ thống triển khai xác thực **hai lớp HMAC độc lập** — vượ
     │  4. Publish topic "local/sensors/{DEVICE_ID}/data":
     │     { sensor_id, sn_timestamp, sn_hmac, sensor_ip, data:{temperature,humidity} }
     ▼
-[Mosquitto Broker :1883] ── wildcard subscribe: local/sensors/+/data
+[MQTT Broker 1 — Mosquitto :1883] ── wildcard subscribe: local/sensors/+/data
     ▼
 [Gateway Node — firmware/gateway-node/lib/forwarder/forwarder.cpp]
     │  Điều kiện: NTP synced ✓ (kiểm tra trước khi callback)
@@ -356,9 +356,9 @@ Hệ thống triển khai xác thực **hai lớp HMAC độc lập** — vượ
     │  10. gw_timestamp = getCurrentTimestamp()
     │  11. gw_hmac = HMAC-SHA256(GW_SECRET_KEY, "GW_ID:gw_timestamp")
     │  12. Build payload lồng ghép: { gateway_id, gw_timestamp, gw_hmac, sensor_payload:{...} }
-    │  13. Publish topic "gateway/{GW_DEVICE_ID}/data"
+    │  13. Publish topic "gateway/{GW_DEVICE_ID}/data" → Broker 2 :1884
     ▼
-[Mosquitto Broker :1883] ── subscribe: gateway/+/data
+[MQTT Broker 2 — Mosquitto :1884] ── subscribe: gateway/+/data
     ▼
 [Backend — backend/src/services/mqttDataService.ts]
     │  LEVEL 1 — Xác thực Gateway:
@@ -729,7 +729,7 @@ Request từ origin khác (cross-site) bị trình duyệt từ chối ở prefl
 | 16 | NTP guard trước khi gửi/forward | Hoàn thành (ngoài yêu cầu gốc) | Cả Sensor Node và Gateway Node kiểm tra `ntpIsSynced()` trước khi gửi |
 | 17 | Buffer overflow protection firmware | Hoàn thành (ngoài yêu cầu gốc) | Giới hạn `copyLen = min(length, MQTT_BUFFER_SIZE - 1)` trong mqtt_client.cpp |
 | 18 | Session token dài hạn cho thiết bị | Đã triển khai một phần | Schema `device_tokens` tồn tại, chưa có route sử dụng |
-| 19 | MQTT TLS/SSL | Chưa triển khai | Plain TCP `WiFiClient`, Mosquitto plain 1883 |
+| 19 | MQTT TLS/SSL | Chưa triển khai | Plain TCP `WiFiClient`, Mosquitto plain — Broker 1 :1883 và Broker 2 :1884 đều không TLS |
 | 20 | HTTPS | Chưa triển khai | Nginx HTTP port 80, không SSL |
 
 ---
@@ -763,7 +763,7 @@ Request từ origin khác (cross-site) bị trình duyệt từ chối ở prefl
 | # | Hạn chế | Chi tiết |
 |---|---------|---------|
 | 13 | **Nginx HTTP only** | Port 80, không SSL certificate — dữ liệu HTTP (API, cookie JWT) truyền plain text |
-| 14 | **Mosquitto plain TCP** | Port 1883, không TLS — dữ liệu MQTT truyền plain text trong mạng LAN |
+| 14 | **Mosquitto plain TCP** | Broker 1 :1883 và Broker 2 :1884, không TLS — dữ liệu MQTT truyền plain text trong mạng LAN |
 
 ---
 
@@ -773,7 +773,7 @@ Request từ origin khác (cross-site) bị trình duyệt từ chối ở prefl
 
 1. **Bật HTTPS + MQTT TLS:**
    - Nginx: thêm SSL certificate, redirect HTTP→HTTPS
-   - Mosquitto: cấu hình TLS port 8883 (`mosquitto/mosquitto.conf`)
+   - Mosquitto: cấu hình TLS port 8883 cho cả `mosquitto/broker1/mosquitto.conf` và `mosquitto/broker2/mosquitto.conf`
    - Firmware: chuyển sang `WiFiClientSecure`, set ca_cert cho server certificate
 
 2. **Gitignore config firmware:**

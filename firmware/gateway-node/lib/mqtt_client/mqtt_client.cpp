@@ -5,8 +5,14 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-static WiFiClient   espClient;
-static PubSubClient mqttClient(espClient);
+// Broker 1: Gateway subscribes sensor data (local/sensors/+/data)
+static WiFiClient   espSubClient;
+static PubSubClient mqttSubClient(espSubClient);
+
+// Broker 2: Gateway publishes forwarded data to backend (gateway/<id>/data)
+static WiFiClient   espPubClient;
+static PubSubClient mqttPubClient(espPubClient);
+
 static MessageCallback _userCallback = nullptr;
 
 static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
@@ -17,58 +23,106 @@ static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     memcpy(buf, payload, copyLen);
     buf[copyLen] = '\0';
 
-    Serial.printf("[MQTT] Received on '%s' (%u bytes)\n", topic, length);
+    Serial.println("\n[MQTT-SUB] ══════════════════════════════════════════════");
+    Serial.printf("[MQTT-SUB]   topic  : %s\n", topic);
+    Serial.printf("[MQTT-SUB]   size   : %u bytes\n", length);
+    if (length > 0) {
+        unsigned int previewLen = copyLen < 300 ? copyLen : 300;
+        char preview[301];
+        memcpy(preview, buf, previewLen);
+        preview[previewLen] = '\0';
+        Serial.printf("[MQTT-SUB]   payload: %s%s\n", preview, copyLen > 300 ? " ..." : "");
+    }
+    Serial.println("[MQTT-SUB] ──────────────────────────────────────────────");
+
     _userCallback(topic, buf, copyLen);
 }
 
-static bool mqttConnect() {
+// Connect to Broker 1 and subscribe to sensor data
+static bool mqttSubConnect() {
     char clientId[48];
-    snprintf(clientId, sizeof(clientId), "gw-%s", GW_DEVICE_ID);
-    Serial.printf("[MQTT] Connecting as '%s'...", clientId);
+    snprintf(clientId, sizeof(clientId), "gw-sub-%s", GW_DEVICE_ID);
+    Serial.printf("[MQTT-SUB] Connecting to Broker1 %s:%d as '%s'...",
+                  MQTT_BROKER1_HOST, MQTT_BROKER1_PORT, clientId);
 
-    if (!mqttClient.connect(clientId)) {
-        Serial.printf(" FAILED (rc=%d)\n", mqttClient.state());
+    if (!mqttSubClient.connect(clientId)) {
+        Serial.printf(" FAILED (rc=%d)\n", mqttSubClient.state());
         return false;
     }
     Serial.println(" OK");
 
     const char* subTopic = "local/sensors/+/data";
-    if (mqttClient.subscribe(subTopic)) {
-        Serial.printf("[MQTT] Subscribed to '%s'\n", subTopic);
+    if (mqttSubClient.subscribe(subTopic)) {
+        Serial.printf("[MQTT-SUB] Subscribed to '%s'\n", subTopic);
     } else {
-        Serial.printf("[MQTT] Subscribe FAILED for '%s'\n", subTopic);
+        Serial.printf("[MQTT-SUB] Subscribe FAILED for '%s'\n", subTopic);
     }
+    return true;
+}
+
+// Connect to Broker 2 for publishing to backend
+static bool mqttPubConnect() {
+    char clientId[48];
+    snprintf(clientId, sizeof(clientId), "gw-%s", GW_DEVICE_ID);
+    Serial.printf("[MQTT-PUB] Connecting to Broker2 %s:%d as '%s'...",
+                  MQTT_BROKER2_HOST, MQTT_BROKER2_PORT, clientId);
+
+    if (!mqttPubClient.connect(clientId)) {
+        Serial.printf(" FAILED (rc=%d)\n", mqttPubClient.state());
+        return false;
+    }
+    Serial.println(" OK");
     return true;
 }
 
 void mqttClientSetup(MessageCallback cb) {
     _userCallback = cb;
-    mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-    mqttClient.setBufferSize(MQTT_BUFFER_SIZE);
-    mqttClient.setCallback(onMqttMessage);
-    Serial.printf("[MQTT] Broker: %s:%d\n", MQTT_HOST, MQTT_PORT);
+
+    // Broker 1 – subscribe side
+    mqttSubClient.setServer(MQTT_BROKER1_HOST, MQTT_BROKER1_PORT);
+    mqttSubClient.setBufferSize(MQTT_BUFFER_SIZE);
+    mqttSubClient.setCallback(onMqttMessage);
+    Serial.printf("[MQTT-SUB] Broker1: %s:%d\n", MQTT_BROKER1_HOST, MQTT_BROKER1_PORT);
+
+    // Broker 2 – publish side (no callback needed)
+    mqttPubClient.setServer(MQTT_BROKER2_HOST, MQTT_BROKER2_PORT);
+    mqttPubClient.setBufferSize(MQTT_BUFFER_SIZE);
+    Serial.printf("[MQTT-PUB] Broker2: %s:%d\n", MQTT_BROKER2_HOST, MQTT_BROKER2_PORT);
 }
 
 void mqttClientMaintain() {
     if (!wifiIsConnected()) return;
 
-    if (mqttClient.connected()) {
-        mqttClient.loop();
-        return;
+    // Maintain Broker 1 (subscribe)
+    if (mqttSubClient.connected()) {
+        mqttSubClient.loop();
+    } else {
+        static unsigned long lastSubAttempt = 0;
+        if (millis() - lastSubAttempt >= MQTT_RECONNECT_INTERVAL_MS) {
+            lastSubAttempt = millis();
+            mqttSubConnect();
+        }
     }
 
-    static unsigned long lastAttempt = 0;
-    if (millis() - lastAttempt >= MQTT_RECONNECT_INTERVAL_MS) {
-        lastAttempt = millis();
-        mqttConnect();
+    // Maintain Broker 2 (publish)
+    if (mqttPubClient.connected()) {
+        mqttPubClient.loop();
+    } else {
+        static unsigned long lastPubAttempt = 0;
+        if (millis() - lastPubAttempt >= MQTT_RECONNECT_INTERVAL_MS) {
+            lastPubAttempt = millis();
+            mqttPubConnect();
+        }
     }
 }
 
+// Returns true when the publish path (Broker 2) is ready
 bool mqttClientIsConnected() {
-    return mqttClient.connected();
+    return mqttPubClient.connected();
 }
 
+// Publish via Broker 2 (gateway → backend)
 bool mqttClientPublish(const char* topic, const char* payload, unsigned int length) {
-    if (!mqttClient.connected()) return false;
-    return mqttClient.publish(topic, (const uint8_t*)payload, length, false);
+    if (!mqttPubClient.connected()) return false;
+    return mqttPubClient.publish(topic, (const uint8_t*)payload, length, false);
 }

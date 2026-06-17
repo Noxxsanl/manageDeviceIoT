@@ -12,17 +12,18 @@
 flowchart LR
     DHT22["🌡️ DHT22\nSensor"]
     SN["⚡ Sensor Node\nESP32 DOIT V1"]
-    BROKER["📡 MQTT Broker\nMosquitto :1883"]
+    BROKER1["📡 MQTT Broker 1\nMosquitto :1883"]
     GW["🔀 Gateway Node\nESP32 DOIT V1"]
+    BROKER2["📡 MQTT Broker 2\nMosquitto :1884"]
     BE["⚙️ Backend API\nExpress.js :5000"]
     DB["🗄️ Database\nMySQL 8.0"]
     FE["📊 Dashboard\nNext.js :3000"]
 
     DHT22 -->|"GPIO4 · 1-Wire"| SN
-    SN -->|"MQTT Publish\nJSON + HMAC-SHA256\ntopic: local/sensors/{id}/data"| BROKER
-    BROKER -->|"MQTT Subscribe\nwildcard: local/sensors/+/data"| GW
-    GW -->|"Validate → Re-sign\nMQTT Publish: gateway/{gw_id}/data"| BROKER
-    BROKER -->|"MQTT Subscribe\nwildcard: gateway/+/data"| BE
+    SN -->|"MQTT Publish\nJSON + HMAC-SHA256\ntopic: local/sensors/{id}/data"| BROKER1
+    BROKER1 -->|"MQTT Subscribe\nwildcard: local/sensors/+/data"| GW
+    GW -->|"Validate → Re-sign\nMQTT Publish: gateway/{gw_id}/data"| BROKER2
+    BROKER2 -->|"MQTT Subscribe\nwildcard: gateway/+/data"| BE
     BE --> DB --> FE
 ```
 
@@ -45,7 +46,8 @@ flowchart TB
     end
 
     subgraph MSG_LAYER ["📡 Lớp Giao Tiếp"]
-        MQTT["📡 MQTT Broker\nMosquitto · :1883\nlocal/sensors/+/data\ngateway/+/data"]
+        MQTT1["📡 MQTT Broker 1\nMosquitto · :1883\nlocal/sensors/+/data"]
+        MQTT2["📡 MQTT Broker 2\nMosquitto · :1884\ngateway/+/data"]
     end
 
     subgraph FW_LAYER ["🔌 Lớp Firmware — ESP32"]
@@ -60,10 +62,10 @@ flowchart TB
     FE     -- "GET /api/devices\nGET /api/devices/:id/data\nGET /api/dashboard/stats" --> API
     API    -- "JSON response"                                  --> FE
     API   <-- "SQL Query / INSERT"                            --> DB
-    API    -- "MQTT Subscribe\ngateway/+/data"                --> MQTT
-    GW     -- "MQTT Publish\ngateway/{gw_id}/data\n{gw_hmac, sn_hmac, data}" --> MQTT
-    SN     -- "MQTT Publish\nlocal/sensors/{id}/data\nJSON + HMAC-SHA256"    --> MQTT
-    MQTT   -- "Subscribe\nlocal/sensors/+/data"               --> GW
+    API    -- "MQTT Subscribe\ngateway/+/data"                --> MQTT2
+    GW     -- "MQTT Publish\ngateway/{gw_id}/data\n{gw_hmac, sn_hmac, data}" --> MQTT2
+    SN     -- "MQTT Publish\nlocal/sensors/{id}/data\nJSON + HMAC-SHA256"    --> MQTT1
+    MQTT1  -- "Subscribe\nlocal/sensors/+/data"               --> GW
     DHT    -- "GPIO4 · 1-Wire · đọc mỗi 5s"                  --> SN
 ```
 
@@ -87,11 +89,11 @@ flowchart TD
         G1["① Subscribe MQTT: local/sensors/+/data"]
         G2["② Validate: Whitelist + Timestamp + HMAC"]
         G3["③ Re-sign Gateway HMAC"]
-        G4["④ MQTT Publish → gateway/{gw_id}/data"]
+        G4["④ MQTT Publish → Broker 2 :1884\ngateway/{gw_id}/data"]
         G1 --> G2 --> G3 --> G4
     end
 
-    S4 -->|"MQTT Broker"| G1
+    S4 -->|"MQTT Broker 1 :1883"| G1
 ```
 
 ---
@@ -386,36 +388,38 @@ sequenceDiagram
     participant DHT as 🌡️ DHT22
     participant SN as ⚡ Sensor Node
     participant NTP as 🕐 NTP Server
-    participant MQ as 📡 MQTT Broker
+    participant MQ1 as 📡 MQTT Broker 1
+    participant MQ2 as 📡 MQTT Broker 2
     participant GW as 🔀 Gateway Node
     participant API as ⚙️ Backend API
 
     Note over SN,NTP: ══ SETUP: Sensor Node ══
     SN->>NTP: configTime(UTC+7) + getLocalTime
     NTP-->>SN: Unix timestamp ✅
-    SN->>MQ: MQTT Connect
+    SN->>MQ1: MQTT Connect
 
     Note over GW,NTP: ══ SETUP: Gateway Node ══
     GW->>NTP: configTime(UTC+7) + getLocalTime
     NTP-->>GW: Unix timestamp ✅
-    GW->>MQ: MQTT Subscribe local/sensors/+/data
+    GW->>MQ1: MQTT Subscribe local/sensors/+/data
+    GW->>MQ2: MQTT Connect (Broker 2 :1884)
 
     Note over SN,DHT: ══ LOOP mỗi 5 giây ══
     SN->>DHT: readHumidity() + readTemperature()
     DHT-->>SN: {temp: 28.5°C, humidity: 65.2%}
     SN->>SN: msg = "DEVICE_ID:timestamp"
     SN->>SN: sn_hmac = HMAC-SHA256(SECRET_KEY, msg)
-    SN->>MQ: Publish {sensor_id, sn_ts, sn_hmac, data}
+    SN->>MQ1: Publish {sensor_id, sn_ts, sn_hmac, data}
 
-    Note over GW,MQ: ══ EVENT: Message đến Gateway ══
-    MQ->>GW: local/sensors/SN-ID/data
+    Note over GW,MQ1: ══ EVENT: Message đến Gateway ══
+    MQ1->>GW: local/sensors/SN-ID/data
     GW->>GW: ① Parse JSON
     GW->>GW: ② findSensorSecret → Whitelist OK
     GW->>GW: ③ |now − sn_ts| <= 300s → OK
     GW->>GW: ④ safeEq64(sn_hmac, expected) → OK
     GW->>GW: ⑤ gw_hmac = HMAC-SHA256(GW_SECRET, "gw_id:gw_ts")
-    GW->>MQ: MQTT Publish gateway/GW-ID/data
-    MQ->>API: Backend subscribe gateway/+/data
+    GW->>MQ2: MQTT Publish gateway/GW-ID/data
+    MQ2->>API: Backend subscribe gateway/+/data
     API->>API: Xác thực HMAC (2 lớp) → Lưu DB → Audit Log
     GW->>GW: 💡 Blink LED_FWD 100ms
 ```

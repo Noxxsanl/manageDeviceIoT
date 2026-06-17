@@ -208,11 +208,17 @@ Hệ thống có 3 luồng chính. Mọi trường hợp triển khai (test hay 
 
 `  `│  ESP32   │      ║  │ MOSQUITTO│   │  NODE.JS BACKEND │   ║
 
-`  `│ Gateway  │─MQTT►║  │  BROKER  │──►│  - REST API      │   ║
+`  `│ Gateway  │─MQTT►║  │ BROKER 2 │──►│  - REST API      │   ║
 
-`  `│  Node    │      ║  │  :1883   │   │  - MQTT Handler  │   ║
+`  `│  Node    │  :1884║  │  :1884   │   │  - MQTT Handler  │   ║
 
-`  `└────▲─────┘      ║  │  :8883   │   │  - HMAC Service  │   ║
+`  `└────▲─────┘      ║  └──────────┘   │  - HMAC Service  │   ║
+
+`       `│            ║  ┌──────────┐   │                  │   ║
+
+`       `│(Subscribe) ║  │ BROKER 1 │   │                  │   ║
+
+`       `│  :1883     ║  │  :1883   │   │                  │   ║
 
 `       `│MQTT local  ║  └──────────┘   │  - WebSocket     │   ║
 

@@ -476,7 +476,7 @@
         <div class="card green">
           <div class="card-icon">📶</div>
           <div class="card-title">Gateway Node (ESP32-S3)</div>
-          <div class="card-desc">Nhận dữ liệu từ MQTT, xác thực, ký HMAC gateway rồi forward lên Backend qua HTTP.</div>
+          <div class="card-desc">Subscribe Broker 1 (1883), xác thực HMAC sensor, ký HMAC gateway rồi MQTT Publish sang Broker 2 (1884) để Backend nhận.</div>
         </div>
         <div class="card violet">
           <div class="card-icon">🖥️</div>
@@ -506,40 +506,49 @@
       <span class="section-tag">02 — Kiến trúc</span>
       <h2>Sơ đồ kiến trúc hệ thống</h2>
 
-      <div class="arch-diagram"><span class="c-muted">┌─────────────────── Môi trường vật lý (LAN) ───────────────────┐</span>
-<span class="c-muted">│</span>                                                               <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">┌──────────────┐</span>     MQTT      <span class="c-green">┌──────────────────┐</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│ Sensor Node  │</span>   ──────────► <span class="c-green">│  Gateway Node    │</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│  (ESP32)     │</span>   topic:      <span class="c-green">│   (ESP32-S3)     │</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│              │</span>   local/      <span class="c-green">│                  │</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│ DHT22 Sensor │</span>   sensors/    <span class="c-green">│ MQTT Subscriber  │</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│ HMAC-SHA256  │</span>   {id}/data   <span class="c-green">│ HMAC Verifier    │</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">└──────────────┘</span>              <span class="c-green">│ HTTP Forwarder   │</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>                               <span class="c-green">└────────┬─────────┘</span>          <span class="c-muted">│</span>
-<span class="c-muted">│</span>                                        <span class="c-muted">│ HTTP POST</span>           <span class="c-muted">│</span>
-<span class="c-muted">└────────────────────────────────────────┼──────────────────────┘</span>
-                                         <span class="c-muted">▼</span>
-<span class="c-muted">┌──────────────────── Cloud / Server ─────────────────────────────┐</span>
-<span class="c-muted">│</span>                                                                  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">┌──────────────────────────────────────────────────────────┐</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">│              Backend REST API (Node.js + Express)        │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">│                                                          │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">│  /api/device/data  ◄── validateDevice (HMAC 2 lớp)      │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">│  /api/devices      ◄── JWT Auth + RBAC                  │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">│  /api/auth         ◄── bcrypt + Rate Limit               │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">│  /api/audit-log    ◄── Ghi nhật ký toàn bộ sự kiện      │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-violet">└──────────────────────────────┬───────────────────────────┘</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>                                <span class="c-muted">│</span>                                <span class="c-muted">│</span>
-<span class="c-muted">│</span>      <span class="c-amber">┌──────────────┐</span>          <span class="c-amber">▼</span>                                <span class="c-muted">│</span>
-<span class="c-muted">│</span>      <span class="c-amber">│  MySQL DB    │◄─────────── sensor_data, devices,        │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>      <span class="c-amber">└──────────────┘</span>          <span class="c-amber">users, audit_log</span>                <span class="c-muted">│</span>
-<span class="c-muted">│</span>                                                                  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">┌──────────────────────────────────────────────────────────┐</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│              Frontend Dashboard (Next.js)                │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│                                                          │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">│  Dashboard / Devices / Sensor Charts / Audit / Users     │</span>  <span class="c-muted">│</span>
-<span class="c-muted">│</span>  <span class="c-blue">└──────────────────────────────────────────────────────────┘</span>  <span class="c-muted">│</span>
-<span class="c-muted">└──────────────────────────────────────────────────────────────────┘</span></div>
+      <div class="arch-diagram"><span class="c-muted">┌──────────────────── Môi trường vật lý (LAN) ───────────────────────┐</span>
+<span class="c-muted">│</span>                                                                     <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">┌──────────────┐</span>  MQTT :1883    <span class="c-amber">┌──────────────────┐</span>            <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│ Sensor Node  │</span>  ────────────► <span class="c-amber">│  Broker 1 :1883  │</span>            <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│  (ESP32)     │</span>  local/sensors/ <span class="c-amber">│  Sensor↔Gateway  │</span>            <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│ DHT22 Sensor │</span>  {id}/data      <span class="c-amber">└────────┬─────────┘</span>            <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│ HMAC-SHA256  │</span>                <span class="c-muted">│ MQTT Subscribe</span>               <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">└──────────────┘</span>                <span class="c-muted">▼</span>                               <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">┌──────────────────┐</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">│  Gateway Node    │</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">│   (ESP32-S3)     │</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">│ MQTT Subscriber  │</span> ◄─ Broker 1       <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">│ HMAC Verifier    │</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">│ MQTT Publisher   │</span> ──► Broker 2      <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-green">└────────┬─────────┘</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                      MQTT :1884 <span class="c-muted">│</span>  gateway/{id}/data            <span class="c-muted">│</span>
+<span class="c-muted">│</span>                                 <span class="c-muted">▼</span>                               <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-amber">┌──────────────────┐</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-amber">│  Broker 2 :1884  │</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-amber">│  Gateway↔Backend │</span>                    <span class="c-muted">│</span>
+<span class="c-muted">│</span>                          <span class="c-amber">└────────┬─────────┘</span>                    <span class="c-muted">│</span>
+<span class="c-muted">└───────────────────────────────────┼──────────────────────────────┘</span>
+                                    <span class="c-muted">▼ MQTT Subscribe gateway/+/data</span>
+<span class="c-muted">┌──────────────────── Server ──────────────────────────────────────────┐</span>
+<span class="c-muted">│</span>                                                                       <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">┌──────────────────────────────────────────────────────────────┐</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│              Backend REST API (Node.js + Express)            │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│                                                              │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  mqttDataService  ◄── gateway/+/data (Broker 2, HMAC 2 lớp) │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/devices     ◄── JWT Auth + RBAC                       │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/auth        ◄── bcrypt + Rate Limit                   │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">│  /api/audit-log   ◄── Ghi nhật ký toàn bộ sự kiện          │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-violet">└──────────────────────────────┬───────────────────────────────┘</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>                                <span class="c-muted">│</span>                                   <span class="c-muted">│</span>
+<span class="c-muted">│</span>      <span class="c-amber">┌──────────────┐</span>          <span class="c-amber">▼</span>                                   <span class="c-muted">│</span>
+<span class="c-muted">│</span>      <span class="c-amber">│  MySQL DB    │◄─────────── sensor_data, devices,           │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>      <span class="c-amber">└──────────────┘</span>          <span class="c-amber">users, audit_log</span>                   <span class="c-muted">│</span>
+<span class="c-muted">│</span>                                                                       <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">┌──────────────────────────────────────────────────────────────┐</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│              Frontend Dashboard (Next.js)                    │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">│  Dashboard / Devices / Sensor Charts / Audit / Users         │</span>  <span class="c-muted">│</span>
+<span class="c-muted">│</span>  <span class="c-blue">└──────────────────────────────────────────────────────────────┘</span>  <span class="c-muted">│</span>
+<span class="c-muted">└───────────────────────────────────────────────────────────────────────┘</span></div>
     </section>
 
     <!--  3. TECH STACK  -->
@@ -586,11 +595,11 @@
         <div class="card">
           <h3>🏗️ Infrastructure</h3>
           <ul style="color:var(--muted); font-size:13.5px; padding-left:18px; line-height:2.1">
-            <li>Mosquitto MQTT Broker (local LAN)</li>
+            <li>Mosquitto Broker 1 – Sensor ↔ Gateway: port <code style="color:#38bdf8">1883</code></li>
+            <li>Mosquitto Broker 2 – Gateway ↔ Backend: port <code style="color:#38bdf8">1884</code></li>
             <li>MySQL 8.x</li>
-            <li>Cổng Backend: <code style="color:#38bdf8">3000</code></li>
-            <li>Cổng Frontend: <code style="color:#38bdf8">3001</code></li>
-            <li>MQTT: <code style="color:#38bdf8">1883</code></li>
+            <li>Cổng Backend: <code style="color:#38bdf8">5000</code></li>
+            <li>Cổng Frontend: <code style="color:#38bdf8">3000</code></li>
           </ul>
         </div>
       </div>
@@ -715,8 +724,14 @@
 <span class="c-green">DB_PASS</span>=your_mysql_password
 <span class="c-green">DB_NAME</span>=iot_manager
 <span class="c-amber">JWT_SECRET</span>=your-super-secret-jwt-key-at-least-32-chars-long
-<span class="c-blue">PORT</span>=3000
-<span class="c-violet">FRONTEND_URL</span>=http://localhost:3001</pre>
+<span class="c-blue">PORT</span>=5000
+
+<span class="c-muted"># MQTT Broker 2 (Gateway → Backend layer)</span>
+<span class="c-muted"># Local dev: localhost:1884 | Docker: overridden to mqtt-broker-2:1883</span>
+<span class="c-green">MQTT_HOST</span>=localhost
+<span class="c-green">MQTT_PORT</span>=1884
+
+<span class="c-violet">FRONTEND_URL</span>=http://localhost:3000</pre>
             </div>
             <div class="alert warning">
               ⚠️ <strong>JWT_SECRET</strong> phải dài ít nhất 32 ký tự. Backend sẽ từ chối khởi động nếu thiếu.
@@ -891,8 +906,8 @@ curl -b cookies.txt -X POST http://localhost:3000/api/devices/register \
 <span class="c-blue">#define</span> <span class="c-green">WIFI_SSID</span>   <span class="c-amber">"TenWifi"</span>
 <span class="c-blue">#define</span> <span class="c-green">WIFI_PASS</span>   <span class="c-amber">"MatKhauWifi"</span>
 
-<span class="c-blue">#define</span> <span class="c-green">MQTT_HOST</span>   <span class="c-amber">"192.168.1.100"</span>           <span class="c-muted">// IP máy chạy Mosquitto</span>
-<span class="c-blue">#define</span> <span class="c-green">MQTT_PORT</span>   1883
+<span class="c-blue">#define</span> <span class="c-green">MQTT_HOST</span>   <span class="c-amber">"192.168.1.100"</span>           <span class="c-muted">// IP Broker 1 (Sensor→Gateway)</span>
+<span class="c-blue">#define</span> <span class="c-green">MQTT_PORT</span>   1883                          <span class="c-muted">// Broker 1 port</span>
 
 <span class="c-blue">#define</span> <span class="c-green">DHT_PIN</span>     4                         <span class="c-muted">// GPIO kết nối DHT22</span>
 <span class="c-blue">#define</span> <span class="c-green">SEND_INTERVAL</span> 5000                   <span class="c-muted">// ms - gửi mỗi 5 giây</span></pre>
@@ -916,8 +931,13 @@ curl -b cookies.txt -X POST http://localhost:3000/api/devices/register \
 <span class="c-blue">#define</span> <span class="c-green">WIFI_SSID</span>      <span class="c-amber">"TenWifi"</span>
 <span class="c-blue">#define</span> <span class="c-green">WIFI_PASS</span>      <span class="c-amber">"MatKhauWifi"</span>
 
-<span class="c-blue">#define</span> <span class="c-green">MQTT_HOST</span>      <span class="c-amber">"192.168.1.100"</span>
-<span class="c-blue">#define</span> <span class="c-green">BACKEND_URL</span>    <span class="c-amber">"http://192.168.1.100:3000/api/device/data"</span>
+<span class="c-muted">// Broker 1 – Subscribe sensor data (local/sensors/+/data)</span>
+<span class="c-blue">#define</span> <span class="c-green">MQTT_BROKER1_HOST</span>  <span class="c-amber">"192.168.1.100"</span>
+<span class="c-blue">#define</span> <span class="c-green">MQTT_BROKER1_PORT</span>  1883
+
+<span class="c-muted">// Broker 2 – Publish gateway data to Backend (gateway/{id}/data)</span>
+<span class="c-blue">#define</span> <span class="c-green">MQTT_BROKER2_HOST</span>  <span class="c-amber">"192.168.1.100"</span>
+<span class="c-blue">#define</span> <span class="c-green">MQTT_BROKER2_PORT</span>  1884
 
 <span class="c-muted">// Thêm sensor vào danh sách cho phép:</span>
 <span class="c-blue">static const</span> SensorCredential KNOWN_SENSORS[] = {
@@ -1082,21 +1102,23 @@ Password: <span class="c-green">admin123</span></pre>
       <div class="code-block">
         <div class="code-header">
           <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
-          <span>Payload gửi lên /api/device/data</span>
+          <span>MQTT payload topic gateway/{gw_id}/data — Broker 2 :1884</span>
         </div>
         <pre>{
   <span class="c-blue">"gateway_id"</span>:  <span class="c-amber">"ESP32-GW-EFGH5678"</span>,
-  <span class="c-blue">"gw_timestamp"</span>: 1716192000,
+  <span class="c-blue">"gateway_ip"</span>:  <span class="c-amber">"192.168.1.101"</span>,
+  <span class="c-blue">"gw_timestamp"</span>: 1716192001,
   <span class="c-blue">"gw_hmac"</span>:     <span class="c-amber">"a1b2c3...hmac-sha256-hex"</span>,
 
-  <span class="c-blue">"sensor_id"</span>:   <span class="c-amber">"ESP32-SN-ABCD1234"</span>,
-  <span class="c-blue">"sn_timestamp"</span>: 1716191999,
-  <span class="c-blue">"sn_hmac"</span>:     <span class="c-amber">"d4e5f6...hmac-sha256-hex"</span>,
-
-  <span class="c-blue">"data"</span>: {
-    <span class="c-green">"temperature"</span>: 28.5,
-    <span class="c-green">"humidity"</span>:    65.2,
-    <span class="c-green">"timestamp"</span>:   <span class="c-amber">"2025-05-21T08:30:00Z"</span>
+  <span class="c-blue">"sensor_payload"</span>: {
+    <span class="c-green">"sensor_id"</span>:   <span class="c-amber">"ESP32-SN-ABCD1234"</span>,
+    <span class="c-green">"sn_timestamp"</span>: 1716191999,
+    <span class="c-green">"sn_hmac"</span>:     <span class="c-amber">"d4e5f6...hmac-sha256-hex"</span>,
+    <span class="c-green">"sensor_ip"</span>:   <span class="c-amber">"192.168.1.100"</span>,
+    <span class="c-green">"data"</span>: {
+      <span class="c-sky">"temperature"</span>: 28.5,
+      <span class="c-sky">"humidity"</span>:    65.2
+    }
   }
 }</pre>
       </div>
@@ -1107,13 +1129,15 @@ Password: <span class="c-green">admin123</span></pre>
         <div class="flow-arrow">→</div>
         <div class="flow-box">HMAC ký sensor</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-box">MQTT publish</div>
+        <div class="flow-box">MQTT Broker 1 :1883</div>
         <div class="flow-arrow">→</div>
         <div class="flow-box">Gateway nhận</div>
         <div class="flow-arrow">→</div>
         <div class="flow-box">HMAC ký gateway</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-box">HTTP POST Backend</div>
+        <div class="flow-box">MQTT Broker 2 :1884</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">Backend subscribe</div>
         <div class="flow-arrow">→</div>
         <div class="flow-box">Validate HMAC × 2</div>
         <div class="flow-arrow">→</div>
@@ -1199,11 +1223,14 @@ Password: <span class="c-green">admin123</span></pre>
         </tbody>
       </table>
 
-      <h3>Device Data (từ firmware)</h3>
+      <h3>Device Data (từ firmware — qua MQTT)</h3>
+      <p style="color:var(--muted); font-size:13.5px; margin-bottom:8px">
+        Gateway không gọi HTTP endpoint — dữ liệu được nhận qua MQTT Broker 2 :1884 (topic <code>gateway/+/data</code>).
+      </p>
       <table class="api-table">
-        <thead><tr><th>Method</th><th>Endpoint</th><th>Mô tả</th><th>Auth</th></tr></thead>
+        <thead><tr><th>MQTT Topic</th><th>Broker</th><th>Mô tả</th><th>Auth</th></tr></thead>
         <tbody>
-          <tr><td><span class="method POST">POST</span></td><td class="route-path">/device/data</td><td class="route-desc">Gateway gửi dữ liệu cảm biến (HMAC 2 lớp)</td><td>HMAC</td></tr>
+          <tr><td class="route-path">gateway/{gw_id}/data</td><td class="route-desc">Broker 2 :1884</td><td class="route-desc">Gateway publish dữ liệu cảm biến (HMAC 2 lớp, nested sensor_payload)</td><td>HMAC</td></tr>
         </tbody>
       </table>
 
@@ -1357,10 +1384,10 @@ String hmac_hex = toHexString(output);</pre>
         <div class="card">
           <h3>Chức năng</h3>
           <ul style="color:var(--muted); font-size:13.5px; padding-left:16px; line-height:2.1">
-            <li>Subscribe MQTT topic <code>local/sensors/+/data</code></li>
+            <li>Subscribe Broker 1 <code>local/sensors/+/data</code> qua <code>mqttSubClient</code></li>
             <li>Xác thực sensor HMAC trước khi forward</li>
-            <li>Ký HMAC gateway vào request</li>
-            <li>HTTP POST lên Backend <code>/api/device/data</code></li>
+            <li>Ký HMAC gateway vào payload</li>
+            <li>MQTT Publish sang Broker 2 <code>gateway/{id}/data</code> qua <code>mqttPubClient</code></li>
             <li>LED báo forward thành công (GPIO 5)</li>
             <li>Bỏ qua nếu NTP chưa đồng bộ</li>
           </ul>
@@ -1396,23 +1423,24 @@ String hmac_hex = toHexString(output);</pre>
         <div class="step">
           <div class="step-num">②</div>
           <div class="step-content">
-            <div class="step-title">Publish lên MQTT</div>
-            <p>Sensor publish JSON đến topic <code>local/sensors/ESP32-SN-xxx/data</code> trên Mosquitto broker.</p>
+            <div class="step-title">Publish lên MQTT Broker 1</div>
+            <p>Sensor publish JSON đến topic <code>local/sensors/ESP32-SN-xxx/data</code> trên <strong>Broker 1 :1883</strong>.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">③</div>
           <div class="step-content">
             <div class="step-title">Gateway nhận & forward</div>
-            <p>Gateway subscribe wildcard, nhận message, kiểm tra sensor có trong <code>KNOWN_SENSORS[]</code>,
-            ký thêm HMAC gateway, rồi HTTP POST lên Backend.</p>
+            <p>Gateway subscribe wildcard <code>local/sensors/+/data</code> trên <strong>Broker 1</strong>, nhận message,
+            kiểm tra sensor có trong <code>KNOWN_SENSORS[]</code> (hoặc registry động từ API),
+            ký thêm HMAC gateway, rồi MQTT Publish lên <strong>Broker 2 :1884</strong> topic <code>gateway/{id}/data</code>.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">④</div>
           <div class="step-content">
-            <div class="step-title">Backend xác thực HMAC × 2</div>
-            <p>Middleware <code>validateDevice</code> xác thực cả gateway HMAC lẫn sensor HMAC.
+            <div class="step-title">Backend nhận qua MQTT & xác thực HMAC × 2</div>
+            <p><code>mqttDataService</code> subscribe <code>gateway/+/data</code> trên Broker 2, xác thực cả gateway HMAC lẫn sensor HMAC.
             Nếu thất bại, tăng <code>fail_count</code>. Đến 5 lần → tự động block thiết bị.</p>
           </div>
         </div>
@@ -1440,7 +1468,7 @@ String hmac_hex = toHexString(output);</pre>
     <div style="text-align:center; color:var(--muted); font-size:13px; padding: 20px 0 40px;">
       <p>🛰️ <strong style="color:white">IoT Device Manager</strong> — Tài liệu hướng dẫn</p>
       <p style="margin-top:8px">Backend: Node.js + Express | Frontend: Next.js | Firmware: PlatformIO + Arduino</p>
-      <p style="margin-top:4px; font-size:12px;">Cập nhật lần cuối: 2026-05-21</p>
+      <p style="margin-top:4px; font-size:12px;">Cập nhật lần cuối: 2026-06-17 — kiến trúc dual-broker MQTT (Broker 1:1883 Sensor↔Gateway, Broker 2:1884 Gateway↔Backend)</p>
     </div>
 
   </main>

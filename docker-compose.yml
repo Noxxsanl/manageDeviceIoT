@@ -21,16 +21,31 @@ services:
       timeout: 5s
       retries: 5
 
-  mosquitto:
+  # Broker 1: Sensor Node → Gateway Node (port 1883)
+  mqtt-broker-1:
     image: eclipse-mosquitto:2
-    container_name: iot-mosquitto
+    container_name: iot-mosquitto-1
     restart: unless-stopped
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_logs:/mosquitto/log
+      - ./mosquitto/broker1/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto1_data:/mosquitto/data
+      - mosquitto1_logs:/mosquitto/log
+    networks:
+      - iot-network
+
+  # Broker 2: Gateway Node → Backend (port 1884)
+  mqtt-broker-2:
+    image: eclipse-mosquitto:2
+    container_name: iot-mosquitto-2
+    restart: unless-stopped
+    ports:
+      - "1884:1883"
+    volumes:
+      - ./mosquitto/broker2/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto2_data:/mosquitto/data
+      - mosquitto2_logs:/mosquitto/log
     networks:
       - iot-network
 
@@ -64,12 +79,14 @@ services:
       # Override host values so Docker always uses service names,
       # regardless of what DB_HOST/MQTT_HOST are set to in .env
       - DB_HOST=mysql
-      - MQTT_HOST=mosquitto
+      # Backend chỉ kết nối Broker 2 (gateway → backend layer)
+      - MQTT_HOST=mqtt-broker-2
+      - MQTT_PORT=1883
       - FRONTEND_URL=http://localhost
     depends_on:
       mysql:
         condition: service_healthy
-      mosquitto:
+      mqtt-broker-2:
         condition: service_started
     networks:
       - iot-network
@@ -98,8 +115,10 @@ services:
 
 volumes:
   mysql_data:
-  mosquitto_data:
-  mosquitto_logs:
+  mosquitto1_data:
+  mosquitto1_logs:
+  mosquitto2_data:
+  mosquitto2_logs:
 
 networks:
   iot-network:

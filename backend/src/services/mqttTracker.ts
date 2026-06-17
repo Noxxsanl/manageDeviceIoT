@@ -18,7 +18,8 @@ async function updateDeviceIp(clientId: string, ip: string): Promise<void> {
 
 export function startMqttTracker(): void {
   const host = process.env.MQTT_HOST || "localhost";
-  const port = Number(process.env.MQTT_PORT) || 1883;
+  // Default port 1884: Broker 2 (gateway → backend layer; $SYS logs contain gateway IPs)
+  const port = Number(process.env.MQTT_PORT) || 1884;
   const url = `mqtt://${host}:${port}`;
 
   const client = mqtt.connect(url, {

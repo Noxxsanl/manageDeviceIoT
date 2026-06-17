@@ -1,6 +1,6 @@
 # Hướng Dẫn Chạy Hệ Thống
 
-Hệ thống gồm 5 service Docker: **MySQL** · **Mosquitto (MQTT)** · **Backend (Node.js)** · **Frontend (Next.js)** · **Nginx (Reverse Proxy)**
+Hệ thống gồm 6 service Docker: **MySQL** · **Mosquitto Broker 1** · **Mosquitto Broker 2** · **Backend (Node.js)** · **Frontend (Next.js)** · **Nginx (Reverse Proxy)**
 
 ---
 
@@ -60,12 +60,13 @@ docker compose ps
 Kết quả mong đợi – tất cả `STATUS` phải là `running`:
 
 ```
-NAME              STATUS                  PORTS
-iot-nginx         running                 0.0.0.0:80->80/tcp
-iot-frontend      running                 0.0.0.0:3000->3000/tcp
-iot-backend       running (healthy)       0.0.0.0:5000->5000/tcp
-iot-mosquitto     running                 0.0.0.0:1883->1883/tcp
-iot-mysql         running (healthy)       0.0.0.0:3308->3306/tcp
+NAME                STATUS                  PORTS
+iot-nginx           running                 0.0.0.0:80->80/tcp
+iot-frontend        running                 0.0.0.0:3000->3000/tcp
+iot-backend         running (healthy)       0.0.0.0:5000->5000/tcp
+iot-mqtt-broker-1   running                 0.0.0.0:1883->1883/tcp
+iot-mqtt-broker-2   running                 0.0.0.0:1884->1883/tcp
+iot-mysql           running (healthy)       0.0.0.0:3308->3306/tcp
 ```
 
 ### Bước 5 – Truy cập
@@ -76,7 +77,8 @@ iot-mysql         running (healthy)       0.0.0.0:3308->3306/tcp
 | **Dashboard (trực tiếp)** | http://localhost:3000 |
 | **Backend API** | http://localhost:5000/api/health |
 | **MySQL (từ host)** | localhost:3308 |
-| **MQTT Broker** | localhost:1883 |
+| **MQTT Broker 1** (Sensor ↔ Gateway) | localhost:1883 |
+| **MQTT Broker 2** (Gateway → Backend) | localhost:1884 |
 
 **Tài khoản đăng nhập mặc định:**
 
@@ -91,10 +93,10 @@ Password: admin123
 
 Dùng khi cần debug từng thành phần mà không muốn dùng Docker.
 
-### 2.1 – Khởi động MySQL và Mosquitto qua Docker
+### 2.1 – Khởi động MySQL và MQTT Broker qua Docker
 
 ```bash
-docker compose up mysql mosquitto -d
+docker compose up mysql mqtt-broker-1 mqtt-broker-2 -d
 ```
 
 ### 2.2 – Chạy Backend
@@ -205,7 +207,8 @@ docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_m
 
 ```
 MySQL (healthy) ──► Backend ──► Frontend ──► Nginx
-Mosquitto ────────► Backend
+Broker 1 ────────► Gateway (ESP32)
+Broker 2 ────────► Backend
 ```
 Nginx là điểm vào duy nhất tại cổng 80: `/api/*` → Backend, `/*` → Frontend.
 
@@ -269,7 +272,7 @@ cat backend/.env
 
 - Đảm bảo `MQTT_HOST` trong `config.h` là IP máy chủ (không phải `localhost`)
 - Kiểm tra firewall không chặn port `1883`
-- Chạy `docker compose logs mosquitto` để xem broker log
+- Chạy `docker compose logs mqtt-broker-1` hoặc `docker compose logs mqtt-broker-2` để xem broker log
 
 **Lỗi: `Cannot connect to MySQL` trong backend log**
 

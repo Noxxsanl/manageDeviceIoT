@@ -9,17 +9,20 @@ managerDeviceIoT-RBAC/
 ├── frontend/            Next.js 16 + React 19 + TailwindCSS v4   → :3000
 ├── backend/             Express 5 + TypeScript + MySQL            → :5000
 ├── firmware/
-│   ├── gateway-node/    ESP32 DOIT V1: xác thực + forward qua MQTT
-│   └── sensor-node/     ESP32 DOIT V1: đọc DHT22 + publish MQTT
+│   ├── gateway-node/    ESP32 DOIT V1: xác thực + forward qua 2 MQTT broker
+│   ├── sensor-node/     ESP32 DOIT V1: đọc DHT22 + publish MQTT Broker 1
+│   └── sensor-node-2/   ESP32 DOIT V1: sensor thứ 2 (cấu hình tương tự)
 ├── database/
 │   └── migrations/      Schema MySQL 8.0
-├── mosquitto/           MQTT Broker (Eclipse Mosquitto 2)         → :1883
+├── mosquitto/
+│   ├── broker1/         MQTT Broker 1 (Sensor ↔ Gateway)         → :1883
+│   └── broker2/         MQTT Broker 2 (Gateway → Backend)        → :1884
 ├── nginx/               Reverse Proxy                             → :80
 ├── docker/              Dockerfile production
 ├── scripts/             Script setup tự động
 │   ├── setup.bat        Windows
 │   └── setup.sh         Linux / macOS / WSL
-├── docker-compose.yml        Development stack (5 services)
+├── docker-compose.yml        Development stack (6 services)
 └── docker-compose.prod.yml   Production stack
 ```
 
@@ -31,20 +34,22 @@ managerDeviceIoT-RBAC/
 [Sensor Node — ESP32 DOIT V1]
   └─ Đọc DHT22 mỗi 5 giây
   └─ Ký HMAC-SHA256(secret_key, "device_id:timestamp")
-  └─ Publish MQTT → topic: local/sensors/{sensor_id}/data
+  └─ Publish MQTT → Broker 1 :1883, topic: local/sensors/{sensor_id}/data
 
-[MQTT Broker — Mosquitto :1883]
+[MQTT Broker 1 — Mosquitto :1883]  ← Lớp Sensor ↔ Gateway (cô lập)
 
 [Gateway Node — ESP32 DOIT V1]
-  └─ Subscribe MQTT: local/sensors/+/data
-  └─ Xác thực: whitelist + timestamp ±300s + HMAC
-  └─ Lấy danh sách sensor từ Backend: GET /api/device/sensors
+  └─ Subscribe MQTT Broker 1: local/sensors/+/data
+  └─ Xác thực: whitelist + timestamp ±300s + HMAC (cục bộ, không cần Backend)
+  └─ Lấy danh sách sensor từ Backend: GET /api/device/sensors (mỗi 5 phút)
   └─ Ký lại Gateway HMAC
-  └─ Publish MQTT → topic: gateway/{gw_id}/data
+  └─ Publish MQTT → Broker 2 :1884, topic: gateway/{gw_id}/data
+
+[MQTT Broker 2 — Mosquitto :1884]  ← Lớp Gateway → Backend (có log_dest topic)
 
 [Backend — Express :5000]
-  └─ Subscribe MQTT: gateway/+/data
-  └─ Xác thực 2 lớp (Gateway HMAC + Sensor HMAC)
+  └─ Subscribe MQTT Broker 2: gateway/+/data
+  └─ Xác thực 2 lớp độc lập (Gateway HMAC + Sensor HMAC)
   └─ Lưu vào MySQL → sensor_data
   └─ Cập nhật last_seen, fail_count
   └─ Ghi audit_log
@@ -63,7 +68,7 @@ managerDeviceIoT-RBAC/
 ### Yêu cầu
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop) >= 24.x (đã cài và đang chạy)
-- Cổng `80`, `3000`, `5000`, `1883`, `3308` chưa bị chiếm
+- Cổng `80`, `3000`, `5000`, `1883`, `1884`, `3308` chưa bị chiếm
 
 ### Bước 1.1 — Tạo file môi trường
 
@@ -85,15 +90,16 @@ DB_USER=iot_managerIoT
 DB_PASS=iot_managerIoTpassword
 DB_NAME=iot_managerDeviceIoT
 JWT_SECRET=dev_secret_please_change_in_production_min32chars
-MQTT_HOST=mosquitto
+MQTT_HOST=mqtt-broker-2
 MQTT_PORT=1883
 FRONTEND_URL=http://localhost
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 ```
 
-> Khi chạy Docker: `DB_HOST=mysql` và `MQTT_HOST=mosquitto` là tên service nội bộ.
-> `docker-compose.yml` tự override hai giá trị này nên không cần sửa.
+> Khi chạy Docker: `DB_HOST=mysql` và `MQTT_HOST=mqtt-broker-2` là tên service nội bộ.
+> Backend chỉ kết nối **Broker 2** (lớp Gateway → Backend), không kết nối Broker 1.
+> `MQTT_PORT=1883` là cổng **nội bộ** Docker; khi chạy local dev dùng `MQTT_PORT=1884`.
 
 ### Bước 1.2 — Build và khởi động
 
@@ -128,12 +134,13 @@ docker compose ps
 Kết quả mong đợi — tất cả phải `running`:
 
 ```
-NAME             STATUS                  PORTS
-iot-nginx        running                 0.0.0.0:80->80/tcp
-iot-frontend     running                 0.0.0.0:3000->3000/tcp
-iot-backend      running (healthy)       0.0.0.0:5000->5000/tcp
-iot-mosquitto    running                 0.0.0.0:1883->1883/tcp
-iot-mysql        running (healthy)       0.0.0.0:3308->3306/tcp
+NAME                 STATUS                  PORTS
+iot-nginx            running                 0.0.0.0:80->80/tcp
+iot-frontend         running                 0.0.0.0:3000->3000/tcp
+iot-backend          running (healthy)       0.0.0.0:5000->5000/tcp
+iot-mqtt-broker-1    running                 0.0.0.0:1883->1883/tcp
+iot-mqtt-broker-2    running                 0.0.0.0:1884->1883/tcp
+iot-mysql            running (healthy)       0.0.0.0:3308->3306/tcp
 ```
 
 Nếu có service bị `Exit`, xem log:
@@ -141,6 +148,8 @@ Nếu có service bị `Exit`, xem log:
 ```bash
 docker compose logs backend
 docker compose logs frontend
+docker compose logs mqtt-broker-1
+docker compose logs mqtt-broker-2
 docker compose logs mysql
 ```
 
@@ -154,7 +163,8 @@ docker compose logs mysql
 | **Dashboard (trực tiếp)** | http://localhost:3000 |
 | **Backend API** | http://localhost:5000 |
 | **Health check** | http://localhost:5000/api/health |
-| **MQTT Broker** | mqtt://localhost:1883 |
+| **MQTT Broker 1** (Sensor ↔ Gateway) | mqtt://localhost:1883 |
+| **MQTT Broker 2** (Gateway → Backend) | mqtt://localhost:1884 |
 
 **Tài khoản mặc định:**
 
@@ -228,7 +238,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```bash
 cd backend
 cp .env.example .env
-# Sửa .env: DB_HOST=localhost, MQTT_HOST=localhost
+# Sửa .env: DB_HOST=localhost, MQTT_HOST=localhost, MQTT_PORT=1884
 npm install
 npm run dev
 # API chạy tại http://localhost:5000
@@ -379,9 +389,13 @@ Mở file cấu hình: `firmware/gateway-node/include/config_gw.h`
 #define WIFI_SSID   "TenMangWifi"
 #define WIFI_PASS   "MatKhauWifi"
 
-// === MQTT Broker ===
-#define MQTT_HOST   "192.168.1.100"
-#define MQTT_PORT   1883
+// === MQTT Broker 1 (Subscribe: nhận dữ liệu từ Sensor) ===
+#define MQTT_BROKER1_HOST  "192.168.1.100"    // IP máy chạy Docker
+#define MQTT_BROKER1_PORT  1883
+
+// === MQTT Broker 2 (Publish: gửi dữ liệu lên Backend) ===
+#define MQTT_BROKER2_HOST  "192.168.1.100"    // IP máy chạy Docker
+#define MQTT_BROKER2_PORT  1884
 
 // === URL lấy danh sách sensor từ Backend (qua Nginx cổng 80) ===
 #define BACKEND_SENSORS_URL  "http://192.168.1.100/api/device/sensors"
@@ -393,8 +407,9 @@ static const SensorCredential KNOWN_SENSORS[] = {
 };
 ```
 
-> Gateway sẽ tự động lấy danh sách sensor từ backend qua `BACKEND_SENSORS_URL` mỗi 5 phút.
-> Danh sách `KNOWN_SENSORS` trong file config là backup, không bắt buộc phải điền đủ.
+> Gateway duy trì **2 kết nối MQTT song song**: subscribe Broker 1 (:1883) để nhận từ Sensor,
+> publish Broker 2 (:1884) để chuyển lên Backend.
+> Danh sách `KNOWN_SENSORS` là backup khi backend chưa khởi động; tự cập nhật mỗi 5 phút.
 
 Flash firmware:
 ```bash
@@ -409,8 +424,11 @@ Kiểm tra Serial Monitor (115200 baud):
 ╚══════════════════════════════════╝
 [WiFi] Kết nối thành công!
 [NTP] Đồng bộ thành công
-[MQTT] Kết nối broker 192.168.1.100:1883
-[MQTT] Subscribe: local/sensors/+/data
+[MQTT-SUB] Broker 1: 192.168.1.100:1883
+[MQTT-SUB] Connecting... OK
+[MQTT-SUB] Subscribed to 'local/sensors/+/data'
+[MQTT-PUB] Broker 2: 192.168.1.100:1884
+[MQTT-PUB] Connecting... OK
 [Registry] Đã lấy danh sách sensor từ backend
 [MAIN] Ready – listening for sensor data...
 ```
@@ -576,8 +594,8 @@ Response:
 | `DB_PASS` | `iot_managerIoTpassword` | MySQL password |
 | `DB_NAME` | `iot_managerDeviceIoT` | Tên database |
 | `JWT_SECRET` | — | Khóa ký JWT (tối thiểu 32 ký tự) |
-| `MQTT_HOST` | `localhost` | Host MQTT Broker (Docker: `mosquitto`) |
-| `MQTT_PORT` | `1883` | Port MQTT Broker |
+| `MQTT_HOST` | `localhost` | Host MQTT **Broker 2** (Docker: `mqtt-broker-2`) |
+| `MQTT_PORT` | `1884` | Port MQTT Broker 2 (Docker internal: `1883`) |
 | `FRONTEND_URL` | `http://localhost` | URL frontend (dùng cho CORS) |
 | `ADMIN_USERNAME` | `admin` | Username tài khoản admin mặc định |
 | `ADMIN_PASSWORD` | `admin123` | Password tài khoản admin mặc định |

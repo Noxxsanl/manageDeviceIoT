@@ -7,7 +7,7 @@
     │  MQTT publish: local/sensors/{sensor_id}/data
     │  Payload: { sensor_id, sn_timestamp, sn_hmac, data:{temp,hum} }
     ▼
-[Mosquitto Broker] ─── port 1883
+[MQTT Broker 1 — Mosquitto :1883]   ← Sensor ↔ Gateway layer
     │
     │  (wildcard subscribe: local/sensors/+/data)
     ▼
@@ -16,9 +16,9 @@
     │  2. Verify sn_hmac locally (whitelist + HMAC#1)
     │  3. Tính gw_hmac = HMAC(GW_SECRET, gw_id:gw_ts)
     │  4. Build merged payload (sensor data lồng trong sensor_payload)
-    │  MQTT publish: gateway/{gw_id}/data
+    │  MQTT publish: gateway/{gw_id}/data → Broker 2 :1884
     ▼
-[Mosquitto Broker] ─── port 1883
+[MQTT Broker 2 — Mosquitto :1884]   ← Gateway → Backend layer
     │
     │  (Backend subscribe: gateway/+/data)
     ▼
@@ -40,7 +40,7 @@
 ## Checklist Chuẩn Bị
 
 ### 1. Backend & Database
-- [ ] `docker compose up -d` → MySQL + Mosquitto + Backend + Frontend + Nginx đang chạy
+- [ ] `docker compose up -d` → MySQL + Broker 1 (:1883) + Broker 2 (:1884) + Backend + Frontend + Nginx đang chạy (6 service)
 - [ ] Kiểm tra: `curl http://localhost:5000/api/health` → `{"status":"ok","db":"connected","mqtt":"connected"}`
 - [ ] Đăng nhập Dashboard: `http://localhost` (qua Nginx) hoặc `http://localhost:3000` → admin / admin123
 
@@ -79,8 +79,12 @@ Kích hoạt cả 2 thiết bị: `PATCH /api/devices/:id/status` → `active`
 #define GW_SECRET_KEY  "..."
 #define WIFI_SSID      "your-wifi"
 #define WIFI_PASS      "your-pass"
-#define MQTT_HOST      "192.168.x.x"       // IP máy chủ (LAN)
-#define MQTT_PORT      1883
+// Broker 1 — Subscribe nhận dữ liệu từ Sensor
+#define MQTT_BROKER1_HOST  "192.168.x.x"   // IP máy chủ (LAN)
+#define MQTT_BROKER1_PORT  1883
+// Broker 2 — Publish dữ liệu lên Backend
+#define MQTT_BROKER2_HOST  "192.168.x.x"   // IP máy chủ (LAN)
+#define MQTT_BROKER2_PORT  1884
 // Gateway lấy danh sách sensor hợp lệ qua HTTP mỗi 5 phút:
 #define BACKEND_SENSORS_URL "http://192.168.x.x/api/device/sensors"
 
