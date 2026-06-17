@@ -4,6 +4,7 @@
 #include "ntp_sync.h"
 #include "mqtt_client.h"
 #include "forwarder.h"
+#include "sensor_registry.h"
 
 static unsigned long _fwdLedOffAt = 0;
 
@@ -36,6 +37,11 @@ void setup() {
     ntpSetup();
     mqttClientSetup(onSensorMessage);
 
+    // Fetch danh sách sensor từ backend sau khi WiFi + NTP sẵn sàng
+    if (ntpIsSynced()) {
+        fetchSensorList();
+    }
+
     Serial.println("\n[MAIN] Ready – listening for sensor data...\n");
 }
 
@@ -46,4 +52,9 @@ void loop() {
     }
     wifiMaintain();
     mqttClientMaintain();
+
+    // Làm mới danh sách sensor mỗi SENSOR_REGISTRY_TTL_MS (5 phút)
+    if (wifiIsConnected() && ntpIsSynced() && registryNeedsRefresh()) {
+        fetchSensorList();
+    }
 }

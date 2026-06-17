@@ -2,19 +2,12 @@
 #include "config_gw.h"
 #include "hmac_util.h"
 #include "ntp_sync.h"
+#include "sensor_registry.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <string.h>
-
-static const char* findSensorSecret(const char* sensor_id) {
-    for (int i = 0; i < KNOWN_SENSOR_COUNT; i++) {
-        if (strcmp(KNOWN_SENSORS[i].device_id, sensor_id) == 0)
-            return KNOWN_SENSORS[i].secret_key;
-    }
-    return nullptr;
-}
 
 // Constant-time compare – prevents timing attacks on HMAC verification
 static bool safeEq64(const char* a, const char* b) {
@@ -53,8 +46,13 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
         return false;
     }
 
-    // 2. Whitelist check
-    const char* sensorSecret = findSensorSecret(sensor_id);
+    // 2. Tra cứu secret từ registry động; lazy-refresh nếu không tìm thấy
+    const char* sensorSecret = registryFindSecret(sensor_id);
+    if (!sensorSecret && registryNeedsRefresh()) {
+        Serial.printf("[FWD] Unknown sensor '%s', refreshing registry...\n", sensor_id);
+        fetchSensorList();
+        sensorSecret = registryFindSecret(sensor_id);
+    }
     if (!sensorSecret) {
         Serial.printf("[FWD] REJECT – unknown sensor '%s'\n", sensor_id);
         return false;
@@ -85,17 +83,19 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
         return false;
     }
 
-    // 6. Build forwarded payload
+    // 6. Build forwarded payload – sensor fields nested under sensor_payload
     StaticJsonDocument<768> outDoc;
     outDoc["gateway_id"]   = GW_DEVICE_ID;
     outDoc["gateway_ip"]   = WiFi.localIP().toString();
     outDoc["gw_timestamp"] = gw_timestamp;
     outDoc["gw_hmac"]      = gw_hmac;
-    outDoc["sensor_id"]    = sensor_id;
-    outDoc["sn_timestamp"] = sn_timestamp;
-    outDoc["sn_hmac"]      = sn_hmac;
-    if (sensor_ip[0]) outDoc["sensor_ip"] = sensor_ip;
-    JsonObject outData = outDoc.createNestedObject("data");
+
+    JsonObject sensorPayload = outDoc.createNestedObject("sensor_payload");
+    sensorPayload["sensor_id"]    = sensor_id;
+    sensorPayload["sn_timestamp"] = sn_timestamp;
+    sensorPayload["sn_hmac"]      = sn_hmac;
+    if (sensor_ip[0]) sensorPayload["sensor_ip"] = sensor_ip;
+    JsonObject outData = sensorPayload.createNestedObject("data");
     for (JsonPair kv : data) outData[kv.key()] = kv.value();
 
     char bodyBuf[768];

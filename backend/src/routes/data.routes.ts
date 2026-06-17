@@ -16,7 +16,8 @@ router.post("/", validateDevice, async (req: Request, res: Response): Promise<vo
   const ip = getClientIp(req);
   const userAgent = req.headers["user-agent"] ?? null;
 
-  const { data, gateway_ip, sensor_ip } = req.body ?? {};
+  const { gateway_ip, sensor_payload } = req.body ?? {};
+  const { data, sensor_ip } = sensor_payload ?? {};
 
   if (data === undefined || data === null || typeof data !== "object" || Array.isArray(data)) {
     res.status(400).json({ error: "MISSING_PAYLOAD_DATA", detail: "Request body must include a 'data' object" });

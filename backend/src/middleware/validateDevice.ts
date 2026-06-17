@@ -36,10 +36,12 @@ export async function validateDevice(req: Request, res: Response, next: NextFunc
     gateway_id,
     gw_timestamp,
     gw_hmac,
-    sensor_id,
-    sn_timestamp,
-    sn_hmac,
+    sensor_payload,
   } = req.body ?? {};
+
+  const sensor_id    = sensor_payload?.sensor_id;
+  const sn_timestamp = sensor_payload?.sn_timestamp;
+  const sn_hmac      = sensor_payload?.sn_hmac;
 
   // ── Level 1: Gateway HMAC ──────────────────────────────────────────────────
   if (!gateway_id || !gw_timestamp || !gw_hmac) {
@@ -71,7 +73,7 @@ export async function validateDevice(req: Request, res: Response, next: NextFunc
   }
 
   // ── Level 2: Sensor HMAC ───────────────────────────────────────────────────
-  if (!sensor_id || !sn_timestamp || !sn_hmac) {
+  if (!sensor_payload || !sensor_id || !sn_timestamp || !sn_hmac) {
     res.status(400).json({ error: "MISSING_SENSOR_FIELDS" });
     return;
   }
