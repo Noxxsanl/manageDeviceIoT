@@ -128,7 +128,7 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
 
     bool success = mqttClientPublish(GATEWAY_DATA_TOPIC, bodyBuf, (unsigned int)bodyLen);
     if (success) {
-        Serial.println("[FWD] └─ MQTT publish OK ✓");
+        Serial.println("[FWD] └─ MQTT publish OK");
     } else {
         Serial.println("[FWD] └─ MQTT publish FAILED ✗");
     }
