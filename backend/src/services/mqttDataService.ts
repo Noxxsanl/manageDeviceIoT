@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
 import pool from "../config/db";
 import { verifyGatewayHMAC, verifyDeviceHMAC } from "./hmacService";
-import { log } from "./auditLogger";
+import { log, logDataRecvWithPrune } from "./auditLogger";
 
 const BLOCK_THRESHOLD = 5;
 
@@ -142,7 +142,7 @@ async function handleGatewayData(raw: string): Promise<void> {
     );
   }
 
-  await log("DATA_RECV", sensor.id, null, null, {
+  await logDataRecvWithPrune(sensor.id, null, null, {
     gateway_id: gateway.device_id,
     sensor_id:  sensor.device_id,
     data_id:    insertResult.insertId,

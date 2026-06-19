@@ -1,16 +1,12 @@
 import { Router, Request, Response } from "express";
 import pool from "../config/db";
 import { verifyJWT } from "../middleware/verifyJWT";
+import { requireRole } from "../middleware/rbac";
 
 const router = Router();
 
 // DELETE /api/audit-log/data-recv – xóa toàn bộ log DATA_RECV (admin/operator only)
-router.delete("/data-recv", verifyJWT, async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user as { role: string };
-  if (user.role === "viewer") {
-    res.status(403).json({ error: "FORBIDDEN" });
-    return;
-  }
+router.delete("/data-recv", verifyJWT, requireRole("admin", "operator"), async (_req: Request, res: Response): Promise<void> => {
   const [result] = await (pool as any).execute(
     "DELETE FROM audit_log WHERE event_type = 'DATA_RECV'"
   );

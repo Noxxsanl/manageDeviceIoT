@@ -389,9 +389,13 @@ sequenceDiagram
     participant SN as ⚡ Sensor Node
     participant NTP as 🕐 NTP Server
     participant MQ1 as 📡 MQTT Broker 1
-    participant MQ2 as 📡 MQTT Broker 2
     participant GW as 🔀 Gateway Node
+    participant MQ2 as 📡 MQTT Broker 2
     participant API as ⚙️ Backend API
+    participant DB as 🗄️ MySQL DB
+    participant FE as 📊 Next.js :3000
+    participant NGX as 🌐 Nginx
+    participant USR as 👤 Trình duyệt
 
     Note over SN,NTP: ══ SETUP: Sensor Node ══
     SN->>NTP: configTime(UTC+7) + getLocalTime
@@ -401,8 +405,8 @@ sequenceDiagram
     Note over GW,NTP: ══ SETUP: Gateway Node ══
     GW->>NTP: configTime(UTC+7) + getLocalTime
     NTP-->>GW: Unix timestamp ✅
-    GW->>MQ1: MQTT Subscribe local/sensors/+/data
-    GW->>MQ2: MQTT Connect (Broker 2 :1884)
+    GW->>MQ1: mqttSubClient → Subscribe local/sensors/+/data
+    GW->>MQ2: mqttPubClient → Connect (publish-only)
 
     Note over SN,DHT: ══ LOOP mỗi 5 giây ══
     SN->>DHT: readHumidity() + readTemperature()
@@ -414,14 +418,46 @@ sequenceDiagram
     Note over GW,MQ1: ══ EVENT: Message đến Gateway ══
     MQ1->>GW: local/sensors/SN-ID/data
     GW->>GW: ① Parse JSON
-    GW->>GW: ② findSensorSecret → Whitelist OK
-    GW->>GW: ③ |now − sn_ts| <= 300s → OK
-    GW->>GW: ④ safeEq64(sn_hmac, expected) → OK
+    GW->>GW: ② Whitelist → findSensorSecret() ✅
+    GW->>GW: ③ |now − sn_ts| ≤ 300s ✅
+    GW->>GW: ④ safeEq64(sn_hmac, expected) ✅
     GW->>GW: ⑤ gw_hmac = HMAC-SHA256(GW_SECRET, "gw_id:gw_ts")
-    GW->>MQ2: MQTT Publish gateway/GW-ID/data
-    MQ2->>API: Backend subscribe gateway/+/data
-    API->>API: Xác thực HMAC (2 lớp) → Lưu DB → Audit Log
+    GW->>MQ2: mqttPubClient.publish → gateway/GW-ID/data
+
+    Note over API,DB: ══ BACKEND: Xử lý & Lưu trữ (mqttDataService) ══
+    MQ2->>API: Subscribe gateway/+/data → nhận message
+    API->>API: verifyGatewayHMAC(gateway_id, gw_timestamp, gw_hmac)
+    API->>API: verifyDeviceHMAC(sensor_id, sn_timestamp, sn_hmac)
+    API->>DB: SELECT device_type, status FROM devices WHERE id IN (gw, sn)
+    DB-->>API: gwRow + snRow
+    API->>DB: INSERT INTO sensor_data (device_id, gateway_id, payload)
+    DB-->>API: ✅ insertId
+    API->>DB: DELETE prune sensor_data giữ 150 bản ghi mới nhất
+    API->>DB: UPDATE devices SET last_seen=NOW(), fail_count=0, last_ip=?
+    API->>DB: INSERT INTO audit_log (event_type='DATA_RECV', device_id, ip_address, user_agent, details)
+    DB-->>API: ✅ Audit ghi nhận
     GW->>GW: 💡 Blink LED_FWD 100ms
+
+    Note over USR,NGX: ══ FRONTEND: Người dùng xem Dashboard ══
+    USR->>NGX: GET / (HTTP :80)
+    NGX->>FE: Proxy → Next.js :3000
+    FE-->>NGX: HTML/JS Dashboard
+    NGX-->>USR: Dashboard ✅
+
+    Note over USR,DB: ══ SWR POLLING: Browser lấy dữ liệu (mỗi 10s) ══
+    USR->>NGX: GET /api/devices (browser JS · SWR)
+    NGX->>API: Proxy /api/ → Express :5000
+    API->>DB: SELECT * FROM devices
+    DB-->>API: Danh sách thiết bị
+    API-->>NGX: JSON response
+    NGX-->>USR: JSON ✅
+    USR->>NGX: GET /api/devices/:id/data?limit=200 (SWR · 10s)
+    NGX->>API: Proxy /api/ → Express :5000
+    API->>DB: SELECT * FROM sensor_data WHERE device_id=? ORDER BY id DESC LIMIT 200
+    DB-->>API: SensorData rows (payload JSON)
+    API-->>NGX: JSON response
+    NGX-->>USR: JSON ✅
+    USR->>USR: Render biểu đồ nhiệt độ & độ ẩm 📊
 ```
 
 ---

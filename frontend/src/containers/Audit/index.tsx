@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, Search, X, Trash2 } from "lucide-react";
+import { RefreshCw, Search, X, Trash2, XCircle } from "lucide-react";
 import { useAuditLog, type AuditLogFilters } from "@/package/features/useAuditLog";
+import { usePermissions } from "@/package/features/usePermissions";
 import AuditLogTable from "@/components/compound/audit/AuditLogTable";
-import api from "@/package/services/api";
+import api, { FetchError } from "@/package/services/api";
 
 const EVENT_TYPES = [
   "AUTH_SUCCESS",
@@ -18,13 +19,18 @@ const EVENT_TYPES = [
 
 const PAGE_SIZES = [10, 25, 50];
 
+type Toast = { msg: string; ok: boolean } | null;
+
 export default function Audit() {
+  const { canDeleteAuditLog } = usePermissions();
+
   const [eventType, setEventType] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [toast, setToast] = useState<Toast>(null);
 
   const filters: AuditLogFilters = useMemo(
     () => ({
@@ -39,12 +45,28 @@ export default function Audit() {
   const { logs, isLoading, isError, refresh } = useAuditLog(filters);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3500);
+  }
+
   async function handleDeleteDataRecv() {
+    if (!canDeleteAuditLog) {
+      showToast("Không có quyền truy cập.", false);
+      return;
+    }
     if (!window.confirm("Xóa toàn bộ log DATA_RECV? Hành động này không thể hoàn tác.")) return;
     setIsDeleting(true);
     try {
       await api.delete("/api/audit-log/data-recv");
       refresh();
+      showToast("Đã xóa toàn bộ log DATA_RECV.");
+    } catch (err: unknown) {
+      if (err instanceof FetchError && err.status === 403) {
+        showToast("Không có quyền truy cập.", false);
+      } else {
+        showToast("Xóa thất bại. Vui lòng thử lại.", false);
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -76,14 +98,16 @@ export default function Audit() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleDeleteDataRecv}
-            disabled={isDeleting}
-            className="inline-flex items-center gap-2 rounded-3xl bg-rose-900/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-800/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" />
-            {isDeleting ? "Đang xóa…" : "Xóa log DATA_RECV"}
-          </button>
+          {canDeleteAuditLog && (
+            <button
+              onClick={handleDeleteDataRecv}
+              disabled={isDeleting}
+              className="inline-flex items-center gap-2 rounded-3xl bg-rose-900/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-800/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isDeleting ? "Đang xóa…" : "Xóa log DATA_RECV"}
+            </button>
+          )}
           <button
             onClick={() => refresh()}
             className="inline-flex items-center gap-2 rounded-3xl bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-white"
@@ -242,6 +266,20 @@ export default function Audit() {
               Sau
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold shadow-xl transition ${
+            toast.ok
+              ? "bg-emerald-500 text-slate-950"
+              : "bg-rose-500 text-white"
+          }`}
+        >
+          <XCircle className="h-4 w-4 shrink-0" />
+          {toast.msg}
         </div>
       )}
     </div>

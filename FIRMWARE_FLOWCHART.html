@@ -1036,17 +1036,17 @@ flowchart TD
     <div class="chapter-num">V</div>
     <div>
       <h2>End-to-End — Sequence Diagram</h2>
-      <p>Luồng hoàn chỉnh từ khởi động đến khi dữ liệu đến Backend API</p>
+      <p>Luồng hoàn chỉnh: Firmware → MQTT → Backend → MySQL DB → Nginx :80 → Browser (SWR polling 10s)</p>
     </div>
   </div>
 
   <div class="section">
-    <p class="section-desc">Sequence diagram tổng hợp toàn bộ luồng: setup hai node song song, vòng lặp 5 giây của Sensor Node, và pipeline validate + forward của Gateway Node.</p>
+    <p class="section-desc">Sequence diagram tổng hợp toàn bộ luồng: setup hai node song song, vòng lặp 5 giây của Sensor Node, pipeline validate + forward của Gateway Node, lưu trữ vào DB, và hiển thị qua Nginx → Next.js lên trình duyệt người dùng.</p>
     <div class="dcard">
       <div class="dcard-bar bar-e2e"></div>
       <div class="dcard-head">
         <div class="dcard-dots"><span></span><span></span><span></span></div>
-        <span class="dcard-file">end-to-end · sequenceDiagram · setup + loop + event</span>
+        <span class="dcard-file">end-to-end · sequenceDiagram · Firmware → DB → Nginx → Frontend → User</span>
       </div>
       <div class="dcard-body">
         <div class="mermaid">
@@ -1059,6 +1059,10 @@ sequenceDiagram
     participant GW  as 🔀 Gateway Node
     participant MQ2 as 📡 Broker 2 :1884
     participant API as ⚙️ Backend API
+    participant DB  as 🗄️ MySQL DB
+    participant FE  as 📊 Next.js :3000
+    participant NGX as 🌐 Nginx
+    participant USR as 👤 Trình duyệt
 
     Note over SN,NTP: ══ SETUP: Sensor Node ══
     SN->>NTP: configTime(UTC+7) + getLocalTime
@@ -1086,9 +1090,41 @@ sequenceDiagram
     GW->>GW: ④ safeEq64(sn_hmac, expected) ✅
     GW->>GW: ⑤ gw_hmac = HMAC-SHA256(GW_SECRET, "gw_id:gw_ts")
     GW->>MQ2: mqttPubClient.publish → gateway/GW-ID/data
-    MQ2->>API: Backend subscribe gateway/+/data → nhận message
-    API->>API: Xác thực 2 lớp HMAC → Lưu DB → Audit Log
+
+    Note over API,DB: ══ BACKEND: Xử lý & Lưu trữ (mqttDataService) ══
+    MQ2->>API: Subscribe gateway/+/data → nhận message
+    API->>API: verifyGatewayHMAC(gateway_id, gw_timestamp, gw_hmac)
+    API->>API: verifyDeviceHMAC(sensor_id, sn_timestamp, sn_hmac)
+    API->>DB: SELECT device_type, status FROM devices WHERE id IN (gw, sn)
+    DB-->>API: gwRow + snRow
+    API->>DB: INSERT INTO sensor_data (device_id, gateway_id, payload)
+    DB-->>API: ✅ insertId
+    API->>DB: DELETE prune sensor_data giữ 150 bản ghi mới nhất
+    API->>DB: UPDATE devices SET last_seen=NOW(), fail_count=0, last_ip=?
+    API->>DB: INSERT INTO audit_log (event_type='DATA_RECV', device_id, ip_address, user_agent, details)
+    DB-->>API: ✅ Audit ghi nhận
     GW->>GW: 💡 Blink LED_FWD 100ms
+
+    Note over USR,NGX: ══ FRONTEND: Người dùng xem Dashboard ══
+    USR->>NGX: GET / (HTTP :80)
+    NGX->>FE: Proxy → Next.js :3000
+    FE-->>NGX: HTML/JS Dashboard
+    NGX-->>USR: Dashboard ✅
+
+    Note over USR,DB: ══ SWR POLLING: Browser lấy dữ liệu (mỗi 10s) ══
+    USR->>NGX: GET /api/devices (browser JS · SWR)
+    NGX->>API: Proxy /api/ → Express :5000
+    API->>DB: SELECT * FROM devices
+    DB-->>API: Danh sách thiết bị
+    API-->>NGX: JSON response
+    NGX-->>USR: JSON ✅
+    USR->>NGX: GET /api/devices/:id/data?limit=200 (SWR · 10s)
+    NGX->>API: Proxy /api/ → Express :5000
+    API->>DB: SELECT * FROM sensor_data WHERE device_id=? ORDER BY id DESC LIMIT 200
+    DB-->>API: SensorData rows (payload JSON)
+    API-->>NGX: JSON response
+    NGX-->>USR: JSON ✅
+    USR->>USR: Render biểu đồ nhiệt độ & độ ẩm 📊
         </div>
       </div>
     </div>

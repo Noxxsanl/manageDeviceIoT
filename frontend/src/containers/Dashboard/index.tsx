@@ -5,10 +5,12 @@ import StatsCard from "@/components/compound/dashboard/StatsCard";
 import { useDevices } from "@/providers/DevicesContext";
 import { useAddDevice } from "@/providers/AddDeviceContext";
 import { useAuth } from "@/package/features/useAuth";
+import { usePermissions } from "@/package/features/usePermissions";
 import { useDashboardStats } from "@/package/features/useDashboardStats";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { canCreateDevice } = usePermissions();
   const { openModal } = useAddDevice();
   const { devices } = useDevices();
   const { stats, isLoading } = useDashboardStats();
@@ -34,12 +36,14 @@ export default function Dashboard() {
               IoT device management, alerts and security monitoring.
             </p>
           </div>
-          <button
-            onClick={openModal}
-            className="rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-          >
-            Add Device
-          </button>
+          {canCreateDevice && (
+            <button
+              onClick={openModal}
+              className="rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+            >
+              Add Device
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Overview — IoT Manager RBAC</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0d0f18;
+      --surface:  #13161f;
+      --surface2: #1c2030;
+      --surface3: #222840;
+      --border:   #2a2f4a;
+      --c-blue:   #60a5fa;
+      --c-cyan:   #22d3ee;
+      --c-purple: #a78bfa;
+      --c-green:  #34d399;
+      --c-orange: #fb923c;
+      --c-red:    #f87171;
+      --c-yellow: #fbbf24;
+      --c-pink:   #f472b6;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --sw: 280px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      display: flex; min-height: 100vh; line-height: 1.6;
+    }
+
+    /* ── SIDEBAR ── */
+    #sb {
+      width: var(--sw); background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed; top: 0; left: 0; bottom: 0;
+      overflow-y: auto; z-index: 200;
+      display: flex; flex-direction: column;
+    }
+    .sb-head {
+      padding: 20px 16px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sb-logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .sb-icon {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--c-cyan), var(--c-purple));
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .sb-head h1 { font-size: 13px; font-weight: 700; line-height: 1.3; }
+    .sb-head p  { font-size: 11px; color: var(--muted); }
+    .sb-sep { font-size: 9.5px; font-weight: 700; letter-spacing: 1.3px;
+              text-transform: uppercase; color: var(--muted); padding: 12px 16px 4px; }
+    .sl {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 16px; font-size: 12.5px; color: var(--muted);
+      text-decoration: none; border-left: 3px solid transparent;
+      transition: all .12s;
+    }
+    .sl:hover, .sl.on { background: var(--surface2); color: var(--text); }
+    .sl.sub { padding-left: 30px; font-size: 12px; }
+    .sl.bl:hover, .sl.bl.on { border-left-color: var(--c-blue); }
+    .sl.cy:hover, .sl.cy.on { border-left-color: var(--c-cyan); }
+    .sl.pu:hover, .sl.pu.on { border-left-color: var(--c-purple); }
+    .sl.gr:hover, .sl.gr.on { border-left-color: var(--c-green); }
+    .sl.or:hover, .sl.or.on { border-left-color: var(--c-orange); }
+    .sl.re:hover, .sl.re.on { border-left-color: var(--c-red); }
+    .sl.ye:hover, .sl.ye.on { border-left-color: var(--c-yellow); }
+    .sl.pk:hover, .sl.pk.on { border-left-color: var(--c-pink); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .db  { background: var(--c-blue); }
+    .dc  { background: var(--c-cyan); }
+    .dp  { background: var(--c-purple); }
+    .dg  { background: var(--c-green); }
+    .do  { background: var(--c-orange); }
+    .dr  { background: var(--c-red); }
+    .dy  { background: var(--c-yellow); }
+    .dpk { background: var(--c-pink); }
+
+    /* ── MAIN ── */
+    #main { margin-left: var(--sw); flex: 1; padding: 40px 52px; max-width: calc(100vw - var(--sw)); }
+
+    /* page title */
+    .pg-title { margin-bottom: 48px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .pg-title h1 {
+      font-size: 28px; font-weight: 800; margin-bottom: 8px;
+      background: linear-gradient(110deg, var(--c-cyan) 0%, var(--c-purple) 50%, var(--c-pink) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .pg-title p { font-size: 13.5px; color: var(--muted); max-width: 620px; line-height: 1.8; }
+    .pg-meta { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; }
+    .pg-tag {
+      font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+      border: 1px solid;
+    }
+    .tag-cy  { color: var(--c-cyan);   border-color: rgba(34,211,238,.35);  background: rgba(34,211,238,.08); }
+    .tag-pu  { color: var(--c-purple); border-color: rgba(167,139,250,.35); background: rgba(167,139,250,.08); }
+    .tag-gr  { color: var(--c-green);  border-color: rgba(52,211,153,.35);  background: rgba(52,211,153,.08); }
+    .tag-or  { color: var(--c-orange); border-color: rgba(251,146,60,.35);  background: rgba(251,146,60,.08); }
+    .tag-bl  { color: var(--c-blue);   border-color: rgba(96,165,250,.35);  background: rgba(96,165,250,.08); }
+    .tag-ye  { color: var(--c-yellow); border-color: rgba(251,191,36,.35);  background: rgba(251,191,36,.08); }
+
+    /* chapter */
+    .chap {
+      margin: 56px 0 0; padding-bottom: 12px;
+      border-bottom: 2px solid var(--border);
+      display: flex; align-items: center; gap: 14px;
+    }
+    .chap-n {
+      width: 34px; height: 34px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800; flex-shrink: 0;
+    }
+    .chap h2 { font-size: 19px; font-weight: 800; }
+    .chap p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .c-bl .chap-n { background: rgba(96,165,250,.18);  color: var(--c-blue); }
+    .c-cy .chap-n { background: rgba(34,211,238,.18);  color: var(--c-cyan); }
+    .c-pu .chap-n { background: rgba(167,139,250,.18); color: var(--c-purple); }
+    .c-gr .chap-n { background: rgba(52,211,153,.18);  color: var(--c-green); }
+    .c-or .chap-n { background: rgba(251,146,60,.18);  color: var(--c-orange); }
+    .c-re .chap-n { background: rgba(248,113,113,.18); color: var(--c-red); }
+    .c-ye .chap-n { background: rgba(251,191,36,.18);  color: var(--c-yellow); }
+    .c-pk .chap-n { background: rgba(244,114,182,.18); color: var(--c-pink); }
+    .c-bl h2 { color: var(--c-blue); }
+    .c-cy h2 { color: var(--c-cyan); }
+    .c-pu h2 { color: var(--c-purple); }
+    .c-gr h2 { color: var(--c-green); }
+    .c-or h2 { color: var(--c-orange); }
+    .c-re h2 { color: var(--c-red); }
+    .c-ye h2 { color: var(--c-yellow); }
+    .c-pk h2 { color: var(--c-pink); }
+
+    /* section */
+    .sec { margin-top: 36px; scroll-margin-top: 18px; }
+    .sec h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .sec-desc { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; max-width: 680px; }
+    .sec-desc code {
+      background: var(--surface3); border-radius: 4px; padding: 1px 5px;
+      font-size: 11.5px; color: var(--text); font-family: 'Cascadia Code', 'Fira Code', monospace;
+    }
+
+    /* diagram card */
+    .dc-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 8px; }
+    .dc-bar  { height: 3px; }
+    .dc-head {
+      padding: 10px 18px; background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .dc-dots { display: flex; gap: 5px; }
+    .dc-dots span { width: 9px; height: 9px; border-radius: 50%; display: block; }
+    .dc-dots span:nth-child(1) { background: #ef4444; }
+    .dc-dots span:nth-child(2) { background: #f59e0b; }
+    .dc-dots span:nth-child(3) { background: #22c55e; }
+    .dc-fname { font-size: 11px; color: var(--muted); font-family: 'Cascadia Code', monospace; }
+    .dc-body  { padding: 24px; display: flex; justify-content: center; overflow-x: auto; }
+
+    .b-bl { background: var(--c-blue); }
+    .b-cy { background: var(--c-cyan); }
+    .b-pu { background: var(--c-purple); }
+    .b-gr { background: var(--c-green); }
+    .b-or { background: var(--c-orange); }
+    .b-re { background: var(--c-red); }
+    .b-ye { background: var(--c-yellow); }
+    .b-pk { background: var(--c-pink); }
+
+    /* grid cards */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 16px; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px;
+    }
+    .card h4 { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; }
+    .card ul { list-style: none; }
+    .card ul li { font-size: 12px; color: var(--muted); padding: 2px 0; }
+    .card ul li::before { content: '›  '; color: var(--border); }
+    .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .card-icon { font-size: 20px; }
+    .card-val { font-size: 26px; font-weight: 800; }
+    .card-lbl { font-size: 11px; color: var(--muted); }
+    .card-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* feature list */
+    .flist { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+    .fitem {
+      display: flex; align-items: flex-start; gap: 8px;
+      background: var(--surface2); border-radius: 7px; padding: 8px 12px;
+      font-size: 12px;
+    }
+    .fitem-icon { font-size: 14px; flex-shrink: 0; }
+    .fitem-text { color: var(--muted); line-height: 1.5; }
+    .fitem-text strong { color: var(--text); display: block; }
+
+    /* table */
+    .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th { text-align: left; padding: 9px 14px; background: var(--surface2); color: var(--muted);
+         font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+         border-bottom: 1px solid var(--border); }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    .tc1 { font-weight: 600; white-space: nowrap; }
+    .tc2 { color: var(--muted); font-size: 11.5px; }
+    .tc3 { font-size: 11.5px; }
+    .method { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 4px; font-family: monospace; margin-right: 4px; }
+    .m-get  { background: rgba(52,211,153,.15); color: var(--c-green); }
+    .m-post { background: rgba(96,165,250,.15); color: var(--c-blue); }
+    .m-patch{ background: rgba(251,146,60,.15); color: var(--c-orange); }
+    .m-del  { background: rgba(248,113,113,.15); color: var(--c-red); }
+    .role-badge {
+      display: inline-block; font-size: 9.5px; font-weight: 700; padding: 1px 6px;
+      border-radius: 10px; margin-right: 3px; border: 1px solid;
+    }
+    .r-admin { color: var(--c-red);    border-color: rgba(248,113,113,.4); background: rgba(248,113,113,.08); }
+    .r-op    { color: var(--c-orange); border-color: rgba(251,146,60,.4);  background: rgba(251,146,60,.08); }
+    .r-view  { color: var(--c-blue);   border-color: rgba(96,165,250,.4);  background: rgba(96,165,250,.08); }
+
+    /* endpoint path */
+    .ep { font-family: 'Cascadia Code', monospace; font-size: 11.5px; }
+
+    /* note */
+    .note { border-radius: 8px; padding: 12px 16px; font-size: 12.5px; line-height: 1.8; margin-top: 10px; }
+    .note-info   { background: rgba(96,165,250,.07);  border: 1px solid rgba(96,165,250,.2); }
+    .note-warn   { background: rgba(251,146,60,.07);  border: 1px solid rgba(251,146,60,.25); }
+    .note-green  { background: rgba(52,211,153,.07);  border: 1px solid rgba(52,211,153,.2); }
+    .note code   { background: var(--surface3); border-radius: 3px; padding: 1px 5px; font-family: 'Cascadia Code', monospace; font-size: 11px; }
+
+    /* tech stack pills row */
+    .stack-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .pill {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--surface2);
+      white-space: nowrap;
+    }
+    .pill-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    /* file tree */
+    .tree {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px 20px; font-family: 'Cascadia Code', monospace; font-size: 12px;
+      color: var(--muted); line-height: 1.9; margin-top: 14px; overflow-x: auto;
+    }
+    .tree .dir  { color: var(--c-cyan); font-weight: 600; }
+    .tree .file { color: var(--text); }
+    .tree .cmt  { color: var(--muted); font-size: 11px; }
+
+    /* doc cards */
+    .doc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+    .doc-card {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 9px;
+      padding: 12px 14px;
+    }
+    .doc-card .doc-icon { font-size: 20px; margin-bottom: 6px; }
+    .doc-card h4 { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+    .doc-card p  { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+    /* timeline */
+    .timeline { margin-top: 16px; position: relative; padding-left: 20px; }
+    .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+    .tl-item { position: relative; margin-bottom: 18px; }
+    .tl-dot { position: absolute; left: -17px; top: 4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
+    .tl-item h4 { font-size: 13px; font-weight: 700; }
+    .tl-item p  { font-size: 12px; color: var(--muted); }
+    .tl-item code { font-size: 11px; background: var(--surface3); border-radius: 3px; padding: 0 4px; font-family: monospace; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 900px) {
+      #sb { display: none; }
+      #main { margin-left: 0; padding: 24px 16px; max-width: 100vw; }
+      .grid2, .grid3, .grid4, .flist, .doc-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<nav id="sb">
+  <div class="sb-head">
+    <div class="sb-logo-row">
+      <div class="sb-icon">🌐</div>
+      <div>
+        <h1>IoT Manager RBAC</h1>
+      </div>
+    </div>
+    <p>Project Overview · Tổng hợp toàn bộ hệ thống</p>
+  </div>
+
+  <div class="sb-sep">I. Kiến Trúc</div>
+  <a class="sl bl" href="#arch"><span class="dot db"></span>Tổng quan hệ thống</a>
+  <a class="sl bl sub" href="#arch-diagram"><span class="dot db"></span>Sơ đồ kiến trúc</a>
+  <a class="sl bl sub" href="#arch-stack"><span class="dot db"></span>Tech stack</a>
+
+  <div class="sb-sep">II. Backend</div>
+  <a class="sl cy" href="#backend"><span class="dot dc"></span>Express + TypeScript</a>
+  <a class="sl cy sub" href="#be-routes"><span class="dot dc"></span>API Endpoints</a>
+  <a class="sl cy sub" href="#be-services"><span class="dot dc"></span>Services</a>
+  <a class="sl cy sub" href="#be-middleware"><span class="dot dc"></span>Middleware</a>
+
+  <div class="sb-sep">III. Database</div>
+  <a class="sl ye" href="#database"><span class="dot dy"></span>MySQL 8.0 Schema</a>
+  <a class="sl ye sub" href="#db-tables"><span class="dot dy"></span>Bảng dữ liệu</a>
+
+  <div class="sb-sep">IV. Frontend</div>
+  <a class="sl pu" href="#frontend"><span class="dot dp"></span>Next.js 16 Dashboard</a>
+  <a class="sl pu sub" href="#fe-pages"><span class="dot dp"></span>Pages & Routes</a>
+  <a class="sl pu sub" href="#fe-components"><span class="dot dp"></span>Components</a>
+
+  <div class="sb-sep">V. Firmware</div>
+  <a class="sl gr" href="#firmware"><span class="dot dg"></span>ESP32 DOIT V1</a>
+  <a class="sl gr sub" href="#fw-sensor"><span class="dot dg"></span>Sensor Node</a>
+  <a class="sl gr sub" href="#fw-gateway"><span class="dot dg"></span>Gateway Node</a>
+
+  <div class="sb-sep">VI. Bảo Mật</div>
+  <a class="sl re" href="#security"><span class="dot dr"></span>Security Features</a>
+  <a class="sl re sub" href="#sec-hmac"><span class="dot dr"></span>2-Layer HMAC</a>
+  <a class="sl re sub" href="#sec-rbac"><span class="dot dr"></span>RBAC</a>
+  <a class="sl re sub" href="#sec-block"><span class="dot dr"></span>Auto-Block</a>
+
+  <div class="sb-sep">VII. Hạ Tầng</div>
+  <a class="sl or" href="#infra"><span class="dot do"></span>Docker & MQTT</a>
+  <a class="sl or sub" href="#infra-docker"><span class="dot do"></span>Docker Compose</a>
+  <a class="sl or sub" href="#infra-mqtt"><span class="dot do"></span>Dual MQTT Brokers</a>
+
+  <div class="sb-sep">VIII. Tài Liệu</div>
+  <a class="sl pk" href="#docs"><span class="dot dpk"></span>Documentation</a>
+  <a class="sl pk sub" href="#docs-list"><span class="dot dpk"></span>Danh sách tài liệu</a>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<main id="main">
+
+  <div class="pg-title">
+    <h1>IoT Device Manager — RBAC</h1>
+    <p>Hệ thống quản lý thiết bị IoT end-to-end: từ firmware ESP32 thu thập cảm biến, qua dual MQTT broker, backend TypeScript xác thực HMAC, đến dashboard Next.js với phân quyền RBAC đầy đủ. Tài liệu này tổng hợp toàn bộ những gì đã được xây dựng.</p>
+    <div class="pg-meta">
+      <span class="pg-tag tag-cy">TypeScript</span>
+      <span class="pg-tag tag-pu">Next.js 16</span>
+      <span class="pg-tag tag-gr">Express 5</span>
+      <span class="pg-tag tag-or">ESP32 C++</span>
+      <span class="pg-tag tag-bl">MySQL 8</span>
+      <span class="pg-tag tag-ye">MQTT Mosquitto</span>
+      <span class="pg-tag tag-cy">Docker</span>
+      <span class="pg-tag tag-pu">HMAC-SHA256</span>
+    </div>
+  </div>
+
+  <!-- ════════ I. KIẾN TRÚC ════════ -->
+  <div id="arch" class="chap c-bl">
+    <div class="chap-n">I</div>
+    <div><h2>Kiến Trúc Hệ Thống</h2><p>Toàn bộ luồng dữ liệu từ phần cứng đến dashboard</p></div>
+  </div>
+
+  <div id="arch-diagram" class="sec">
+    <h3>Sơ Đồ Kiến Trúc Tổng Quan</h3>
+    <p class="sec-desc">6 lớp hệ thống: firmware ESP32 → MQTT brokers → backend API → MySQL → frontend dashboard. Nginx đóng vai trò reverse proxy trước tất cả dịch vụ HTTP.</p>
+    <div class="dc-wrap">
+      <div class="dc-bar b-bl"></div>
+      <div class="dc-head">
+        <div class="dc-dots"><span></span><span></span><span></span></div>
+        <span class="dc-fname">docker-compose.yml · System Architecture</span>
+      </div>
+      <div class="dc-body">
+        <div class="mermaid">
+%%{init:{"theme":"dark","themeVariables":{"primaryColor":"#1c2030","primaryTextColor":"#e2e8f0","primaryBorderColor":"#2a2f4a","lineColor":"#64748b","edgeLabelBackground":"#1c2030"}}}%%
+flowchart TB
+    subgraph HW["⚡ Phần Cứng (ESP32 DOIT V1)"]
+        SN1["🌡️ Sensor Node 1\nDHT22 · GPIO4\nHMAC-SHA256"]
+        SN2["🌡️ Sensor Node 2\nDHT22 · GPIO4\nHMAC-SHA256"]
+        GW["📡 Gateway Node\nDual MQTT Client\n2-layer HMAC"]
+    end
+
+    subgraph BROKERS["📶 MQTT Brokers (Mosquitto)"]
+        B1["Broker 1 :1883\nlocal/sensors/+/data\nSensor ↔ Gateway"]
+        B2["Broker 2 :1884\ngateway/+/data\nGateway → Backend"]
+    end
+
+    subgraph BACKEND["⚙️ Backend (Express + TypeScript) :5000"]
+        API["REST API\n/api/..."]
+        MQTT_SVC["mqttDataService\nSubscribe & Validate"]
+        HMAC_SVC["hmacService\nHMAC-SHA256"]
+    end
+
+    subgraph DB["🗄️ MySQL 8.0 :3308"]
+        TBL["users · devices\nsensor_data · audit_log"]
+    end
+
+    subgraph FE["🖥️ Frontend (Next.js 16) :3000"]
+        DASH["Dashboard · Devices\nUsers · Audit Log"]
+    end
+
+    NGINX["🔀 Nginx Reverse Proxy :80"]
+    ADMIN["👤 Admin / Operator / Viewer\nBrowser"]
+
+    SN1 -->|"MQTT publish\nlocal/sensors/sn1/data"| B1
+    SN2 -->|"MQTT publish\nlocal/sensors/sn2/data"| B1
+    B1  -->|"Subscribe + Validate"| GW
+    GW  -->|"Re-sign + Publish\ngateway/gw1/data"| B2
+    B2  -->|"Subscribe"| MQTT_SVC
+    GW  -->|"GET /api/device/sensors\nfetch whitelist"| API
+    MQTT_SVC --> HMAC_SVC
+    MQTT_SVC --> TBL
+    API --> HMAC_SVC
+    API --> TBL
+    ADMIN --> NGINX
+    NGINX -->|":3000"| DASH
+    NGINX -->|":5000"| API
+    DASH -->|"REST + Cookie JWT"| API
+
+    style HW fill:#1a2030,stroke:#34d399
+    style BROKERS fill:#1a1a2e,stroke:#a78bfa
+    style BACKEND fill:#1c2030,stroke:#22d3ee
+    style DB fill:#1a1e10,stroke:#fbbf24
+    style FE fill:#201a30,stroke:#f472b6
+    style NGINX fill:#1e1a10,stroke:#fb923c
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="arch-stack" class="sec">
+    <h3>Tech Stack</h3>
+    <div class="grid3">
+      <div class="card">
+        <h4 style="color:var(--c-cyan)">⚙️ Backend</h4>
+        <div class="stack-row">
+          <span class="pill"><span class="pill-dot" style="background:var(--c-cyan)"></span>Express 5.x</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-blue)"></span>TypeScript 6</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-yellow)"></span>MySQL2</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-purple)"></span>MQTT.js</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-green)"></span>bcrypt</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-orange)"></span>jsonwebtoken</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-red)"></span>helmet</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-pink)"></span>morgan</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--c-purple)">🖥️ Frontend</h4>
+        <div class="stack-row">
+          <span class="pill"><span class="pill-dot" style="background:var(--c-purple)"></span>Next.js 16.2.5</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-cyan)"></span>React 19.2.4</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-blue)"></span>TailwindCSS v4</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-green)"></span>Recharts 3.8</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-orange)"></span>SWR</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-yellow)"></span>Lucide React</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-pink)"></span>next-themes</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--c-green)">⚡ Firmware / Infra</h4>
+        <div class="stack-row">
+          <span class="pill"><span class="pill-dot" style="background:var(--c-green)"></span>ESP32 C++</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-cyan)"></span>PlatformIO</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-purple)"></span>Mosquitto 2</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-orange)"></span>Docker Compose</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-yellow)"></span>Nginx Alpine</span>
+          <span class="pill"><span class="pill-dot" style="background:var(--c-blue)"></span>MySQL 8.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ II. BACKEND ════════ -->
+  <div id="backend" class="chap c-cy">
+    <div class="chap-n">II</div>
+    <div><h2>Backend API</h2><p>Express 5 + TypeScript — xác thực, phân quyền, xử lý dữ liệu IoT</p></div>
+  </div>
+
+  <div id="be-routes" class="sec">
+    <h3>API Endpoints</h3>
+    <p class="sec-desc">Toàn bộ các endpoint RESTful. Rate limit áp dụng per-IP: login 10/15min, device data 60/min, API chung 100/15min.</p>
+
+    <!-- Auth -->
+    <p style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 6px;">Authentication</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Method + Path</th><th>Mô tả</th><th>Quyền</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1"><span class="method m-post">POST</span><span class="ep">/api/auth/login</span></td>
+            <td class="tc2">Đăng nhập → JWT cookie HttpOnly 8h</td>
+            <td class="tc3">Public · Rate 10/15min</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-post">POST</span><span class="ep">/api/auth/logout</span></td>
+            <td class="tc2">Xoá cookie JWT, kết thúc session</td>
+            <td class="tc3">Đã đăng nhập</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/auth/me</span></td>
+            <td class="tc2">Lấy thông tin user hiện tại</td>
+            <td class="tc3">Đã đăng nhập</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Devices -->
+    <p style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 6px;">Devices</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Method + Path</th><th>Mô tả</th><th>Quyền</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1"><span class="method m-post">POST</span><span class="ep">/api/devices/register</span></td>
+            <td class="tc2">Đăng ký thiết bị mới → trả về <code>device_id</code> + <code>secret_key</code> (chỉ 1 lần)</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span><span class="role-badge r-op">operator</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/devices</span></td>
+            <td class="tc2">Danh sách thiết bị kèm trạng thái online</td>
+            <td class="tc3">Tất cả roles</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/devices/:id</span></td>
+            <td class="tc2">Chi tiết thiết bị + 10 readings gần nhất</td>
+            <td class="tc3">Tất cả roles</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/devices/:id/data</span></td>
+            <td class="tc2">Lịch sử dữ liệu phân trang (page, limit)</td>
+            <td class="tc3">Tất cả roles</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-patch">PATCH</span><span class="ep">/api/devices/:id/status</span></td>
+            <td class="tc2">Đổi status: active / inactive / blocked</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span><span class="role-badge r-op">operator</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-del">DELETE</span><span class="ep">/api/devices/:id</span></td>
+            <td class="tc2">Xoá thiết bị (cascade sensor_data, tokens, audit)</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span><span class="role-badge r-op">operator</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Device Data -->
+    <p style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 6px;">Device Data (HMAC-authenticated)</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Method + Path</th><th>Mô tả</th><th>Quyền</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1"><span class="method m-post">POST</span><span class="ep">/api/device/data</span></td>
+            <td class="tc2">HTTP fallback nhận dữ liệu cảm biến — xác thực 2 lớp HMAC · Rate 60/min</td>
+            <td class="tc3">Device HMAC</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/device/sensors</span></td>
+            <td class="tc2">Gateway lấy danh sách sensor đang active</td>
+            <td class="tc3">Device HMAC</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Users -->
+    <p style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 6px;">Users (Admin only)</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Method + Path</th><th>Mô tả</th><th>Quyền</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/users</span></td>
+            <td class="tc2">Danh sách tài khoản hệ thống</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-post">POST</span><span class="ep">/api/users</span></td>
+            <td class="tc2">Tạo tài khoản operator / viewer mới</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-patch">PATCH</span><span class="ep">/api/users/:id/password</span></td>
+            <td class="tc2">Reset mật khẩu — bcrypt cost 12</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-del">DELETE</span><span class="ep">/api/users/:id</span></td>
+            <td class="tc2">Xoá tài khoản (chặn self-delete và admin)</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Misc -->
+    <p style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 6px;">Dashboard · Audit · Health</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Method + Path</th><th>Mô tả</th><th>Quyền</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/dashboard/stats</span></td>
+            <td class="tc2">Tổng gateways/sensors, số online, tổng data points</td>
+            <td class="tc3">Tất cả roles</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/audit-log</span></td>
+            <td class="tc2">Lọc log theo event_type, device_id, date range (max 500)</td>
+            <td class="tc3">Tất cả roles</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-del">DELETE</span><span class="ep">/api/audit-log/data-recv</span></td>
+            <td class="tc2">Xoá toàn bộ DATA_RECV logs</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span><span class="role-badge r-op">operator</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/health</span></td>
+            <td class="tc2">Health check cho orchestration · <code>{"{"}"status":"ok"{"}"}</code></td>
+            <td class="tc3">Public</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="be-services" class="sec">
+    <h3>Services</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Mục đích</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1" style="color:var(--c-cyan)">hmacService.ts</td>
+            <td class="tc2">HMAC-SHA256 với <code>crypto.timingSafeEqual()</code> · cửa sổ timestamp ±300s · trả về lỗi typed: NOT_FOUND / TIMESTAMP_EXPIRED / HMAC_MISMATCH / DEVICE_BLOCKED</td>
+          </tr>
+          <tr>
+            <td class="tc1" style="color:var(--c-cyan)">mqttDataService.ts</td>
+            <td class="tc2">Subscribe <code>gateway/+/data</code> trên Broker 2 · xác thực 2 lớp HMAC · lưu DB · auto-block sau 5 lần lỗi</td>
+          </tr>
+          <tr>
+            <td class="tc1" style="color:var(--c-cyan)">auditLogger.ts</td>
+            <td class="tc2">Ghi sự kiện vào <code>audit_log</code> · tự prune DATA_RECV giữ 150 bản ghi mới nhất per device</td>
+          </tr>
+          <tr>
+            <td class="tc1" style="color:var(--c-cyan)">deviceStatus.ts</td>
+            <td class="tc2">Heartbeat monitor mỗi 30s · thiết bị được xem là online nếu <code>last_seen</code> trong vòng 60s</td>
+          </tr>
+          <tr>
+            <td class="tc1" style="color:var(--c-cyan)">mqttTracker.ts</td>
+            <td class="tc2">Theo dõi kết nối MQTT qua topic <code>$SYS/broker/log/N</code> · cập nhật <code>last_ip</code> cho thiết bị</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="be-middleware" class="sec">
+    <h3>Middleware</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Chức năng</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1" style="color:var(--c-green)">verifyJWT.ts</td>
+            <td class="tc2">Đọc JWT từ cookie HttpOnly → verify signature → attach <code>req.user</code> · reject nếu expired hoặc invalid</td>
+          </tr>
+          <tr>
+            <td class="tc1" style="color:var(--c-green)">rbac.ts</td>
+            <td class="tc2"><code>requireRole(...roles)</code> guard · trả 403 nếu user không đủ quyền</td>
+          </tr>
+          <tr>
+            <td class="tc1" style="color:var(--c-green)">validateDevice.ts</td>
+            <td class="tc2">Xác thực 2 lớp HMAC (Gateway → Sensor) · tăng <code>fail_count</code> mỗi lần lỗi · auto-block ở lần thứ 5 · ghi audit log</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════ III. DATABASE ════════ -->
+  <div id="database" class="chap c-ye">
+    <div class="chap-n">III</div>
+    <div><h2>Database Schema</h2><p>MySQL 8.0 · UTF8MB4 · 5 bảng với foreign keys và composite indexes</p></div>
+  </div>
+
+  <div id="db-tables" class="sec">
+    <h3>Cấu Trúc Bảng</h3>
+    <div class="dc-wrap">
+      <div class="dc-bar b-ye"></div>
+      <div class="dc-head">
+        <div class="dc-dots"><span></span><span></span><span></span></div>
+        <span class="dc-fname">database/migrations/001_schema.sql · Entity Relationship</span>
+      </div>
+      <div class="dc-body">
+        <div class="mermaid">
+%%{init:{"theme":"dark","themeVariables":{"primaryColor":"#1c2030","primaryTextColor":"#e2e8f0","primaryBorderColor":"#2a2f4a","lineColor":"#64748b","edgeLabelBackground":"#1c2030"}}}%%
+erDiagram
+    users {
+        INT id PK
+        VARCHAR username UK
+        VARCHAR password_hash
+        ENUM role "admin|operator|viewer"
+        DATETIME created_at
+    }
+    devices {
+        INT id PK
+        VARCHAR device_id UK
+        VARCHAR device_name
+        ENUM device_type "sensor|gateway"
+        VARCHAR secret_key
+        ENUM status "inactive|active|blocked"
+        TINYINT fail_count
+        DATETIME last_seen
+        VARCHAR last_ip
+        INT created_by FK
+        DATETIME created_at
+    }
+    sensor_data {
+        INT id PK
+        INT device_id FK
+        INT gateway_id FK
+        JSON payload
+        DATETIME received_at
+    }
+    device_tokens {
+        INT id PK
+        INT device_id FK
+        VARCHAR token
+        DATETIME expires_at
+        DATETIME created_at
+    }
+    audit_log {
+        INT id PK
+        VARCHAR event_type
+        INT device_id FK
+        INT user_id FK
+        JSON details
+        DATETIME created_at
+    }
+    users ||--o{ devices : "created_by"
+    users ||--o{ audit_log : "user_id"
+    devices ||--o{ sensor_data : "device_id (sensor)"
+    devices ||--o{ sensor_data : "gateway_id"
+    devices ||--o{ device_tokens : "device_id"
+    devices ||--o{ audit_log : "device_id"
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:16px;">
+      <div class="card">
+        <h4 style="color:var(--c-yellow)">Audit Event Types</h4>
+        <ul>
+          <li>DEVICE_REGISTER — thiết bị đăng ký mới</li>
+          <li>DEVICE_STATUS_CHANGE — thay đổi trạng thái</li>
+          <li>GATEWAY_AUTH_FAIL — lỗi xác thực HMAC gateway</li>
+          <li>SENSOR_AUTH_FAIL — lỗi xác thực HMAC sensor</li>
+          <li>DEVICE_BLOCKED — thiết bị bị auto-block</li>
+          <li>DATA_RECV — nhận dữ liệu cảm biến thành công</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--c-yellow)">Data Retention & Indexes</h4>
+        <ul>
+          <li>sensor_data: giữ 150 records mới nhất / sensor</li>
+          <li>audit_log DATA_RECV: giữ 150 records / device</li>
+          <li>Index: (device_id, received_at) cho paginated query</li>
+          <li>Index: (event_type, created_at) cho log filter</li>
+          <li>Seeded: tài khoản admin mặc định (bcrypt)</li>
+          <li>Character set: utf8mb4_unicode_ci</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ IV. FRONTEND ════════ -->
+  <div id="frontend" class="chap c-pu">
+    <div class="chap-n">IV</div>
+    <div><h2>Frontend Dashboard</h2><p>Next.js 16 + React 19 + TailwindCSS v4 — giao diện quản lý IoT đầy đủ tính năng</p></div>
+  </div>
+
+  <div id="fe-pages" class="sec">
+    <h3>Pages & Routes</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Route</th><th>Trang</th><th>Tính năng</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1 ep">/login</td>
+            <td class="tc2">Đăng nhập</td>
+            <td class="tc3">Form đăng nhập · JWT cookie · redirect sau login</td>
+          </tr>
+          <tr>
+            <td class="tc1 ep">/dashboard</td>
+            <td class="tc2">Tổng quan</td>
+            <td class="tc3">Stats cards (gateway/sensor total + online) · data points count · real-time refresh</td>
+          </tr>
+          <tr>
+            <td class="tc1 ep">/devices</td>
+            <td class="tc2">Thiết bị</td>
+            <td class="tc3">Bảng danh sách · filter trạng thái · badge online · nút đăng ký / xoá / thay đổi status</td>
+          </tr>
+          <tr>
+            <td class="tc1 ep">/devices/[id]</td>
+            <td class="tc2">Chi tiết thiết bị</td>
+            <td class="tc3">Metrics panel · biểu đồ lịch sử (Recharts) · sensor history table · security panel (HMAC credentials)</td>
+          </tr>
+          <tr>
+            <td class="tc1 ep">/users</td>
+            <td class="tc2">Quản lý user</td>
+            <td class="tc3">Tạo / reset mật khẩu / xoá tài khoản operator, viewer</td>
+          </tr>
+          <tr>
+            <td class="tc1 ep">/audit</td>
+            <td class="tc2">Audit Log</td>
+            <td class="tc3">Lọc theo event type, device_id, date range · hiển thị 500 events mới nhất</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note note-info" style="margin-top:12px;">
+      Route layout: <code>/account/*</code> (public) và <code>/private/*</code> (yêu cầu JWT). Middleware Next.js tự động redirect về login nếu chưa xác thực.
+    </div>
+  </div>
+
+  <div id="fe-components" class="sec">
+    <h3>Components (22 TSX files)</h3>
+    <div class="flist">
+      <div class="fitem"><span class="fitem-icon">📋</span><div class="fitem-text"><strong>DeviceTable + DeviceRow</strong>Bảng thiết bị có sort, filter trạng thái, hành động inline</div></div>
+      <div class="fitem"><span class="fitem-icon">🃏</span><div class="fitem-text"><strong>DeviceCard + DeviceGrid</strong>Hiển thị dạng card grid cho thiết bị</div></div>
+      <div class="fitem"><span class="fitem-icon">➕</span><div class="fitem-text"><strong>AddDeviceModal + RegisterModal</strong>Dialog đăng ký thiết bị mới, hiện secret key 1 lần</div></div>
+      <div class="fitem"><span class="fitem-icon">📈</span><div class="fitem-text"><strong>DeviceActivityChart + SensorChart</strong>Recharts line chart cho temperature/humidity theo thời gian</div></div>
+      <div class="fitem"><span class="fitem-icon">🔍</span><div class="fitem-text"><strong>DeviceDetailHeader + DeviceMetrics</strong>Panel chi tiết: uptime, last_seen, fail_count, IP</div></div>
+      <div class="fitem"><span class="fitem-icon">🔒</span><div class="fitem-text"><strong>DeviceSecurityPanel</strong>Hiển thị HMAC credentials để nạp vào firmware</div></div>
+      <div class="fitem"><span class="fitem-icon">🟢</span><div class="fitem-text"><strong>DeviceStatusBadge + OnlineIndicator</strong>Badge màu active/blocked/inactive · dot blink khi online</div></div>
+      <div class="fitem"><span class="fitem-icon">📊</span><div class="fitem-text"><strong>StatsCard + StatCard</strong>Cards hiển thị số liệu tổng hợp trên dashboard</div></div>
+      <div class="fitem"><span class="fitem-icon">📜</span><div class="fitem-text"><strong>AuditLogTable + LogTable</strong>Bảng audit log với color-coded event types</div></div>
+      <div class="fitem"><span class="fitem-icon">🧩</span><div class="fitem-text"><strong>button / input / select / dialog / ConfirmDialog</strong>Primitive UI components theo design system</div></div>
+    </div>
+  </div>
+
+  <!-- ════════ V. FIRMWARE ════════ -->
+  <div id="firmware" class="chap c-gr">
+    <div class="chap-n">V</div>
+    <div><h2>Firmware ESP32</h2><p>C++ + PlatformIO — 3 node (2 sensor + 1 gateway), dual MQTT, HMAC-SHA256</p></div>
+  </div>
+
+  <div id="fw-sensor" class="sec">
+    <h3>Sensor Node (×2)</h3>
+    <p class="sec-desc">File: <code>firmware/sensor-node/</code> và <code>firmware/sensor-node-2/</code> · Đọc DHT22, ký HMAC, publish MQTT mỗi 5 giây.</p>
+    <div class="flist">
+      <div class="fitem"><span class="fitem-icon">🌡️</span><div class="fitem-text"><strong>Đọc DHT22 (GPIO4)</strong>Đo nhiệt độ (°C) và độ ẩm (%) mỗi 5000ms trong <code>loop()</code></div></div>
+      <div class="fitem"><span class="fitem-icon">🔐</span><div class="fitem-text"><strong>HMAC-SHA256</strong>Ký <code>sensor_id:timestamp</code> bằng <code>secret_key</code> từ <code>config.h</code></div></div>
+      <div class="fitem"><span class="fitem-icon">📶</span><div class="fitem-text"><strong>Publish MQTT Broker 1 :1883</strong>Topic: <code>local/sensors/{"{"}sensor_id{"}"}/data</code> · JSON payload</div></div>
+      <div class="fitem"><span class="fitem-icon">🕐</span><div class="fitem-text"><strong>NTP Sync</strong>Đồng bộ thời gian với NTP server để timestamp chính xác trong cửa sổ ±300s</div></div>
+      <div class="fitem"><span class="fitem-icon">📡</span><div class="fitem-text"><strong>WiFi Manager</strong>Kết nối WiFi 2.4GHz, tự reconnect khi mất kết nối</div></div>
+      <div class="fitem"><span class="fitem-icon">⚙️</span><div class="fitem-text"><strong>config.h</strong>Device credentials, WiFi SSID/pass, MQTT host, DHT pin number</div></div>
+    </div>
+  </div>
+
+  <div id="fw-gateway" class="sec">
+    <h3>Gateway Node (×1)</h3>
+    <p class="sec-desc">File: <code>firmware/gateway-node/</code> · Nhận dữ liệu từ sensors, xác thực, ký lại, chuyển tiếp lên Backend.</p>
+    <div class="flist">
+      <div class="fitem"><span class="fitem-icon">🔁</span><div class="fitem-text"><strong>Dual MQTT Client</strong>Kết nối đồng thời Broker 1 (:1883) và Broker 2 (:1884) — 2 connection object tách biệt</div></div>
+      <div class="fitem"><span class="fitem-icon">✅</span><div class="fitem-text"><strong>Xác thực Sensor</strong>Kiểm tra timestamp ±300s và HMAC-SHA256 của mỗi sensor message nhận được</div></div>
+      <div class="fitem"><span class="fitem-icon">📋</span><div class="fitem-text"><strong>Sensor Registry</strong>Whitelist sensor local + fetch từ <code>GET /api/device/sensors</code> mỗi 5 phút</div></div>
+      <div class="fitem"><span class="fitem-icon">🔏</span><div class="fitem-text"><strong>Re-sign Gateway HMAC</strong>Ký lại toàn bộ payload bằng <code>GW_SECRET_KEY</code> trước khi forward</div></div>
+      <div class="fitem"><span class="fitem-icon">📤</span><div class="fitem-text"><strong>Forward tới Broker 2</strong>Topic: <code>gateway/{"{"}gateway_id{"}"}/data</code> · payload: gw_hmac + gw_timestamp + sensor_payload</div></div>
+      <div class="fitem"><span class="fitem-icon">⚙️</span><div class="fitem-text"><strong>config_gw.h</strong>Gateway credentials, WiFi, Broker 1/2 hosts, Backend URL, poll interval</div></div>
+    </div>
+
+    <div class="tbl-wrap" style="margin-top:16px;">
+      <table>
+        <thead><tr><th>Library (C++)</th><th>Mục đích</th></tr></thead>
+        <tbody>
+          <tr><td class="tc1" style="color:var(--c-green)">hmac_util.*</td><td class="tc2">Tính HMAC-SHA256 thuần C++</td></tr>
+          <tr><td class="tc1" style="color:var(--c-green)">mqtt_client.*</td><td class="tc2">Dual subscription/publication management</td></tr>
+          <tr><td class="tc1" style="color:var(--c-green)">ntp_sync.*</td><td class="tc2">Đồng bộ NTP và lấy Unix timestamp hiện tại</td></tr>
+          <tr><td class="tc1" style="color:var(--c-green)">wifi_manager.*</td><td class="tc2">Kết nối WiFi với auto-reconnect</td></tr>
+          <tr><td class="tc1" style="color:var(--c-green)">sensor_registry.*</td><td class="tc2">Quản lý whitelist sensor, fetch từ backend</td></tr>
+          <tr><td class="tc1" style="color:var(--c-green)">forwarder.*</td><td class="tc2">Logic chuyển tiếp message từ Broker 1 → Broker 2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════ VI. BẢO MẬT ════════ -->
+  <div id="security" class="chap c-re">
+    <div class="chap-n">VI</div>
+    <div><h2>Bảo Mật</h2><p>HMAC-SHA256 · RBAC · Auto-block · JWT · Rate limiting · Helmet · Timing-safe</p></div>
+  </div>
+
+  <div id="sec-hmac" class="sec">
+    <h3>2-Layer HMAC Authentication</h3>
+    <p class="sec-desc">Mỗi message đi qua 2 lớp xác thực độc lập: sensor ký payload, gateway ký lại trước khi gửi backend.</p>
+    <div class="dc-wrap">
+      <div class="dc-bar b-re"></div>
+      <div class="dc-head">
+        <div class="dc-dots"><span></span><span></span><span></span></div>
+        <span class="dc-fname">hmacService.ts · 2-Layer HMAC verification chain</span>
+      </div>
+      <div class="dc-body">
+        <div class="mermaid">
+%%{init:{"theme":"dark","themeVariables":{"primaryColor":"#1c2030","primaryTextColor":"#e2e8f0","primaryBorderColor":"#2a2f4a","lineColor":"#64748b","edgeLabelBackground":"#1c2030"}}}%%
+sequenceDiagram
+    participant SN as 🌡️ Sensor Node
+    participant B1 as 📶 Broker 1
+    participant GW as 📡 Gateway Node
+    participant B2 as 📶 Broker 2
+    participant BE as ⚙️ Backend
+
+    SN->>SN: HMAC_SHA256(secret_key, "sn_id:timestamp")
+    SN->>B1: publish local/sensors/sn1/data<br/>{sn_id, sn_timestamp, sn_hmac, temperature, humidity}
+
+    B1->>GW: message received
+    GW->>GW: verify sn_hmac<br/>check timestamp ±300s
+    GW->>GW: HMAC_SHA256(gw_secret, "gw_id:timestamp")
+    GW->>B2: publish gateway/gw1/data<br/>{gw_id, gw_timestamp, gw_hmac, [sensor_payload]}
+
+    B2->>BE: mqttDataService receives message
+    BE->>BE: Layer 1: verify gw_hmac
+    BE->>BE: Layer 2: verify sn_hmac
+    BE->>BE: INSERT sensor_data
+    BE->>BE: UPDATE last_seen, fail_count=0
+        </div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:14px;">
+      <div class="card">
+        <h4 style="color:var(--c-red)">Cơ chế bảo vệ</h4>
+        <ul>
+          <li><code>crypto.timingSafeEqual()</code> — chống timing attack</li>
+          <li>Timestamp window ±300s — chống replay attack</li>
+          <li>Mỗi device có <code>secret_key</code> riêng trong DB</li>
+          <li>Secret key chỉ trả về 1 lần khi register</li>
+          <li>HMAC algorithm: SHA-256 (không thể giả mạo)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--c-red)">Điều kiện tăng fail_count</h4>
+        <ul>
+          <li>TIMESTAMP_EXPIRED — timestamp lệch &gt; 300s</li>
+          <li>HMAC_MISMATCH — chữ ký không khớp</li>
+          <li>NOT_FOUND — không thay đổi fail_count</li>
+          <li>DEVICE_BLOCKED — không thay đổi fail_count</li>
+          <li>Auth success → reset fail_count = 0</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec-rbac" class="sec">
+    <h3>RBAC — Phân Quyền 3 Tầng</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Role</th><th>Quyền</th><th>Hạn chế</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="tc1"><span class="role-badge r-admin">admin</span></td>
+            <td class="tc2">Toàn quyền: CRUD users, devices, xoá audit log, thay đổi mọi trạng thái</td>
+            <td class="tc3" style="color:var(--c-orange)">Không thể tự xoá bản thân. Không thể xoá tài khoản admin khác.</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="role-badge r-op">operator</span></td>
+            <td class="tc2">Đăng ký thiết bị, quản lý devices (status, xoá), xem audit log</td>
+            <td class="tc3" style="color:var(--c-orange)">Không quản lý được users. Không xoá được tài khoản.</td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="role-badge r-view">viewer</span></td>
+            <td class="tc2">Xem danh sách devices, dashboard stats, lịch sử dữ liệu</td>
+            <td class="tc3" style="color:var(--c-orange)">Chỉ đọc. Không thể thực hiện bất kỳ thao tác ghi nào.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="sec-block" class="sec">
+    <h3>Auto-Block Mechanism</h3>
+    <div class="grid4">
+      <div class="card" style="text-align:center">
+        <div class="card-val" style="color:var(--c-red)">5</div>
+        <div class="card-lbl">BLOCK_THRESHOLD</div>
+        <div class="card-sub">Lần fail liên tiếp để block</div>
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-val" style="color:var(--c-orange)">300s</div>
+        <div class="card-lbl">Timestamp Window</div>
+        <div class="card-sub">Cửa sổ hợp lệ của timestamp</div>
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-val" style="color:var(--c-cyan)">2</div>
+        <div class="card-lbl">Luồng block</div>
+        <div class="card-sub">REST API + MQTT độc lập</div>
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-val" style="color:var(--c-green)">0</div>
+        <div class="card-lbl">fail_count sau unblock</div>
+        <div class="card-sub">Reset khi admin mở khoá</div>
+      </div>
+    </div>
+    <div class="note note-warn" style="margin-top:12px;">
+      fail_count được chia sẻ giữa REST và MQTT: 3 lần lỗi qua REST + 2 lần qua MQTT = block ngay. Xem chi tiết tại <strong>AUTO_BLOCK_FLOWCHART.html</strong>.
+    </div>
+  </div>
+
+  <!-- ════════ VII. HẠ TẦNG ════════ -->
+  <div id="infra" class="chap c-or">
+    <div class="chap-n">VII</div>
+    <div><h2>Hạ Tầng</h2><p>Docker Compose · Dual MQTT Brokers · Nginx Reverse Proxy</p></div>
+  </div>
+
+  <div id="infra-docker" class="sec">
+    <h3>Docker Services</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Service</th><th>Image</th><th>Port</th><th>Mô tả</th></tr></thead>
+        <tbody>
+          <tr><td class="tc1" style="color:var(--c-yellow)">mysql</td><td class="tc2">mysql:8.0</td><td class="tc2">:3308</td><td class="tc3">Database chính, persistent volume, auto-run migrations</td></tr>
+          <tr><td class="tc1" style="color:var(--c-purple)">mqtt-broker-1</td><td class="tc2">eclipse-mosquitto:2</td><td class="tc2">:1883</td><td class="tc3">Sensor ↔ Gateway, topic: <code>local/sensors/+/data</code></td></tr>
+          <tr><td class="tc1" style="color:var(--c-purple)">mqtt-broker-2</td><td class="tc2">eclipse-mosquitto:2</td><td class="tc2">:1884</td><td class="tc3">Gateway → Backend, topic: <code>gateway/+/data</code></td></tr>
+          <tr><td class="tc1" style="color:var(--c-cyan)">backend</td><td class="tc2">Node.js 20</td><td class="tc2">:5000</td><td class="tc3">Express API + MQTT subscriber, TypeScript compiled</td></tr>
+          <tr><td class="tc1" style="color:var(--c-pink)">frontend</td><td class="tc2">Node.js 20</td><td class="tc2">:3000</td><td class="tc3">Next.js 16 SSR dashboard, hot reload (dev)</td></tr>
+          <tr><td class="tc1" style="color:var(--c-orange)">nginx</td><td class="tc2">nginx:alpine</td><td class="tc2">:80</td><td class="tc3">Reverse proxy, SSL-ready config, route /api → backend</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note note-green" style="margin-top:12px;">
+      <strong style="color:var(--c-green)">Setup tự động:</strong> <code>scripts/setup.sh</code> (Linux/macOS/WSL) và <code>scripts/setup.bat</code> (Windows) tự detect docker compose v1/v2, tạo <code>.env</code>, pull images và launch toàn bộ stack bằng 1 lệnh.
+    </div>
+  </div>
+
+  <div id="infra-mqtt" class="sec">
+    <h3>Dual MQTT Broker Architecture</h3>
+    <p class="sec-desc">Hai broker tách biệt để cô lập lớp bảo mật: sensor–gateway không có đường thẳng vào backend.</p>
+    <div class="dc-wrap">
+      <div class="dc-bar b-or"></div>
+      <div class="dc-head">
+        <div class="dc-dots"><span></span><span></span><span></span></div>
+        <span class="dc-fname">mosquitto/broker1/ + broker2/ · Isolation Architecture</span>
+      </div>
+      <div class="dc-body">
+        <div class="mermaid">
+%%{init:{"theme":"dark","themeVariables":{"primaryColor":"#1c2030","primaryTextColor":"#e2e8f0","primaryBorderColor":"#2a2f4a","lineColor":"#64748b","edgeLabelBackground":"#1c2030"}}}%%
+flowchart LR
+    subgraph ZONE1["🔒 Zone 1 · Local Network"]
+        SN1["🌡️ Sensor 1"]
+        SN2["🌡️ Sensor 2"]
+        B1["📶 Broker 1\n:1883\nlocal/sensors/+/data"]
+        GW["📡 Gateway"]
+        SN1 -->|publish| B1
+        SN2 -->|publish| B1
+        B1  -->|subscribe| GW
+    end
+
+    subgraph ZONE2["🔒 Zone 2 · Backend Network"]
+        B2["📶 Broker 2\n:1884\ngateway/+/data"]
+        BE["⚙️ Backend API\n:5000"]
+        B2 -->|subscribe| BE
+    end
+
+    GW -->|"re-sign + publish\ngw_hmac"| B2
+
+    style ZONE1 fill:#1a2010,stroke:#34d399
+    style ZONE2 fill:#1a1020,stroke:#a78bfa
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ VIII. TÀI LIỆU ════════ -->
+  <div id="docs" class="chap c-pk">
+    <div class="chap-n">VIII</div>
+    <div><h2>Tài Liệu</h2><p>Flowcharts, threat model, deployment guide, security docs — 15+ files</p></div>
+  </div>
+
+  <div id="docs-list" class="sec">
+    <h3>Danh Sách Tài Liệu</h3>
+    <div class="doc-grid">
+      <div class="doc-card">
+        <div class="doc-icon">📊</div>
+        <h4>FIRMWARE_FLOWCHART.html</h4>
+        <p>Sơ đồ kiến trúc firmware ESP32 toàn diện: sensor, gateway, HMAC, WiFi, full E2E flow</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🔒</div>
+        <h4>AUTO_BLOCK_FLOWCHART.html</h4>
+        <p>Chi tiết cơ chế tự block thiết bị: REST + MQTT paths, state machine, recovery flow</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🌐</div>
+        <h4>PROJECT_OVERVIEW.html</h4>
+        <p>File này — tổng hợp toàn bộ những gì đã xây dựng trong workspace</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🛡️</div>
+        <h4>THREAT_MODEL_SECURITY.md</h4>
+        <p>Phân tích threat model, attack vectors, countermeasures theo STRIDE framework</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">👥</div>
+        <h4>RBAC_CHI_TIET.md</h4>
+        <p>Bảng phân quyền chi tiết từng endpoint theo từng role admin/operator/viewer</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🔄</div>
+        <h4>LUONG_DU_LIEU_IOT.md</h4>
+        <p>Sơ đồ luồng dữ liệu end-to-end từ cảm biến đến dashboard</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">📡</div>
+        <h4>GIAO_TIEP_HE_THONG.md</h4>
+        <p>Hướng dẫn tích hợp các thành phần hệ thống, protocol specs</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🚀</div>
+        <h4>KET_QUA_TRIEN_KHAI.md</h4>
+        <p>Kết quả triển khai, performance benchmarks, deployment verification</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">💻</div>
+        <h4>CHAY_LOCAL.md</h4>
+        <p>Hướng dẫn chạy local development không cần Docker</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🔑</div>
+        <h4>STATUS_CODES.md</h4>
+        <p>Danh sách đầy đủ HTTP status codes và error codes của API</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">🎓</div>
+        <h4>IoT_Security_Project_v3_2.md</h4>
+        <p>Báo cáo học thuật — thiết kế hệ thống, phân tích bảo mật, đánh giá kết quả</p>
+      </div>
+      <div class="doc-card">
+        <div class="doc-icon">❓</div>
+        <h4>CAU_HOI_PHAN_BIEN.md</h4>
+        <p>Q&A phản biện — câu hỏi thường gặp về thiết kế và quyết định kỹ thuật</p>
+      </div>
+    </div>
+
+    <div class="note note-green" style="margin-top:20px;">
+      <strong style="color:var(--c-green)">Scripts bổ sung:</strong> <code>scripts/attack_demo.sh</code> — demo kịch bản tấn công (HMAC mismatch, replay attack, brute-force) để kiểm tra cơ chế auto-block và rate limiting hoạt động đúng.
+    </div>
+  </div>
+
+  <div style="height:80px;"></div>
+</main>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true, theme: 'dark',
+    flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true },
+    sequence: { useMaxWidth: true },
+    er: { useMaxWidth: true },
+    themeVariables: {
+      background: '#0d0f18', primaryColor: '#1c2030',
+      primaryTextColor: '#e2e8f0', primaryBorderColor: '#2a2f4a',
+      lineColor: '#64748b', secondaryColor: '#13161f',
+      tertiaryColor: '#222840', edgeLabelBackground: '#1c2030',
+      nodeBorder: '#2a2f4a', clusterBkg: '#13161f',
+      titleColor: '#e2e8f0', stateLabelColor: '#e2e8f0',
+      actorBkg: '#1c2030', actorBorder: '#2a2f4a',
+      actorTextColor: '#e2e8f0', actorLineColor: '#64748b',
+      signalColor: '#64748b', signalTextColor: '#e2e8f0',
+      labelBoxBkgColor: '#1c2030', labelBoxBorderColor: '#2a2f4a',
+      labelTextColor: '#e2e8f0', loopTextColor: '#e2e8f0',
+      noteBorderColor: '#2a2f4a', noteBkgColor: '#222840',
+      noteTextColor: '#e2e8f0',
+    }
+  });
+
+  const links = document.querySelectorAll('.sl');
+  const ids   = Array.from(document.querySelectorAll('[id]'));
+  function updateActive() {
+    const y = window.scrollY + 90;
+    let cur = '';
+    for (const el of ids) if (el.offsetTop <= y) cur = el.id;
+    links.forEach(l => l.classList.toggle('on', l.getAttribute('href') === '#' + cur));
+  }
+  window.addEventListener('scroll', updateActive, { passive: true });
+  updateActive();
+</script>
+</body>
+</html>

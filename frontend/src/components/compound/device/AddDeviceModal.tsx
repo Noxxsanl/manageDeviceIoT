@@ -63,11 +63,11 @@ export function AddDeviceModal({ open, onClose, onSuccess }: AddDeviceModalProps
       });
       setCredentials({ device_id: data.device.device_id, secret_key: data.device.secret_key });
     } catch (err: unknown) {
-      const msg =
-        err instanceof FetchError
-          ? ((err.data as { error?: string })?.error ?? "Đã có lỗi xảy ra.")
-          : "Đã có lỗi xảy ra.";
-      setApiError(msg);
+      if (err instanceof FetchError && err.status === 403) {
+        setApiError("Không có quyền truy cập.");
+      } else {
+        setApiError("Đã có lỗi xảy ra. Vui lòng thử lại.");
+      }
     } finally {
       setSubmitting(false);
     }

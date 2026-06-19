@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import pool from "../config/db";
 import { validateDevice } from "../middleware/validateDevice";
-import { log } from "../services/auditLogger";
+import { logDataRecvWithPrune } from "../services/auditLogger";
 
 const router = Router();
 
@@ -104,7 +104,7 @@ router.post("/", validateDevice, async (req: Request, res: Response): Promise<vo
   }
 
   // Audit log
-  await log("DATA_RECV", sensor.id, ip, userAgent, {
+  await logDataRecvWithPrune(sensor.id, ip, userAgent as string | null, {
     gateway_id: gateway.device_id,
     sensor_id: sensor.device_id,
     data_id: insertResult.insertId,
