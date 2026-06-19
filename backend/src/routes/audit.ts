@@ -15,8 +15,14 @@ const VALID_EVENT_TYPES = [
   "DEVICE_DELETE",
 ];
 
-// DELETE /api/audit-log/by-type?event_type=XXX – xóa toàn bộ log theo loại (admin/operator only)
-router.delete("/by-type", verifyJWT, requireRole("admin", "operator"), async (req: Request, res: Response): Promise<void> => {
+const ALLOWED_EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
+  admin: VALID_EVENT_TYPES,
+  operator: ["GATEWAY_AUTH_FAIL", "SENSOR_AUTH_FAIL", "DATA_RECV", "DEVICE_REGISTER", "DEVICE_BLOCKED", "DEVICE_STATUS_CHANGE"],
+  viewer: ["DATA_RECV", "DEVICE_REGISTER", "DEVICE_BLOCKED", "DEVICE_STATUS_CHANGE"],
+};
+
+// DELETE /api/audit-log/by-type?event_type=XXX – xóa toàn bộ log theo loại (admin only)
+router.delete("/by-type", verifyJWT, requireRole("admin"), async (req: Request, res: Response): Promise<void> => {
   const { event_type } = req.query;
   if (!event_type || typeof event_type !== "string" || !VALID_EVENT_TYPES.includes(event_type)) {
     res.status(400).json({ error: "INVALID_EVENT_TYPE" });
@@ -30,7 +36,7 @@ router.delete("/by-type", verifyJWT, requireRole("admin", "operator"), async (re
 });
 
 // DELETE /api/audit-log/data-recv – giữ lại để tương thích ngược
-router.delete("/data-recv", verifyJWT, requireRole("admin", "operator"), async (_req: Request, res: Response): Promise<void> => {
+router.delete("/data-recv", verifyJWT, requireRole("admin"), async (_req: Request, res: Response): Promise<void> => {
   const [result] = await (pool as any).execute(
     "DELETE FROM audit_log WHERE event_type = 'DATA_RECV'"
   );
@@ -40,13 +46,22 @@ router.delete("/data-recv", verifyJWT, requireRole("admin", "operator"), async (
 // GET /api/audit-log  – filter by event_type, device_id, from, to; sorted DESC
 router.get("/", verifyJWT, async (req: Request, res: Response): Promise<void> => {
   const { event_type, device_id, from, to } = req.query;
+  const user = (req as any).user;
+  const allowedTypes = ALLOWED_EVENT_TYPES_BY_ROLE[user?.role] ?? [];
 
   const conditions: string[] = [];
   const params: (string | number | Date)[] = [];
 
   if (event_type && typeof event_type === "string") {
+    if (!allowedTypes.includes(event_type)) {
+      res.status(403).json({ error: "FORBIDDEN" });
+      return;
+    }
     conditions.push("a.event_type = ?");
     params.push(event_type);
+  } else {
+    conditions.push(`a.event_type IN (${allowedTypes.map(() => "?").join(",")})`);
+    params.push(...allowedTypes);
   }
   if (device_id) {
     const id = Number(device_id);

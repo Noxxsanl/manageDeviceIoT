@@ -13,7 +13,7 @@ function hasRole(role: UserRole | undefined, ...allowed: UserRole[]): boolean {
  *   POST   /api/devices/register       → admin, operator
  *   PATCH  /api/devices/:id/status     → admin, operator
  *   DELETE /api/devices/:id            → admin
- *   DELETE /api/audit-log/data-recv    → admin, operator
+ *   DELETE /api/audit-log/data-recv    → admin
  */
 export function usePermissions() {
   const { user } = useAuth();
@@ -27,6 +27,6 @@ export function usePermissions() {
     canCreateDevice: hasRole(role, "admin", "operator"),
     canUpdateDeviceStatus: hasRole(role, "admin", "operator"),
     canDeleteDevice: hasRole(role, "admin"),
-    canDeleteAuditLog: hasRole(role, "admin", "operator"),
+    canDeleteAuditLog: hasRole(role, "admin"),
   };
 }

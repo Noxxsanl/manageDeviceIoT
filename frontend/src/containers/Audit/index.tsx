@@ -7,22 +7,40 @@ import { usePermissions } from "@/package/features/usePermissions";
 import AuditLogTable from "@/components/compound/audit/AuditLogTable";
 import api, { FetchError } from "@/package/services/api";
 
-const EVENT_TYPES = [
-  "GATEWAY_AUTH_FAIL",
-  "SENSOR_AUTH_FAIL",
-  "DATA_RECV",
-  "DEVICE_REGISTER",
-  "DEVICE_BLOCKED",
-  "DEVICE_STATUS_CHANGE",
-  "DEVICE_DELETE",
-];
+const EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
+  admin: [
+    "GATEWAY_AUTH_FAIL",
+    "SENSOR_AUTH_FAIL",
+    "DATA_RECV",
+    "DEVICE_REGISTER",
+    "DEVICE_BLOCKED",
+    "DEVICE_STATUS_CHANGE",
+    "DEVICE_DELETE",
+  ],
+  operator: [
+    "GATEWAY_AUTH_FAIL",
+    "SENSOR_AUTH_FAIL",
+    "DATA_RECV",
+    "DEVICE_REGISTER",
+    "DEVICE_BLOCKED",
+    "DEVICE_STATUS_CHANGE",
+  ],
+  viewer: [
+    "DATA_RECV",
+    "DEVICE_REGISTER",
+    "DEVICE_BLOCKED",
+    "DEVICE_STATUS_CHANGE",
+  ],
+};
 
 const PAGE_SIZES = [10, 25, 50];
 
 type Toast = { msg: string; ok: boolean } | null;
 
 export default function Audit() {
-  const { canDeleteAuditLog } = usePermissions();
+  const { canDeleteAuditLog, isAdmin, isOperator } = usePermissions();
+  const role = isAdmin ? "admin" : isOperator ? "operator" : "viewer";
+  const EVENT_TYPES = EVENT_TYPES_BY_ROLE[role] ?? EVENT_TYPES_BY_ROLE.viewer;
 
   const [eventType, setEventType] = useState("");
   const [deviceId, setDeviceId] = useState("");
