@@ -63,10 +63,56 @@ export default function Audit() {
   const { logs, isLoading, isError, refresh } = useAuditLog(filters);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteType, setDeleteType] = useState("DATA_RECV");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
+  }
+
+  function handleToggle(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function handleToggleAll(ids: number[]) {
+    setSelectedIds((prev) => {
+      const allSelected = ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  async function handleDeleteSelected() {
+    if (!canDeleteAuditLog || selectedIds.size === 0) return;
+    if (!window.confirm(`Xóa ${selectedIds.size} log đã chọn? Hành động này không thể hoàn tác.`)) return;
+    setIsDeleting(true);
+    try {
+      await api.delete("/api/audit-log/bulk", { ids: Array.from(selectedIds) });
+      setSelectedIds(new Set());
+      refresh();
+      showToast(`Đã xóa ${selectedIds.size} log.`);
+    } catch (err: unknown) {
+      if (err instanceof FetchError && err.status === 403) {
+        showToast("Không có quyền truy cập.", false);
+      } else {
+        showToast("Xóa thất bại. Vui lòng thử lại.", false);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   async function handleDeleteByType() {
@@ -116,7 +162,17 @@ export default function Audit() {
             Nhật ký bảo mật và sự kiện hệ thống. Tự động làm mới mỗi 30 giây.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canDeleteAuditLog && selectedIds.size > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              disabled={isDeleting}
+              className="inline-flex items-center gap-2 rounded-3xl border border-red-500/60 bg-red-950/80 px-5 py-3 text-sm font-semibold text-red-300 transition hover:border-red-400 hover:bg-red-900/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isDeleting ? "Đang xóa…" : `Xóa ${selectedIds.size} đã chọn`}
+            </button>
+          )}
           {canDeleteAuditLog && (
             <div className="flex items-center gap-1">
               <select
@@ -255,7 +311,13 @@ export default function Audit() {
       </div>
 
       {/* Table */}
-      <AuditLogTable logs={pageLogs} />
+      <AuditLogTable
+        logs={pageLogs}
+        isAdmin={isAdmin}
+        selectedIds={selectedIds}
+        onToggle={handleToggle}
+        onToggleAll={handleToggleAll}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (

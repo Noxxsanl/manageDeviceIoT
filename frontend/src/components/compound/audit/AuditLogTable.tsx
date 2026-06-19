@@ -6,6 +6,10 @@ import type { AuditLogEntry } from "@/package/schema/api";
 
 type Props = {
   logs: AuditLogEntry[];
+  isAdmin?: boolean;
+  selectedIds?: Set<number>;
+  onToggle?: (id: number) => void;
+  onToggleAll?: (ids: number[]) => void;
 };
 
 const EVENT_STYLES: Record<string, string> = {
@@ -56,7 +60,7 @@ function JsonDetails({ details }: { details: Record<string, unknown> | null }) {
   );
 }
 
-export default function AuditLogTable({ logs }: Props) {
+export default function AuditLogTable({ logs, isAdmin, selectedIds, onToggle, onToggleAll }: Props) {
   if (logs.length === 0) {
     return (
       <div className="rounded-4xl border border-slate-800 bg-slate-950/95 px-6 py-12 text-center text-slate-500">
@@ -65,12 +69,27 @@ export default function AuditLogTable({ logs }: Props) {
     );
   }
 
+  const allSelected = logs.length > 0 && logs.every((l) => selectedIds?.has(l.id));
+  const someSelected = !allSelected && logs.some((l) => selectedIds?.has(l.id));
+
   return (
     <div className="overflow-hidden rounded-4xl border border-slate-800 bg-slate-950/95 shadow-lg shadow-slate-950/20">
       <div className="overflow-x-auto">
         <table className="min-w-full table-auto text-left text-sm">
           <thead className="bg-slate-900/90 text-slate-400">
             <tr>
+              {isAdmin && (
+                <th className="w-10 px-4 py-4">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                    onChange={() => onToggleAll?.(logs.map((l) => l.id))}
+                    className="h-4 w-4 cursor-pointer accent-sky-500"
+                    title="Chọn tất cả trên trang này"
+                  />
+                </th>
+              )}
               <th className="px-4 py-4 font-medium">Thời gian</th>
               <th className="px-4 py-4 font-medium">Event Type</th>
               <th className="px-4 py-4 font-medium">Device ID</th>
@@ -79,48 +98,63 @@ export default function AuditLogTable({ logs }: Props) {
             </tr>
           </thead>
           <tbody>
-            {logs.map((log) => (
-              <tr
-                key={log.id}
-                className="border-b border-slate-800/60 transition hover:bg-slate-900/60"
-              >
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
-                  {formatTime(log.created_at)}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      EVENT_STYLES[log.event_type] ?? DEFAULT_EVENT_STYLE
-                    }`}
-                  >
-                    {log.event_type}
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                  {log.device_identifier ? (
-                    <span title={log.device_name ?? undefined}>
-                      {log.device_identifier}
-                    </span>
-                  ) : (
-                    <span className="text-slate-600">—</span>
+            {logs.map((log) => {
+              const checked = selectedIds?.has(log.id) ?? false;
+              return (
+                <tr
+                  key={log.id}
+                  className={`border-b border-slate-800/60 transition hover:bg-slate-900/60 ${
+                    checked ? "bg-sky-950/30" : ""
+                  }`}
+                >
+                  {isAdmin && (
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => onToggle?.(log.id)}
+                        className="h-4 w-4 cursor-pointer accent-sky-500"
+                      />
+                    </td>
                   )}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                  {log.device_ip ? (
-                    log.device_ip
-                  ) : log.ip_address ? (
-                    <span className="text-slate-500" title="IP của client (không phải thiết bị)">
-                      {log.ip_address}
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                    {formatTime(log.created_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        EVENT_STYLES[log.event_type] ?? DEFAULT_EVENT_STYLE
+                      }`}
+                    >
+                      {log.event_type}
                     </span>
-                  ) : (
-                    <span className="text-slate-600">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <JsonDetails details={log.details} />
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                    {log.device_identifier ? (
+                      <span title={log.device_name ?? undefined}>
+                        {log.device_identifier}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                    {log.device_ip ? (
+                      log.device_ip
+                    ) : log.ip_address ? (
+                      <span className="text-slate-500" title="IP của client (không phải thiết bị)">
+                        {log.ip_address}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <JsonDetails details={log.details} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

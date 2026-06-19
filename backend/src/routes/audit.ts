@@ -35,6 +35,26 @@ router.delete("/by-type", verifyJWT, requireRole("admin"), async (req: Request, 
   res.json({ success: true, deleted: result.affectedRows });
 });
 
+// DELETE /api/audit-log/bulk – xóa nhiều log theo danh sách ID (admin only)
+router.delete("/bulk", verifyJWT, requireRole("admin"), async (req: Request, res: Response): Promise<void> => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: "INVALID_IDS" });
+    return;
+  }
+  const numIds = (ids as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (numIds.length === 0) {
+    res.status(400).json({ error: "INVALID_IDS" });
+    return;
+  }
+  const placeholders = numIds.map(() => "?").join(",");
+  const [result] = await (pool as any).execute(
+    `DELETE FROM audit_log WHERE id IN (${placeholders})`,
+    numIds
+  );
+  res.json({ success: true, deleted: (result as any).affectedRows });
+});
+
 // DELETE /api/audit-log/data-recv – giữ lại để tương thích ngược
 router.delete("/data-recv", verifyJWT, requireRole("admin"), async (_req: Request, res: Response): Promise<void> => {
   const [result] = await (pool as any).execute(
