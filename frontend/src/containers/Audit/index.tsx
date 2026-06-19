@@ -8,13 +8,13 @@ import AuditLogTable from "@/components/compound/audit/AuditLogTable";
 import api, { FetchError } from "@/package/services/api";
 
 const EVENT_TYPES = [
-  "AUTH_SUCCESS",
-  "AUTH_FAIL",
   "GATEWAY_AUTH_FAIL",
   "SENSOR_AUTH_FAIL",
   "DATA_RECV",
   "DEVICE_REGISTER",
   "DEVICE_BLOCKED",
+  "DEVICE_STATUS_CHANGE",
+  "DEVICE_DELETE",
 ];
 
 const PAGE_SIZES = [10, 25, 50];
@@ -44,23 +44,24 @@ export default function Audit() {
 
   const { logs, isLoading, isError, refresh } = useAuditLog(filters);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteType, setDeleteType] = useState("DATA_RECV");
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
   }
 
-  async function handleDeleteDataRecv() {
+  async function handleDeleteByType() {
     if (!canDeleteAuditLog) {
       showToast("Không có quyền truy cập.", false);
       return;
     }
-    if (!window.confirm("Xóa toàn bộ log DATA_RECV? Hành động này không thể hoàn tác.")) return;
+    if (!window.confirm(`Xóa toàn bộ log ${deleteType}? Hành động này không thể hoàn tác.`)) return;
     setIsDeleting(true);
     try {
-      await api.delete("/api/audit-log/data-recv");
+      await api.delete(`/api/audit-log/by-type?event_type=${deleteType}`);
       refresh();
-      showToast("Đã xóa toàn bộ log DATA_RECV.");
+      showToast(`Đã xóa toàn bộ log ${deleteType}.`);
     } catch (err: unknown) {
       if (err instanceof FetchError && err.status === 403) {
         showToast("Không có quyền truy cập.", false);
@@ -99,14 +100,26 @@ export default function Audit() {
         </div>
         <div className="flex gap-2">
           {canDeleteAuditLog && (
-            <button
-              onClick={handleDeleteDataRecv}
-              disabled={isDeleting}
-              className="inline-flex items-center gap-2 rounded-3xl bg-rose-900/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-800/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Trash2 className="h-4 w-4" />
-              {isDeleting ? "Đang xóa…" : "Xóa log DATA_RECV"}
-            </button>
+            <div className="flex items-center gap-1">
+              <select
+                value={deleteType}
+                onChange={(e) => setDeleteType(e.target.value)}
+                disabled={isDeleting}
+                className="rounded-3xl border border-slate-600 bg-slate-800 px-3 py-3 text-sm font-semibold text-slate-200 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleDeleteByType}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-2 rounded-3xl border border-red-700/50 bg-red-950/60 px-5 py-3 text-sm font-semibold text-red-400 transition hover:border-red-600 hover:bg-red-900/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isDeleting ? "Đang xóa…" : `Xóa ${deleteType}`}
+              </button>
+            </div>
           )}
           <button
             onClick={() => refresh()}

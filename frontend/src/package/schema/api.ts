@@ -53,13 +53,13 @@ export type ApiDeviceDetail = ApiDevice & {
 };
 
 export type AuditEventType =
-  | "AUTH_SUCCESS"
-  | "AUTH_FAIL"
   | "GATEWAY_AUTH_FAIL"
   | "SENSOR_AUTH_FAIL"
   | "DATA_RECV"
   | "DEVICE_REGISTER"
   | "DEVICE_BLOCKED"
+  | "DEVICE_STATUS_CHANGE"
+  | "DEVICE_DELETE"
   | string;
 
 export type AuditLogEntry = {

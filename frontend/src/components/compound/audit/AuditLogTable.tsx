@@ -9,13 +9,13 @@ type Props = {
 };
 
 const EVENT_STYLES: Record<string, string> = {
-  AUTH_FAIL: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
-  GATEWAY_AUTH_FAIL: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
-  SENSOR_AUTH_FAIL: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
-  DEVICE_BLOCKED: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
-  AUTH_SUCCESS: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20",
-  DATA_RECV: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20",
-  DEVICE_REGISTER: "bg-amber-500/15 text-amber-300 border border-amber-500/20",
+  GATEWAY_AUTH_FAIL:    "bg-rose-500/15 text-rose-300 border border-rose-500/20",
+  SENSOR_AUTH_FAIL:     "bg-rose-500/15 text-rose-300 border border-rose-500/20",
+  DEVICE_BLOCKED:       "bg-rose-500/15 text-rose-300 border border-rose-500/20",
+  DEVICE_DELETE:        "bg-rose-500/15 text-rose-300 border border-rose-500/20",
+  DATA_RECV:            "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20",
+  DEVICE_REGISTER:      "bg-amber-500/15 text-amber-300 border border-amber-500/20",
+  DEVICE_STATUS_CHANGE: "bg-sky-500/15 text-sky-300 border border-sky-500/20",
 };
 
 const DEFAULT_EVENT_STYLE = "bg-slate-700/40 text-slate-300 border border-slate-700";

@@ -5,7 +5,31 @@ import { requireRole } from "../middleware/rbac";
 
 const router = Router();
 
-// DELETE /api/audit-log/data-recv – xóa toàn bộ log DATA_RECV (admin/operator only)
+const VALID_EVENT_TYPES = [
+  "GATEWAY_AUTH_FAIL",
+  "SENSOR_AUTH_FAIL",
+  "DATA_RECV",
+  "DEVICE_REGISTER",
+  "DEVICE_BLOCKED",
+  "DEVICE_STATUS_CHANGE",
+  "DEVICE_DELETE",
+];
+
+// DELETE /api/audit-log/by-type?event_type=XXX – xóa toàn bộ log theo loại (admin/operator only)
+router.delete("/by-type", verifyJWT, requireRole("admin", "operator"), async (req: Request, res: Response): Promise<void> => {
+  const { event_type } = req.query;
+  if (!event_type || typeof event_type !== "string" || !VALID_EVENT_TYPES.includes(event_type)) {
+    res.status(400).json({ error: "INVALID_EVENT_TYPE" });
+    return;
+  }
+  const [result] = await (pool as any).execute(
+    "DELETE FROM audit_log WHERE event_type = ?",
+    [event_type]
+  );
+  res.json({ success: true, deleted: result.affectedRows });
+});
+
+// DELETE /api/audit-log/data-recv – giữ lại để tương thích ngược
 router.delete("/data-recv", verifyJWT, requireRole("admin", "operator"), async (_req: Request, res: Response): Promise<void> => {
   const [result] = await (pool as any).execute(
     "DELETE FROM audit_log WHERE event_type = 'DATA_RECV'"
