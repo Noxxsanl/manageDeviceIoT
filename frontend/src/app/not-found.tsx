@@ -1,41 +1,47 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function NotFoundPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800/80 bg-slate-900/95 p-8 text-center shadow-2xl shadow-slate-950/40 sm:p-10">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/15 ring-1 ring-sky-500/30">
-          <svg
-            className="h-7 w-7 text-sky-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-            />
-          </svg>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#F6F8FB] px-4 text-gray-900">
+      <div className="flex w-full max-w-sm flex-col items-center text-center">
+
+        {/* Illustration */}
+        <Image
+          src="/404-not-found.png"
+          alt="404 Not Found"
+          width={320}
+          height={240}
+          priority
+          className="select-none"
+        />
+
+        {/* Text */}
+        <div className="mt-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Lỗi 404
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold text-gray-900">
+            Không tìm thấy trang
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-500">
+            Trang bạn đang tìm kiếm không tồn tại<br />hoặc đã bị xóa.
+          </p>
         </div>
 
-        <p className="mt-6 text-sm uppercase tracking-[0.3em] text-slate-500">
-          Lỗi 404
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold text-white">
-          Không tìm thấy trang
-        </h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Trang bạn đang tìm kiếm không tồn tại hoặc đã bị xóa.
-        </p>
-
-        <div className="mt-8">
+        {/* Action */}
+        <div className="mt-8 flex items-center gap-3">
           <Link
             href="/dashboard"
-            className="inline-flex items-center justify-center rounded-2xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
+            className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             Về trang chủ
+          </Link>
+          <Link
+            href="javascript:history.back()"
+            className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+          >
+            Quay lại
           </Link>
         </div>
       </div>

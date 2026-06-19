@@ -26,34 +26,34 @@ export function RegisterModal({ deviceId, secretKey, onClose }: RegisterModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative z-10 w-full max-w-lg rounded-4xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-        <h2 className="text-xl font-semibold text-white">Device Credentials</h2>
-        <p className="mt-1 text-sm text-slate-400">Thiết bị đã được đăng ký thành công.</p>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-[#E5EAF0] bg-white p-6 shadow-xl">
+        <h2 className="text-xl font-semibold text-gray-900">Device Credentials</h2>
+        <p className="mt-1 text-sm text-gray-500">Thiết bị đã được đăng ký thành công.</p>
 
-        <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
-          <p className="text-sm font-semibold text-red-300">
-            Chỉ hiển thị 1 lần  Hãy lưu lại trước khi đóng!
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <p className="text-sm font-semibold text-amber-700">
+            Chỉ hiển thị 1 lần — Hãy lưu lại trước khi đóng!
           </p>
         </div>
 
         <div className="mt-5 space-y-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-            <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400">
               Device ID
             </label>
             <div className="mt-2 flex items-center gap-2">
-              <code className="flex-1 break-all rounded-lg bg-slate-950 px-3 py-2 font-mono text-sm text-slate-100">
+              <code className="flex-1 break-all rounded-lg bg-white px-3 py-2 font-mono text-sm text-gray-900 ring-1 ring-gray-200">
                 {deviceId}
               </code>
               <button
                 type="button"
                 onClick={() => copy(deviceId, "id")}
-                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
               >
                 {copiedId ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
                 ) : (
                   <Copy className="h-3.5 w-3.5" />
                 )}
@@ -62,21 +62,21 @@ export function RegisterModal({ deviceId, secretKey, onClose }: RegisterModalPro
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-            <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400">
               Secret Key
             </label>
             <div className="mt-2 flex items-center gap-2">
-              <code className="flex-1 break-all rounded-lg bg-slate-950 px-3 py-2 font-mono text-sm text-slate-100">
+              <code className="flex-1 break-all rounded-lg bg-white px-3 py-2 font-mono text-sm text-gray-900 ring-1 ring-gray-200">
                 {secretKey}
               </code>
               <button
                 type="button"
                 onClick={() => copy(secretKey, "key")}
-                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
               >
                 {copiedKey ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
                 ) : (
                   <Copy className="h-3.5 w-3.5" />
                 )}
@@ -90,7 +90,7 @@ export function RegisterModal({ deviceId, secretKey, onClose }: RegisterModalPro
           <button
             type="button"
             onClick={onClose}
-            className="rounded-2xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+            className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
           >
             Tôi đã lưu – Đóng
           </button>

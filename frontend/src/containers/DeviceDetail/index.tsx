@@ -4,18 +4,12 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Server,
-  Cpu,
-  Lock,
-  Unlock,
-  Trash2,
-  MapPin,
-  Hash,
-  Activity,
-  RefreshCw,
+  Server, Cpu, Lock, Unlock, Trash2,
+  MapPin, Hash, Activity, RefreshCw, ArrowLeft,
+  Thermometer, Droplets,
 } from "lucide-react";
-import DeviceStatusBadge from "@/components/compound/device/DeviceStatusBadge";
 import OnlineIndicator from "@/components/compound/device/OnlineIndicator";
+import DeviceStatusBadge from "@/components/compound/device/DeviceStatusBadge";
 import ConfirmDialog from "@/components/primitives/ConfirmDialog";
 import SensorChart from "@/components/compound/device/SensorChart";
 import { useDeviceDetail } from "@/package/features/useDeviceDetail";
@@ -25,38 +19,29 @@ import type { ApiDeviceStatus } from "@/package/schema/api";
 type PendingAction = "lock" | "unlock" | "delete" | null;
 
 function formatLastSeen(lastSeen: string | null): string {
-  if (!lastSeen) return "Never";
+  if (!lastSeen) return "Chưa kết nối";
   const diff = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 60)    return `${diff}s ago`;
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 }
 
-type InfoCardProps = {
-  label: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-};
-
-function InfoCard({ label, icon, children }: InfoCardProps) {
+/* ── Info cell used in the device info grid ── */
+function InfoCell({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl bg-slate-900/90 p-4">
-      <p className="text-xs uppercase tracking-[0.24em] text-slate-500">{label}</p>
-      <div className="mt-2 flex items-center gap-2">
-        {icon}
-        <span className="text-sm font-semibold text-white">{children}</span>
+    <div className="flex flex-col gap-1.5 p-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+      <div className="flex items-center gap-2">
+        {icon && <span className="shrink-0 text-gray-400">{icon}</span>}
+        <span className="text-sm font-semibold text-gray-900">{children}</span>
       </div>
     </div>
   );
@@ -70,7 +55,7 @@ export default function DeviceDetail() {
   const isSensor = device?.device_type === "sensor";
   const { sensorData, isLoading: chartLoading } = useSensorData(isSensor ? id : null);
 
-  const [pending, setPending] = useState<PendingAction>(null);
+  const [pending, setPending]             = useState<PendingAction>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const handleConfirm = async () => {
@@ -96,203 +81,195 @@ export default function DeviceDetail() {
 
   const linkedGateway = recentData[0]?.gateway_id;
 
+  /* ── Loading ── */
   if (isLoading) {
     return (
       <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
-        <div className="flex items-center gap-2 text-slate-400">
+        <div className="flex items-center gap-2 text-sm text-gray-400">
           <RefreshCw className="h-4 w-4 animate-spin" />
-          Loading device…
+          Đang tải thiết bị…
         </div>
       </div>
     );
   }
 
+  /* ── Error ── */
   if (isError || !device) {
     return (
-      <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
-        <div className="text-center">
-          <p className="text-rose-400">Failed to load device.</p>
-          <Link
-            href="/devices"
-            className="mt-4 inline-block text-sm text-slate-400 hover:text-slate-200"
-          >
-            ← Back to Devices
-          </Link>
-        </div>
+      <div className="flex min-h-[calc(100vh-5rem)] flex-col items-center justify-center gap-4">
+        <p className="text-red-500">Không có quyền truy cập hoặc thiết bị không tồn tại.</p>
+        <Link href="/devices"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+          <ArrowLeft className="h-4 w-4" />
+          Trở về Devices
+        </Link>
       </div>
     );
   }
 
   const dialogProps =
     pending === "delete"
-      ? {
-          title: "Delete device",
-          description: `Permanently delete "${device.device_name}"? This cannot be undone.`,
-          confirmLabel: "Delete",
-          danger: true,
-        }
+      ? { title: "Xóa thiết bị",    description: `Xóa vĩnh viễn "${device.device_name}"? Không thể hoàn tác.`, confirmLabel: "Xóa",      danger: true  }
       : pending === "lock"
-      ? {
-          title: "Block device",
-          description: `Block "${device.device_name}"? It will be denied access until unblocked.`,
-          confirmLabel: "Block",
-          danger: true,
-        }
-      : {
-          title: "Unblock device",
-          description: `Unblock "${device.device_name}"? It will resume normal access.`,
-          confirmLabel: "Unblock",
-          danger: false,
-        };
+      ? { title: "Khóa thiết bị",   description: `Khóa "${device.device_name}"? Thiết bị sẽ bị từ chối kết nối.`, confirmLabel: "Khóa",  danger: true  }
+      : { title: "Mở khóa thiết bị", description: `Mở khóa "${device.device_name}"?`,                             confirmLabel: "Mở khóa", danger: false };
+
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] w-full">
-      {/* Page header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <Link href="/devices" className="text-sm text-slate-400 hover:text-slate-100">
-            ← Back to Devices
+    <div className="min-h-[calc(100vh-5rem)] w-full space-y-5">
+
+      {/* ── Page header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+        {/* Left: back + title */}
+        <div className="space-y-3">
+          <Link
+            href="/devices"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600  transition hover:bg-gray-50 hover:text-gray-900"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Trở về Devices
           </Link>
+
           <div className="flex items-center gap-3">
-            {isSensor ? (
-              <Cpu className="h-6 w-6 text-violet-400" />
-            ) : (
-              <Server className="h-6 w-6 text-sky-400" />
-            )}
-            <h1 className="text-4xl font-semibold text-white">{device.device_name}</h1>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isSensor ? "bg-violet-50" : "bg-blue-50"}`}>
+              {isSensor
+                ? <Cpu    className="h-5 w-5 text-violet-600" />
+                : <Server className="h-5 w-5 text-blue-600" />
+              }
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold text-gray-900">{device.device_name}</h1>
+                <DeviceStatusBadge status={device.status} />
+              </div>
+              <p className="mt-0.5 font-mono text-xs text-gray-400">{device.device_id}</p>
+            </div>
           </div>
-          <p className="font-mono text-sm text-slate-400">{device.device_id}</p>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Right: actions */}
+        <div className="flex items-center gap-2">
           {device.status === "blocked" ? (
-            <button
-              type="button"
-              onClick={() => setPending("unlock")}
-              className="inline-flex items-center gap-2 rounded-3xl bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
-            >
+            <button type="button" onClick={() => setPending("unlock")}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100">
               <Unlock className="h-4 w-4" />
-              Unblock
+              Mở khóa
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => setPending("lock")}
-              className="inline-flex items-center gap-2 rounded-3xl bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20"
-            >
+            <button type="button" onClick={() => setPending("lock")}
+              className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-100">
               <Lock className="h-4 w-4" />
-              Block
+              Khóa
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setPending("delete")}
-            className="inline-flex items-center gap-2 rounded-3xl bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20"
-          >
+          <button type="button" onClick={() => setPending("delete")}
+            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100">
             <Trash2 className="h-4 w-4" />
-            Delete
+            Xóa
           </button>
         </div>
       </div>
 
-      {/* Info cards */}
-      <div className="mb-5 rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
-        <p className="mb-4 text-sm uppercase tracking-[0.24em] text-slate-500">Device Info</p>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <InfoCard
-            label="Type"
-            icon={
-              isSensor ? (
-                <Cpu className="h-4 w-4 text-violet-400" />
-              ) : (
-                <Server className="h-4 w-4 text-sky-400" />
-              )
-            }
-          >
-            <span className="capitalize">{device.device_type}</span>
-          </InfoCard>
+      {/* ── Device info grid ── */}
+      <div className="overflow-hidden rounded-xl border border-[#E5EAF0] bg-white ">
+        <div className="border-b border-gray-100 px-5 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Thông tin thiết bị</p>
+        </div>
+        <div className="grid divide-y divide-gray-100 sm:grid-cols-2 xl:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <InfoCell label="Loại"
+            icon={isSensor ? <Cpu size={15} className="text-violet-500" /> : <Server size={15} className="text-blue-500" />}>
+            <span className="capitalize">{isSensor ? "Sensor" : "Gateway"}</span>
+          </InfoCell>
 
-          <InfoCard label="Status">
+          <InfoCell label="Trạng thái">
             <DeviceStatusBadge status={device.status} />
-          </InfoCard>
+          </InfoCell>
 
-          <InfoCard label="Connection">
+          <InfoCell label="Kết nối">
             <OnlineIndicator lastSeen={device.last_seen} />
-          </InfoCard>
+          </InfoCell>
 
-          <InfoCard label="Last Seen">
+          <InfoCell label="Hoạt động gần nhất">
             {formatLastSeen(device.last_seen)}
-          </InfoCard>
+          </InfoCell>
+        </div>
 
-          {device.location ? (
-            <InfoCard label="Location" icon={<MapPin className="h-4 w-4 text-slate-400" />}>
+        {/* Second row */}
+        <div className="grid divide-y divide-gray-100 border-t border-gray-100 sm:grid-cols-2 xl:grid-cols-4 sm:divide-x sm:divide-y-0">
+          {device.location && (
+            <InfoCell label="Vị trí" icon={<MapPin size={15} />}>
               {device.location}
-            </InfoCard>
-          ) : null}
+            </InfoCell>
+          )}
 
-          {isSensor && linkedGateway != null ? (
-            <InfoCard label="Linked Gateway" icon={<Server className="h-4 w-4 text-sky-400" />}>
+          {isSensor && linkedGateway != null && (
+            <InfoCell label="Gateway liên kết" icon={<Server size={15} className="text-blue-400" />}>
               <span className="font-mono text-xs">{String(linkedGateway)}</span>
-            </InfoCard>
-          ) : null}
+            </InfoCell>
+          )}
 
-          <InfoCard label="Fail Count" icon={<Activity className="h-4 w-4 text-slate-400" />}>
-            <span className={device.fail_count > 0 ? "text-amber-300" : "text-white"}>
+          <InfoCell label="Fail Count" icon={<Activity size={15} />}>
+            <span className={device.fail_count > 0 ? "text-amber-600" : "text-gray-900"}>
               {device.fail_count}
             </span>
-          </InfoCard>
+          </InfoCell>
 
-          <InfoCard label="Device ID" icon={<Hash className="h-4 w-4 text-slate-400" />}>
+          <InfoCell label="Device ID" icon={<Hash size={15} />}>
             <span className="font-mono text-xs">{device.device_id}</span>
-          </InfoCard>
+          </InfoCell>
         </div>
       </div>
 
-      {/* Sensor-only: chart + recent data table */}
+      {/* ── Sensor-only: chart + recent data ── */}
       {isSensor && (
         <>
           <SensorChart data={sensorData} isLoading={chartLoading} />
 
-          <div className="mt-5 rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
-            <p className="mb-4 text-sm uppercase tracking-[0.24em] text-slate-500">
-              Recent Data
-            </p>
+          <div className="overflow-hidden rounded-xl border border-[#E5EAF0] bg-white ">
+            <div className="border-b border-gray-100 px-5 py-2.5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Dữ liệu gần nhất</p>
+            </div>
 
             {recentData.length === 0 ? (
-              <p className="text-sm text-slate-500">No sensor data received yet.</p>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Activity className="mb-3 h-8 w-8 text-gray-200" />
+                <p className="text-sm text-gray-400">Chưa có dữ liệu cảm biến.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full table-auto text-left text-sm">
                   <thead>
-                    <tr className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                      <th className="pb-3 pr-6 font-medium">Time</th>
-                      <th className="pb-3 pr-6 font-medium">Temperature (°C)</th>
-                      <th className="pb-3 pr-6 font-medium">Humidity (%)</th>
-                      <th className="pb-3 font-medium">Gateway</th>
+                    <tr className="border-b border-gray-100 bg-gray-50/80">
+                      <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Thời gian</th>
+                      <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        <span className="flex items-center gap-1.5"><Thermometer size={12} /> Nhiệt độ (°C)</span>
+                      </th>
+                      <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        <span className="flex items-center gap-1.5"><Droplets size={12} /> Độ ẩm (%)</span>
+                      </th>
+                      <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Gateway</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-100">
                     {recentData.map((record) => (
-                      <tr key={record.id} className="border-t border-slate-800/60">
-                        <td className="py-3 pr-6 text-slate-400">
+                      <tr key={record.id} className="transition hover:bg-gray-50/60">
+                        <td className="px-5 py-2.5 font-mono text-xs text-gray-500">
                           {formatDateTime(record.received_at)}
                         </td>
-                        <td className="py-3 pr-6 font-semibold text-orange-300">
-                          {record.payload?.temperature !== undefined ? (
-                            `${record.payload.temperature}°C`
-                          ) : (
-                            <span className="text-slate-600">—</span>
-                          )}
+                        <td className="px-4 py-2.5 font-semibold text-orange-500">
+                          {record.payload?.temperature !== undefined
+                            ? `${record.payload.temperature}°C`
+                            : <span className="text-gray-300">—</span>
+                          }
                         </td>
-                        <td className="py-3 pr-6 font-semibold text-sky-300">
-                          {record.payload?.humidity !== undefined ? (
-                            `${record.payload.humidity}%`
-                          ) : (
-                            <span className="text-slate-600">—</span>
-                          )}
+                        <td className="px-4 py-2.5 font-semibold text-blue-500">
+                          {record.payload?.humidity !== undefined
+                            ? `${record.payload.humidity}%`
+                            : <span className="text-gray-300">—</span>
+                          }
                         </td>
-                        <td className="py-3 font-mono text-xs text-slate-400">
+                        <td className="px-4 py-2.5 font-mono text-xs text-gray-500">
                           {String(record.gateway_id)}
                         </td>
                       </tr>
@@ -309,7 +286,7 @@ export default function DeviceDetail() {
         open={!!pending}
         title={dialogProps.title}
         description={dialogProps.description}
-        confirmLabel={actionLoading ? "Processing…" : dialogProps.confirmLabel}
+        confirmLabel={actionLoading ? "Đang xử lý…" : dialogProps.confirmLabel}
         danger={dialogProps.danger}
         onConfirm={handleConfirm}
         onCancel={() => !actionLoading && setPending(null)}

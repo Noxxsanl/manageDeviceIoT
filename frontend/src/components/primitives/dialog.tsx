@@ -5,7 +5,6 @@ import { createPortal } from "react-dom"
 
 import { cn } from "@/utils/helpers"
 
-// Simple dialog implementation without Radix
 interface DialogProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -37,17 +36,17 @@ const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1000] flex min-h-dvh items-center justify-center overflow-y-auto px-4 py-6"
+      className="fixed inset-0 z-1000 flex min-h-dvh items-center justify-center overflow-y-auto px-4 py-6"
       role="presentation"
     >
       <div
-        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm"
         onClick={() => onOpenChange?.(false)}
       />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-[1001] max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-slate-800/90 bg-slate-950 text-slate-100 shadow-2xl shadow-black/60"
+        className="relative z-1001 max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#E5EAF0] bg-white text-gray-900 shadow-xl"
       >
         {children}
       </div>
@@ -69,7 +68,7 @@ const DialogHeader: React.FC<{ className?: string; children: React.ReactNode }> 
 };
 
 const DialogTitle: React.FC<{ className?: string; children: React.ReactNode }> = ({ className, children }) => {
-  return <h2 className={cn("text-lg font-semibold text-white", className)}>{children}</h2>;
+  return <h2 className={cn("text-lg font-semibold text-gray-900", className)}>{children}</h2>;
 };
 
 export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle };

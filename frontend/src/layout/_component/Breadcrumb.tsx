@@ -38,13 +38,13 @@ export default function Breadcrumb() {
     <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
       {crumbs.map((crumb, index) => (
         <span key={crumb.href} className="flex items-center gap-2">
-          {index > 0 && <span className="text-slate-600">/</span>}
+          {index > 0 && <span className="text-gray-300">/</span>}
           {index === crumbs.length - 1 ? (
-            <span className="font-medium text-white">{crumb.label}</span>
+            <span className="font-medium text-gray-900">{crumb.label}</span>
           ) : (
             <Link
               href={crumb.href}
-              className="text-slate-400 transition-colors hover:text-white"
+              className="text-gray-400 transition-colors hover:text-gray-700"
             >
               {crumb.label}
             </Link>

@@ -5,39 +5,39 @@ type LogTableProps = {
 };
 
 const levelStyles: Record<LogEntry["level"], string> = {
-  INFO: "bg-sky-500/10 text-sky-300",
-  WARNING: "bg-amber-500/10 text-amber-300",
-  ERROR: "bg-rose-500/10 text-rose-300",
-  SECURITY: "bg-violet-500/10 text-violet-300",
+  INFO: "bg-blue-50 text-blue-700",
+  WARNING: "bg-amber-50 text-amber-700",
+  ERROR: "bg-red-50 text-red-700",
+  SECURITY: "bg-violet-50 text-violet-700",
 };
 
 export default function LogTable({ logs }: LogTableProps) {
   return (
-    <div className="overflow-hidden rounded-4xl border border-slate-900/10 bg-slate-950/95 shadow-lg shadow-slate-950/20">
-      <div className="border-b border-slate-900/10 px-6 py-4 text-sm text-slate-400">System events log</div>
+    <div className="overflow-hidden rounded-2xl border border-[#E5EAF0] bg-white shadow-sm">
+      <div className="border-b border-[#E5EAF0] px-6 py-4 text-sm text-gray-500">System events log</div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-900/90 text-slate-400">
+          <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-4">Time</th>
-              <th className="px-4 py-4">Device ID</th>
-              <th className="px-4 py-4">Event</th>
-              <th className="px-4 py-4">Level</th>
-              <th className="px-4 py-4">Message</th>
+              <th className="px-4 py-3.5 text-xs font-semibold text-gray-500">Time</th>
+              <th className="px-4 py-3.5 text-xs font-semibold text-gray-500">Device ID</th>
+              <th className="px-4 py-3.5 text-xs font-semibold text-gray-500">Event</th>
+              <th className="px-4 py-3.5 text-xs font-semibold text-gray-500">Level</th>
+              <th className="px-4 py-3.5 text-xs font-semibold text-gray-500">Message</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((log) => (
-              <tr key={log.id} className="border-b border-slate-900/10 hover:bg-slate-900/80">
-                <td className="px-4 py-4 text-slate-300">{log.timestamp}</td>
-                <td className="px-4 py-4 text-slate-300">{log.deviceId}</td>
-                <td className="px-4 py-4 text-slate-300">{log.event}</td>
+              <tr key={log.id} className="border-b border-gray-100 transition hover:bg-gray-50">
+                <td className="px-4 py-4 text-gray-600">{log.timestamp}</td>
+                <td className="px-4 py-4 text-gray-600">{log.deviceId}</td>
+                <td className="px-4 py-4 text-gray-600">{log.event}</td>
                 <td className="px-4 py-4">
-                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${levelStyles[log.level]}`}>
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${levelStyles[log.level]}`}>
                     {log.level}
                   </span>
                 </td>
-                <td className="px-4 py-4 text-slate-400">{log.message}</td>
+                <td className="px-4 py-4 text-gray-500">{log.message}</td>
               </tr>
             ))}
           </tbody>

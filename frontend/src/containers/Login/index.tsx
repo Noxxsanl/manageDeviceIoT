@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { User, Lock } from "lucide-react";
 import { useAuth } from "@/package/features/useAuth";
 import { FetchError } from "@/package/services/api";
 
@@ -21,7 +22,6 @@ export default function Login() {
     }
 
     setIsSubmitting(true);
-
     try {
       await login(username.trim(), password);
     } catch (err) {
@@ -38,27 +38,30 @@ export default function Login() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center">
-        <section className="rounded-3xl border border-slate-800/80 bg-slate-900/95 p-8 shadow-2xl shadow-slate-950/40 sm:p-10">
-          <div className="mb-8 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500 text-lg font-semibold text-white shadow-xl shadow-sky-950/30">
-              IoT
-            </div>
-            <p className="mt-6 text-sm uppercase tracking-[0.3em] text-slate-500">
-              Quản trị hệ thống
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold text-white">Đăng nhập</h1>
-            <p className="mt-2 text-sm text-slate-400">
-              Truy cập vào Dashboard quản lý thiết bị IoT.
-            </p>
-          </div>
+    <main className="flex min-h-screen items-center justify-center bg-linear-to-bl from-[#c850c0] to-[#4158d0] p-4">
+      <div className="flex w-full max-w-[960px] overflow-hidden rounded-[10px] bg-white shadow-2xl">
 
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-            <div>
-              <label htmlFor="username" className="mb-2 block text-sm font-semibold text-slate-200">
-                Tên đăng nhập
-              </label>
+        {/* Left — illustration */}
+        <div className="hidden flex-shrink-0 items-center justify-center p-16 md:flex md:w-[55%]">
+          <img
+            src="/img-01.webp"
+            alt="IoT Manager illustration"
+            className="max-w-full"
+          />
+        </div>
+
+        {/* Right — form */}
+        <div className="flex w-full flex-col justify-center px-10 py-14 md:w-[45%] md:px-14 lg:px-16">
+          <h1
+            className="mb-12 text-center text-2xl font-bold text-[#333333]"
+            style={{ fontFamily: "Poppins-Bold, sans-serif" }}
+          >
+            Manager Device IoT
+          </h1>
+
+          <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+            {/* Username */}
+            <div className="relative">
               <input
                 id="username"
                 name="username"
@@ -66,17 +69,17 @@ export default function Login() {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20"
-                placeholder="admin"
-                aria-invalid={Boolean(error)}
+                placeholder="Tên đăng nhập"
                 required
+                className="peer h-[50px] w-full rounded-full bg-[#e6e6e6] pl-[68px] pr-6 text-[15px] text-[#666666] outline-none transition placeholder:text-[#999999] focus:ring-4 focus:ring-blue-600/30"
               />
+              <span className="pointer-events-none absolute left-[35px] top-1/2 -translate-y-1/2 text-[#666666] transition-all peer-focus:text-blue-600">
+                <User size={15} />
+              </span>
             </div>
 
-            <div>
-              <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-200">
-                Mật khẩu
-              </label>
+            {/* Password */}
+            <div className="relative">
               <input
                 id="password"
                 name="password"
@@ -84,31 +87,38 @@ export default function Login() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-2xl border border-slate-800/90 bg-slate-950/90 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20"
-                placeholder="••••••••"
-                aria-invalid={Boolean(error)}
+                placeholder="Mật khẩu"
                 required
+                className="peer h-[50px] w-full rounded-full bg-[#e6e6e6] pl-[68px] pr-6 text-[15px] text-[#666666] outline-none transition placeholder:text-[#999999] focus:ring-4 focus:ring-blue-600/30"
               />
+              <span className="pointer-events-none absolute left-[35px] top-1/2 -translate-y-1/2 text-[#666666] transition-all peer-focus:text-blue-600">
+                <Lock size={15} />
+              </span>
             </div>
 
-            {error ? (
-              <div
+            {/* Error */}
+            {error && (
+              <p
                 role="alert"
-                className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-rose-500/20"
+                className="rounded-full border border-red-200 bg-red-50 px-5 py-2 text-center text-sm text-red-600"
               >
                 {error}
-              </div>
-            ) : null}
+              </p>
+            )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex w-full items-center justify-center rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
-            </button>
+            {/* Submit */}
+            <div className="pt-5">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex h-[50px] w-full items-center justify-center rounded-full bg-blue-600 text-[15px] font-bold uppercase tracking-wide text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Đang đăng nhập..." : "Login"}
+              </button>
+            </div>
           </form>
-        </section>
+        </div>
+
       </div>
     </main>
   );

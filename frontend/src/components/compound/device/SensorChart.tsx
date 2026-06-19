@@ -56,22 +56,22 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
     }));
 
   return (
-    <div className="rounded-4xl border border-slate-800 bg-slate-950/95 p-6">
+    <div className="rounded-2xl border border-[#E5EAF0] bg-white p-6 shadow-sm">
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Sensor Chart</p>
-          <h3 className="mt-2 text-2xl font-semibold text-white">Temperature & Humidity</h3>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Sensor Chart</p>
+          <h3 className="mt-1 text-lg font-semibold text-gray-900">Temperature &amp; Humidity</h3>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {(["1h", "6h", "24h"] as TimeRange[]).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRange(r)}
-              className={`rounded-2xl px-3 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
                 range === r
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                  ? "bg-blue-600 text-white"
+                  : "border border-gray-200 text-gray-500 hover:bg-gray-50"
               }`}
             >
               {r}
@@ -81,26 +81,24 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
       </div>
 
       {isLoading ? (
-        <div className="flex h-52 items-center justify-center text-sm text-slate-500">
+        <div className="flex h-52 items-center justify-center text-sm text-gray-400">
           Loading chart data…
         </div>
       ) : chartData.length === 0 ? (
-        <div className="flex h-52 items-center justify-center text-sm text-slate-500">
+        <div className="flex h-52 items-center justify-center text-sm text-gray-400">
           No data in the last {range}.
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, left: -5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5EAF0" />
             <XAxis
               dataKey="time"
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              tick={{ fill: "#9ca3af", fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: "#1e293b" }}
+              axisLine={{ stroke: "#E5EAF0" }}
               interval="preserveStartEnd"
             />
-            {/* Separate scale per metric so small fluctuations are visible
-                instead of being flattened by a shared 0-based axis. */}
             <YAxis
               yAxisId="temperature"
               domain={["dataMin - 1", "dataMax + 1"]}
@@ -115,22 +113,23 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
               orientation="right"
               domain={["dataMin - 1", "dataMax + 1"]}
               tickCount={6}
-              tick={{ fill: "#38bdf8", fontSize: 10 }}
+              tick={{ fill: "#3b82f6", fontSize: 10 }}
               tickLine={false}
               axisLine={false}
               width={40}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "#0f172a",
-                border: "1px solid #1e293b",
+                backgroundColor: "#ffffff",
+                border: "1px solid #E5EAF0",
                 borderRadius: "12px",
                 fontSize: 12,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
               }}
-              labelStyle={{ color: "#94a3b8", fontSize: 11 }}
+              labelStyle={{ color: "#6b7280", fontSize: 11 }}
               itemStyle={{ fontSize: 12 }}
             />
-            <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 12 }} />
+            <Legend wrapperStyle={{ fontSize: 12, color: "#6b7280", paddingTop: 12 }} />
             <Line
               yAxisId="temperature"
               type="monotone"
@@ -146,7 +145,7 @@ export default function SensorChart({ data, isLoading }: SensorChartProps) {
               yAxisId="humidity"
               type="monotone"
               dataKey="humidity"
-              stroke="#38bdf8"
+              stroke="#3b82f6"
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 4 }}

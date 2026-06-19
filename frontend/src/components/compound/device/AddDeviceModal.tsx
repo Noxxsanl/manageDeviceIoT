@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSWRConfig } from "swr";
-import { X } from "lucide-react";
+import { X, Server, Cpu, MapPin, Tag } from "lucide-react";
 import api, { FetchError } from "@/package/services/api";
 import { RegisterModal } from "@/components/compound/device/RegisterModal";
 import type { RegisterDeviceResponse } from "@/package/schema/api";
@@ -12,9 +12,6 @@ interface AddDeviceModalProps {
   onClose: () => void;
   onSuccess?: () => void;
 }
-
-const inputBase =
-  "h-10 w-full rounded-xl border bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 transition";
 
 export function AddDeviceModal({ open, onClose, onSuccess }: AddDeviceModalProps) {
   const { mutate } = useSWRConfig();
@@ -82,95 +79,159 @@ export function AddDeviceModal({ open, onClose, onSuccess }: AddDeviceModalProps
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={handleClose}
         />
-        <div className="relative z-10 w-full max-w-md rounded-4xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Register new device</h2>
+
+        {/* Modal */}
+        <div className="relative z-10 w-full max-w-120 overflow-hidden rounded-xl bg-white shadow-lg">
+
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
+                <Server className="h-4 w-4 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Đăng ký thiết bị</h2>
+                <p className="text-xs text-gray-400">Thêm thiết bị mới vào hệ thống</p>
+              </div>
+            </div>
             <button
               type="button"
               onClick={handleClose}
-              className="rounded-xl p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="add-name" className="mb-1.5 block text-sm font-medium text-slate-300">
-                Tên thiết bị <span className="text-red-400">*</span>
-              </label>
-              <input
-                id="add-name"
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (nameError) setNameError("");
-                }}
-                placeholder="Nhập tên thiết bị"
-                className={`${inputBase} ${
-                  nameError
-                    ? "border-red-500 focus:ring-2 focus:ring-red-500/30"
-                    : "border-slate-700 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                }`}
-              />
-              {nameError && <p className="mt-1.5 text-xs text-red-400">{nameError}</p>}
+          {/* Body */}
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="space-y-5 px-6 py-6">
+
+              {/* Device name */}
+              <div>
+                <label htmlFor="add-name" className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Tên thiết bị
+                  <span className="ml-1 text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Tag className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="add-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (nameError) setNameError("");
+                    }}
+                    placeholder="VD: Gateway phòng server"
+                    className={`h-11 w-full rounded-xl border pl-10 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-300
+                      ${nameError
+                        ? "border-red-400 bg-red-50 focus:border-red-500 focus:ring-2 focus:ring-red-500/15"
+                        : "border-gray-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                      }`}
+                  />
+                </div>
+                {nameError && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600">
+                    <span className="h-1 w-1 rounded-full bg-red-500" />
+                    {nameError}
+                  </p>
+                )}
+              </div>
+
+              {/* Device type */}
+              <div>
+                <label htmlFor="add-type" className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Loại thiết bị
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["sensor", "gateway"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setType(t)}
+                      className={`flex items-center gap-3 rounded-lg border-2 px-4 py-3 text-left transition
+                        ${type === t
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                    >
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
+                        ${type === t ? "bg-blue-100" : "bg-gray-100"}`}>
+                        {t === "sensor"
+                          ? <Cpu className={`h-4 w-4 ${type === t ? "text-blue-600" : "text-gray-500"}`} />
+                          : <Server className={`h-4 w-4 ${type === t ? "text-blue-600" : "text-gray-500"}`} />
+                        }
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold capitalize ${type === t ? "text-blue-700" : "text-gray-700"}`}>
+                          {t === "sensor" ? "Sensor" : "Gateway"}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {t === "sensor" ? "Cảm biến đo lường" : "Trạm trung gian"}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label htmlFor="add-location" className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Vị trí
+                  <span className="ml-2 text-xs font-normal text-gray-400">(tuỳ chọn)</span>
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="add-location"
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="VD: Tầng 2 – Khu A"
+                    className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                  />
+                </div>
+              </div>
+
+              {/* API error */}
+              {apiError && (
+                <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                  {apiError}
+                </div>
+              )}
             </div>
 
-            <div>
-              <label htmlFor="add-type" className="mb-1.5 block text-sm font-medium text-slate-300">
-                Loại thiết bị
-              </label>
-              <select
-                id="add-type"
-                value={type}
-                onChange={(e) => setType(e.target.value as "sensor" | "gateway")}
-                className="h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-              >
-                <option value="sensor">Sensor</option>
-                <option value="gateway">Gateway</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="add-location" className="mb-1.5 block text-sm font-medium text-slate-300">
-                Vị trí
-              </label>
-              <input
-                id="add-location"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Nhập vị trí thiết bị (tuỳ chọn)"
-                className={`${inputBase} border-slate-700 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20`}
-              />
-            </div>
-
-            {apiError && (
-              <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {apiError}
-              </p>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
               <button
                 type="button"
                 onClick={handleClose}
-                className="rounded-2xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800"
+                className="h-10 rounded-lg border border-gray-200 px-5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
               >
                 Huỷ
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-2xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {submitting ? "Đang đăng ký…" : "Đăng ký thiết bị"}
+                {submitting ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Đang đăng ký…
+                  </>
+                ) : (
+                  "Đăng ký thiết bị"
+                )}
               </button>
             </div>
           </form>

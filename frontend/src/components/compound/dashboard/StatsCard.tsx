@@ -4,22 +4,23 @@ type StatsCardProps = {
   subtitle: string;
   icon: React.ReactNode;
   accent: string;
+  iconBg?: string;
 };
 
-export default function StatsCard({ title, value, subtitle, icon, accent }: StatsCardProps) {
+export default function StatsCard({ title, value, subtitle, icon, accent, iconBg }: StatsCardProps) {
   return (
-    <div className="rounded-3xl border border-slate-900/10 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20 transition hover:-translate-y-1 hover:border-slate-700/60 hover:bg-slate-950/95">
-      <div className="flex items-center justify-between gap-4">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-800/80 text-slate-200 shadow-inner">
+    <div className="rounded-xl border border-[#E5EAF0] bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${iconBg ?? "bg-gray-100"}`}>
           {icon}
         </div>
-        <div className={`inline-flex rounded-2xl px-3 py-1 text-xs font-semibold ${accent}`}>
+        <div className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${accent}`}>
           Live
         </div>
       </div>
-      <p className="mt-6 text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-2 text-sm text-slate-400">{title}</p>
-      <p className="mt-3 text-sm leading-6 text-slate-500">{subtitle}</p>
+      <p className="mt-4 text-2xl font-semibold text-gray-900">{value}</p>
+      <p className="mt-0.5 text-sm font-medium text-gray-700">{title}</p>
+      <p className="mt-1 text-xs leading-5 text-gray-400">{subtitle}</p>
     </div>
   );
 }
