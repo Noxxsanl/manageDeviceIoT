@@ -11,6 +11,8 @@ const EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
   admin: [
     "GATEWAY_AUTH_FAIL",
     "SENSOR_AUTH_FAIL",
+    "REPLAY_ATTACK",
+    "PRIVILEGE_ESCALATION",
     "DATA_RECV",
     "DEVICE_REGISTER",
     "DEVICE_BLOCKED",
@@ -20,6 +22,8 @@ const EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
   operator: [
     "GATEWAY_AUTH_FAIL",
     "SENSOR_AUTH_FAIL",
+    "REPLAY_ATTACK",
+    "PRIVILEGE_ESCALATION",
     "DATA_RECV",
     "DEVICE_REGISTER",
     "DEVICE_BLOCKED",

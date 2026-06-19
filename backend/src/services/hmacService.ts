@@ -51,10 +51,10 @@ export async function verifyGatewayHMAC(
   const device = await fetchDevice(gateway_id);
   if (!device) return { ok: false, error: "NOT_FOUND" };
 
-  if (!isTimestampValid(gw_timestamp)) return { ok: false, error: "TIMESTAMP_EXPIRED" };
+  if (!isTimestampValid(gw_timestamp)) return { ok: false, device: { ...device, device_id: gateway_id }, error: "TIMESTAMP_EXPIRED" };
 
   const expected = computeHMAC(device.secret_key, `${gateway_id}:${gw_timestamp}`).toString("hex");
-  if (!safeCompare(expected, gw_hmac)) return { ok: false, error: "HMAC_MISMATCH" };
+  if (!safeCompare(expected, gw_hmac)) return { ok: false, device: { ...device, device_id: gateway_id }, error: "HMAC_MISMATCH" };
 
   return { ok: true, device: { ...device, device_id: gateway_id } };
 }
@@ -67,10 +67,10 @@ export async function verifyDeviceHMAC(
   const device = await fetchDevice(sensor_id);
   if (!device) return { ok: false, error: "NOT_FOUND" };
 
-  if (!isTimestampValid(sn_timestamp)) return { ok: false, error: "TIMESTAMP_EXPIRED" };
+  if (!isTimestampValid(sn_timestamp)) return { ok: false, device: { ...device, device_id: sensor_id }, error: "TIMESTAMP_EXPIRED" };
 
   const expected = computeHMAC(device.secret_key, `${sensor_id}:${sn_timestamp}`).toString("hex");
-  if (!safeCompare(expected, sn_hmac)) return { ok: false, error: "HMAC_MISMATCH" };
+  if (!safeCompare(expected, sn_hmac)) return { ok: false, device: { ...device, device_id: sensor_id }, error: "HMAC_MISMATCH" };
 
   return { ok: true, device: { ...device, device_id: sensor_id } };
 }

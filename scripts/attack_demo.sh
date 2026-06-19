@@ -53,6 +53,7 @@ print_result() {
     echo -e "  Response: $(echo "$body" | head -c 200)"
 }
 
+# Tạo payload hợp lệ với nested sensor_payload (format hiện tại của backend)
 build_valid_payload() {
     local gw_ts sn_ts gw_hmac sn_hmac
     gw_ts=$(now_ts)
@@ -65,10 +66,12 @@ build_valid_payload() {
   "gateway_id":   "$GW_ID",
   "gw_timestamp": $gw_ts,
   "gw_hmac":      "$gw_hmac",
-  "sensor_id":    "$SN_ID",
-  "sn_timestamp": $sn_ts,
-  "sn_hmac":      "$sn_hmac",
-  "data":         { "temperature": 28.5, "humidity": 65.0 }
+  "sensor_payload": {
+    "sensor_id":    "$SN_ID",
+    "sn_timestamp": $sn_ts,
+    "sn_hmac":      "$sn_hmac",
+    "data":         { "temperature": 28.5, "humidity": 65.0 }
+  }
 }
 EOF
 }
@@ -108,7 +111,7 @@ send_payload "$VALID_PAYLOAD"
 # ══════════════════════════════════════════════════════════════════════════════
 #  SCENARIO 1: Device Spoofing – HMAC giả mạo
 # ══════════════════════════════════════════════════════════════════════════════
-print_header "SCENARIO 1: Device Spoofing – HMAC giả mạo (kỳ vọng: 401)"
+print_header "SCENARIO 1: Device Spoofing – HMAC giả mạo (kỳ vọng: 401 GATEWAY_AUTH_FAIL)"
 echo -e "${YELLOW}Mô tả: Kẻ tấn công biết device_id nhưng không có secret_key,${NC}"
 echo -e "${YELLOW}       cố gắng giả mạo HMAC bằng chuỗi ngẫu nhiên.${NC}"
 echo ""
@@ -118,10 +121,12 @@ SPOOF_PAYLOAD=$(cat <<EOF
   "gateway_id":   "$GW_ID",
   "gw_timestamp": $GW_TS,
   "gw_hmac":      "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-  "sensor_id":    "$SN_ID",
-  "sn_timestamp": $SN_TS,
-  "sn_hmac":      "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe00",
-  "data":         { "temperature": 99.9, "humidity": 0.0 }
+  "sensor_payload": {
+    "sensor_id":    "$SN_ID",
+    "sn_timestamp": $SN_TS,
+    "sn_hmac":      "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe00",
+    "data":         { "temperature": 99.9, "humidity": 0.0 }
+  }
 }
 EOF
 )
@@ -135,7 +140,7 @@ echo -e "${GREEN}✓ Hệ thống từ chối và ghi GATEWAY_AUTH_FAIL vào aud
 # ══════════════════════════════════════════════════════════════════════════════
 #  SCENARIO 2: Replay Attack – Gửi lại request cũ
 # ══════════════════════════════════════════════════════════════════════════════
-print_header "SCENARIO 2: Replay Attack – Timestamp quá cũ (kỳ vọng: 401)"
+print_header "SCENARIO 2: Replay Attack – Timestamp quá cũ (kỳ vọng: 401 REPLAY_ATTACK)"
 echo -e "${YELLOW}Mô tả: Kẻ tấn công chặn được 1 request hợp lệ và cố gửi lại sau 10 phút.${NC}"
 echo -e "${YELLOW}       Server kiểm tra: |now - timestamp| > 300s → reject.${NC}"
 echo ""
@@ -147,10 +152,12 @@ REPLAY_PAYLOAD=$(cat <<EOF
   "gateway_id":   "$GW_ID",
   "gw_timestamp": $OLD_TS,
   "gw_hmac":      "$GW_HMAC_OLD",
-  "sensor_id":    "$SN_ID",
-  "sn_timestamp": $OLD_TS,
-  "sn_hmac":      "$SN_HMAC_OLD",
-  "data":         { "temperature": 25.0, "humidity": 60.0 }
+  "sensor_payload": {
+    "sensor_id":    "$SN_ID",
+    "sn_timestamp": $OLD_TS,
+    "sn_hmac":      "$SN_HMAC_OLD",
+    "data":         { "temperature": 25.0, "humidity": 60.0 }
+  }
 }
 EOF
 )
@@ -159,7 +166,7 @@ echo "$REPLAY_PAYLOAD"
 echo ""
 echo -e "${RED}→ Gửi request với timestamp cũ...${NC}"
 send_payload "$REPLAY_PAYLOAD"
-echo -e "${GREEN}✓ HMAC hợp lệ nhưng timestamp window violated → 401${NC}"
+echo -e "${GREEN}✓ HMAC hợp lệ nhưng timestamp window violated → 401 REPLAY_ATTACK ghi vào audit_log${NC}"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SCENARIO 3: Brute Force Block – 6 request sai liên tiếp
@@ -175,10 +182,12 @@ for i in $(seq 1 6); do
   "gateway_id":   "$GW_ID",
   "gw_timestamp": $GW_TS,
   "gw_hmac":      "$(openssl rand -hex 32)",
-  "sensor_id":    "$SN_ID",
-  "sn_timestamp": $SN_TS,
-  "sn_hmac":      "$(openssl rand -hex 32)",
-  "data":         { "temperature": 20.0, "humidity": 50.0 }
+  "sensor_payload": {
+    "sensor_id":    "$SN_ID",
+    "sn_timestamp": $SN_TS,
+    "sn_hmac":      "$(openssl rand -hex 32)",
+    "data":         { "temperature": 20.0, "humidity": 50.0 }
+  }
 }
 EOF
     )
@@ -198,7 +207,7 @@ echo -e "${GREEN}✓ fail_count >= 5 → DEVICE_BLOCKED trong audit_log${NC}"
 # ══════════════════════════════════════════════════════════════════════════════
 #  SCENARIO 4: Unregistered Device – device_id không tồn tại
 # ══════════════════════════════════════════════════════════════════════════════
-print_header "SCENARIO 4: Unregistered Device (kỳ vọng: 401/403)"
+print_header "SCENARIO 4: Unregistered Device (kỳ vọng: 401 GATEWAY_AUTH_FAIL)"
 echo -e "${YELLOW}Mô tả: Thiết bị chưa đăng ký cố gửi dữ liệu lên server.${NC}"
 echo ""
 FAKE_TS=$(now_ts)
@@ -207,10 +216,12 @@ UNREG_PAYLOAD=$(cat <<EOF
   "gateway_id":   "ESP32-GW-NOTEXIST",
   "gw_timestamp": $FAKE_TS,
   "gw_hmac":      "$(openssl rand -hex 32)",
-  "sensor_id":    "ESP32-SN-NOTEXIST",
-  "sn_timestamp": $FAKE_TS,
-  "sn_hmac":      "$(openssl rand -hex 32)",
-  "data":         { "temperature": 30.0, "humidity": 70.0 }
+  "sensor_payload": {
+    "sensor_id":    "ESP32-SN-NOTEXIST",
+    "sn_timestamp": $FAKE_TS,
+    "sn_hmac":      "$(openssl rand -hex 32)",
+    "data":         { "temperature": 30.0, "humidity": 70.0 }
+  }
 }
 EOF
 )
@@ -219,14 +230,15 @@ echo "$UNREG_PAYLOAD"
 echo ""
 echo -e "${RED}→ Gửi request từ thiết bị chưa đăng ký...${NC}"
 send_payload "$UNREG_PAYLOAD"
-echo -e "${GREEN}✓ Server không tìm thấy device_id → GATEWAY_AUTH_FAIL → 401${NC}"
+echo -e "${GREEN}✓ Server không tìm thấy device_id → GATEWAY_AUTH_FAIL (NOT_FOUND) → 401${NC}"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SCENARIO 5: Privilege Escalation – Sensor giả vờ là Gateway
 # ══════════════════════════════════════════════════════════════════════════════
-print_header "SCENARIO 5: Privilege Escalation – Sensor dùng gateway_id (kỳ vọng: 403)"
+print_header "SCENARIO 5: Privilege Escalation – Sensor dùng gateway_id (kỳ vọng: 403 PRIVILEGE_ESCALATION)"
 echo -e "${YELLOW}Mô tả: Sensor node cố gắng gửi dữ liệu trực tiếp bằng cách đặt${NC}"
 echo -e "${YELLOW}       chính mình làm gateway_id (vi phạm RBAC: device_type check).${NC}"
+echo -e "${YELLOW}       HMAC hợp lệ (dùng đúng secret của sensor) nhưng device_type sai.${NC}"
 echo ""
 PRIV_TS=$(now_ts)
 SN_HMAC_AS_GW=$(hmac_sha256 "$SN_SECRET" "${SN_ID}:${PRIV_TS}")
@@ -235,19 +247,22 @@ PRIV_PAYLOAD=$(cat <<EOF
   "gateway_id":   "$SN_ID",
   "gw_timestamp": $PRIV_TS,
   "gw_hmac":      "$SN_HMAC_AS_GW",
-  "sensor_id":    "$SN_ID",
-  "sn_timestamp": $PRIV_TS,
-  "sn_hmac":      "$SN_HMAC_AS_GW",
-  "data":         { "temperature": 25.0, "humidity": 60.0 }
+  "sensor_payload": {
+    "sensor_id":    "$SN_ID",
+    "sn_timestamp": $PRIV_TS,
+    "sn_hmac":      "$SN_HMAC_AS_GW",
+    "data":         { "temperature": 25.0, "humidity": 60.0 }
+  }
 }
 EOF
 )
-echo "Payload (sensor dùng sensor_id làm gateway_id):"
+echo "Payload (sensor dùng sensor_id làm gateway_id, HMAC hợp lệ):"
 echo "$PRIV_PAYLOAD"
 echo ""
 echo -e "${RED}→ Gửi request privilege escalation...${NC}"
 send_payload "$PRIV_PAYLOAD"
-echo -e "${GREEN}✓ Backend kiểm tra device_type: sensor không thể đóng vai gateway → 403 INVALID_DEVICE_TYPE${NC}"
+echo -e "${GREEN}✓ HMAC pass, nhưng backend kiểm tra device_type: sensor không thể đóng vai gateway${NC}"
+echo -e "${GREEN}✓ → 403 INVALID_DEVICE_TYPE + PRIVILEGE_ESCALATION ghi vào audit_log${NC}"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  TỔNG KẾT
@@ -256,12 +271,13 @@ echo ""
 echo -e "${BLUE}══════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  TỔNG KẾT KẾT QUẢ ATTACK DEMO${NC}"
 echo -e "${BLUE}══════════════════════════════════════════════════${NC}"
-echo -e "  Scenario 0 (Baseline)          → ${GREEN}200 OK${NC}"
-echo -e "  Scenario 1 (Device Spoofing)   → ${RED}401 GATEWAY_AUTH_FAIL${NC}"
-echo -e "  Scenario 2 (Replay Attack)     → ${RED}401 TIMESTAMP_EXPIRED${NC}"
-echo -e "  Scenario 3 (Brute Force)       → ${RED}401 x5 → 403 DEVICE_BLOCKED${NC}"
-echo -e "  Scenario 4 (Unregistered)      → ${RED}401 GATEWAY_AUTH_FAIL${NC}"
-echo -e "  Scenario 5 (Privilege Escal.)  → ${RED}403 INVALID_DEVICE_TYPE${NC}"
+echo -e "  Scenario 0 (Baseline)          → ${GREEN}200 OK → DATA_RECV${NC}"
+echo -e "  Scenario 1 (Device Spoofing)   → ${RED}401 → GATEWAY_AUTH_FAIL (HMAC_MISMATCH)${NC}"
+echo -e "  Scenario 2 (Replay Attack)     → ${RED}401 → REPLAY_ATTACK (TIMESTAMP_EXPIRED)${NC}"
+echo -e "  Scenario 3 (Brute Force)       → ${RED}401 x5 → GATEWAY_AUTH_FAIL + DEVICE_BLOCKED${NC}"
+echo -e "  Scenario 4 (Unregistered)      → ${RED}401 → GATEWAY_AUTH_FAIL (NOT_FOUND)${NC}"
+echo -e "  Scenario 5 (Privilege Escal.)  → ${RED}403 → PRIVILEGE_ESCALATION${NC}"
 echo ""
 echo -e "${YELLOW}Kiểm tra audit_log trên Dashboard để xem tất cả sự kiện đã được ghi lại.${NC}"
+echo -e "${YELLOW}Vào http://localhost:3000/audit → lọc theo REPLAY_ATTACK hoặc PRIVILEGE_ESCALATION${NC}"
 echo ""

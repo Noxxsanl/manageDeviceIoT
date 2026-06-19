@@ -55,7 +55,8 @@ export async function validateDevice(req: Request, res: Response, next: NextFunc
     const gwDevice = gwResult.device;
     const deviceDbId = gwDevice?.id ?? null;
 
-    await log("GATEWAY_AUTH_FAIL", deviceDbId, ip, userAgent, {
+    const gwEventType = gwResult.error === "TIMESTAMP_EXPIRED" ? "REPLAY_ATTACK" : "GATEWAY_AUTH_FAIL";
+    await log(gwEventType, deviceDbId, ip, userAgent, {
       gateway_id,
       reason: gwResult.error,
     });
@@ -84,7 +85,8 @@ export async function validateDevice(req: Request, res: Response, next: NextFunc
     const snDevice = snResult.device;
     const deviceDbId = snDevice?.id ?? null;
 
-    await log("SENSOR_AUTH_FAIL", deviceDbId, ip, userAgent, {
+    const snEventType = snResult.error === "TIMESTAMP_EXPIRED" ? "REPLAY_ATTACK" : "SENSOR_AUTH_FAIL";
+    await log(snEventType, deviceDbId, ip, userAgent, {
       sensor_id,
       reason: snResult.error,
     });

@@ -15,6 +15,8 @@ type Props = {
 const EVENT_STYLES: Record<string, string> = {
   GATEWAY_AUTH_FAIL:    "bg-rose-500/15 text-rose-300 border border-rose-500/20",
   SENSOR_AUTH_FAIL:     "bg-rose-500/15 text-rose-300 border border-rose-500/20",
+  REPLAY_ATTACK:        "bg-orange-500/15 text-orange-300 border border-orange-500/20",
+  PRIVILEGE_ESCALATION: "bg-purple-500/15 text-purple-300 border border-purple-500/20",
   DEVICE_BLOCKED:       "bg-rose-500/15 text-rose-300 border border-rose-500/20",
   DEVICE_DELETE:        "bg-rose-500/15 text-rose-300 border border-rose-500/20",
   DATA_RECV:            "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20",

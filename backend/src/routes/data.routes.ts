@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import pool from "../config/db";
 import { validateDevice } from "../middleware/validateDevice";
-import { logDataRecvWithPrune } from "../services/auditLogger";
+import { log, logDataRecvWithPrune } from "../services/auditLogger";
 
 const router = Router();
 
@@ -35,10 +35,20 @@ router.post("/", validateDevice, async (req: Request, res: Response): Promise<vo
 
   // RBAC: device_type check
   if (!gwRow || gwRow.device_type !== "gateway") {
+    await log("PRIVILEGE_ESCALATION", gateway.id, ip, userAgent as string | null, {
+      gateway_id: gateway.device_id,
+      actual_type: gwRow?.device_type ?? "unknown",
+      reason: "device_type_not_gateway",
+    });
     res.status(403).json({ error: "INVALID_DEVICE_TYPE", detail: "gateway_id must be a gateway device" });
     return;
   }
   if (!snRow || snRow.device_type !== "sensor") {
+    await log("PRIVILEGE_ESCALATION", sensor.id, ip, userAgent as string | null, {
+      sensor_id: sensor.device_id,
+      actual_type: snRow?.device_type ?? "unknown",
+      reason: "device_type_not_sensor",
+    });
     res.status(403).json({ error: "INVALID_DEVICE_TYPE", detail: "sensor_id must be a sensor device" });
     return;
   }
