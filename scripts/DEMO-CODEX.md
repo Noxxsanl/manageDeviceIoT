@@ -9,7 +9,8 @@ Tai lieu nay mo ta threat model va cach demo cac kich ban tan cong cho repo
 - Database: MySQL 8, cong host `3308`
 - MQTT broker: Mosquitto, cong `1883`
 - Endpoint nhan du lieu thiet bi: `POST /api/device/data`
-- Script demo: `scripts/attack_demo.sh`
+- Script demo core (5 kich ban): `scripts/attack_demo.sh`
+- Script demo nang cao (6 kich ban): `scripts/attack_demo_extended.sh`
 
 > Luu y: File nay khong dung cho moi truong production. Cac lenh tan cong chi
 > nen chay tren may lab/local do ban so huu.
@@ -179,24 +180,70 @@ SN_ID="ESP32-SN-..."
 SN_SECRET="..."
 ```
 
-### 2.3 Chay script demo nhanh
+### 2.3 Chay script demo – Huong dan step by step
 
-Script hien tai chay 6 muc: baseline + 5 kich ban tan cong.
+Co 2 script chay noi tiep nhau. Khong reset thiet bi giua 2 script (S7 trong script 2 can Gateway dang blocked tu S3 cua script 1).
 
+**Buoc 1 — Gan bien moi truong (Git Bash):**
+```bash
+export BACKEND="http://localhost:5000"
+export GW_ID="ESP32-GW-..."       # device_id Gateway
+export GW_SECRET="aabb...64"      # secret_key Gateway (64 ky tu hex)
+export SN_ID="ESP32-SN-..."       # device_id Sensor
+export SN_SECRET="1122...64"      # secret_key Sensor
+
+# Xac nhan HMAC hoat dong (phai ra 64 ky tu hex)
+echo -n "${GW_ID}:$(date +%s)" | openssl dgst -sha256 -hmac "$GW_SECRET" -hex | sed 's/^.* //'
+```
+
+**Buoc 2 — Chay script core (S0–S4):**
 ```bash
 cd /e/WorkSpace/managerDeviceIoT
 chmod +x scripts/attack_demo.sh
-
-./scripts/attack_demo.sh \
-  "http://localhost:3000" \
-  "$GW_ID" "$GW_SECRET" \
-  "$SN_ID" "$SN_SECRET"
+./scripts/attack_demo.sh "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET"
 ```
 
-Co the thay URL dau tien bang `http://localhost:5000` neu muon goi backend truc
-tiep.
+Theo doi terminal — ket qua mong doi tung scenario:
+```
+S0: ✓ HTTP 200  → DATA_RECV
+S1: ✗ HTTP 401  → GATEWAY_AUTH_FAIL (HMAC_MISMATCH)
+S2: ✗ HTTP 401  → GATEWAY_AUTH_FAIL (TIMESTAMP_EXPIRED) + audit REPLAY_ATTACK
+S3: Lan 1..6: HTTP 401 → sau lan 5: DEVICE_BLOCKED (Gateway badge do Blocked)
+S4: ✗ HTTP 403  → INVALID_DEVICE_TYPE + audit PRIVILEGE_ESCALATION
+```
 
-> Can co `curl`, `openssl`, va `xxd`. `jq` khong bat buoc.
+Sau S3: mo Dashboard (/devices) → xac nhan Gateway co badge do `Blocked`.
+**Khong unlock** — script extended (S7) can trang thai nay.
+
+**Buoc 3 — Chay script extended (S5–S10) ngay sau:**
+```bash
+chmod +x scripts/attack_demo_extended.sh
+./scripts/attack_demo_extended.sh \
+  "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET" \
+  "admin" "admin123"
+```
+
+Ket qua mong doi:
+```
+S5:  ✗ HTTP 401  → SENSOR_AUTH_FAIL (HMAC_MISMATCH) — Layer 2 doc lap
+S6:  ✗ HTTP 401  → GATEWAY_AUTH_FAIL (TIMESTAMP_EXPIRED) + audit REPLAY_ATTACK
+S7:  ✗ HTTP 403  → DEVICE_BLOCKED (HMAC dung nhung blocked)
+S8:  ✗ HTTP 401  → GATEWAY_AUTH_FAIL (NOT_FOUND — device chua dang ky)
+S9:  [auto] patch inactive → HTTP 403 DEVICE_NOT_ACTIVE → restore active
+S10: [auto] viewer → GET audit 200, DELETE audit 403, GET users 403 → cleanup
+```
+
+**Buoc 4 — Kiem tra ket qua:**
+- Audit `/audit`: phai thay du DATA_RECV, GATEWAY_AUTH_FAIL, REPLAY_ATTACK, DEVICE_BLOCKED, PRIVILEGE_ESCALATION, SENSOR_AUTH_FAIL
+- DB: `SELECT event_type, COUNT(*) FROM audit_log GROUP BY event_type;`
+
+**Buoc 5 — Reset sau demo:**
+```powershell
+docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_managerDeviceIoT -e "UPDATE devices SET status='active', fail_count=0 WHERE device_type='gateway';"
+```
+Hoac vao Dashboard → Devices → chon Gateway → doi status ve `active`.
+
+> Yeu cau: `curl`, `openssl` cho script 1; them `python3` cho script 2.
 
 ---
 
@@ -585,15 +632,20 @@ SELECT COUNT(*) FROM devices;
 
 ## 11. Bang tong hop STRIDE
 
-| Scenario | Threat | STRIDE | Defense | Ket qua |
-|---|---|---|---|---|
-| 0. Baseline | Request hop le | - | HMAC + RBAC + status deu pass | `200` |
-| 1. Spoofing | Gia mao device/HMAC | Spoofing | HMAC-SHA256 + timing-safe compare | `401 HMAC_MISMATCH` |
-| 2. Replay | Gui lai request cu | Tampering | Timestamp window +-300 giay | `401 TIMESTAMP_EXPIRED` |
-| 3. Brute force | Thu token lien tuc | DoS / Spoofing | Rate limit + fail_count + auto block | `401`, sau do blocked |
-| 4. Unregistered | Thiet bi la | Spoofing | DB lookup theo device_id | `401 NOT_FOUND` |
-| 5. Privilege escalation | Sensor gia gateway | Elevation of Privilege | device_type RBAC | `403 INVALID_DEVICE_TYPE` |
-| 6. SQL injection | Chen SQL vao ID | Tampering / Info Disclosure | Prepared statements | `401 NOT_FOUND`, DB an toan |
+| # | Scenario | STRIDE | Defense | Ket qua | Audit Event |
+|---|---|---|---|---|---|
+| 0 | Baseline hop le | — | Pass toan bo | `200` | `DATA_RECV` |
+| 1 | Gateway HMAC fake (Layer 1) | Spoofing | `timingSafeEqual` fail | `401` | `GATEWAY_AUTH_FAIL` |
+| 2 | Sensor HMAC fake (Layer 2) | Spoofing | `timingSafeEqual` fail | `401` | `SENSOR_AUTH_FAIL` |
+| 3 | Replay timestamp cu -12 phut | Tampering | Timestamp window ±300s | `401` | `REPLAY_ATTACK` |
+| 4 | Replay timestamp tuong lai | Tampering | Timestamp window ±300s | `401` | `REPLAY_ATTACK` |
+| 5 | Brute Force x6 → auto-block | DoS | `fail_count >= 5` → `blocked` | `401→403` | `GATEWAY_AUTH_FAIL`×5 + `DEVICE_BLOCKED` |
+| 6 | Blocked device HMAC dung | Tampering | `data.routes` status check | `403` | — |
+| 7 | Unregistered device | Spoofing | `fetchDevice()` → null | `401` | `GATEWAY_AUTH_FAIL` |
+| 8 | Privilege Escalation (type) | Elevation | `device_type` RBAC | `403` | `PRIVILEGE_ESCALATION` |
+| 9 | Inactive device HMAC dung | Tampering | `data.routes` status check | `403` | — |
+| 10 | RBAC Violation REST API | Elevation | `requireRole()` JWT check | `403` | — |
+| — | SQL Injection (bonus) | Tampering | Prepared statements | `401` | `GATEWAY_AUTH_FAIL` |
 
 ---
 
@@ -719,27 +771,38 @@ code hien tai. Dieu nay phu hop local HTTP, nhung production nen bat HTTPS va
 
 ---
 
-## 14. Thu tu demo khuyen dung
+## 14. Thu tu demo khuyen dung (25 phut)
 
 ```text
-1. Mo kien truc: Sensor -> MQTT -> Gateway -> HTTP -> Backend -> MySQL
-2. Cho xem /api/device/data va cong thuc HMAC
-3. Scenario 0: request hop le -> 200 DATA_RECV
-4. Scenario 1: HMAC gia -> 401 HMAC_MISMATCH
-5. Scenario 2: timestamp cu -> 401 TIMESTAMP_EXPIRED
-6. Scenario 3: brute force -> fail_count tang, device blocked
-7. Scenario 4: device chua dang ky -> 401 NOT_FOUND
-8. Scenario 5: sensor gia gateway -> 403 INVALID_DEVICE_TYPE
-9. Scenario 6: SQL injection -> prepared statement chan
-10. Mo Audit Dashboard va MySQL de doi chieu
-11. Ket luan rui ro con lai: firmware key, MQTT TLS, DB secret, key rotation
+[ 2 phut] 1. Gioi thieu so do kien truc: Sensor → MQTT → Gateway → HTTP → Backend
+[ 1 phut] 2. Giai thich 5 lop bao ve: HMAC · Timestamp · fail_count · device_type · JWT
+--- CHAY scripts/attack_demo.sh (S0–S4) ---
+[ 1 phut] 3. S0: Request hop le → 200 DATA_RECV (diem doi chieu)
+[ 2 phut] 4. S1: Gateway HMAC fake (Layer 1) → 401 HMAC_MISMATCH (giai thich timingSafeEqual)
+[ 2 phut] 5. S2: Replay timestamp cu −12 phut → 401 REPLAY_ATTACK (HMAC dung, ts sai)
+[ 2 phut] 6. S3: Brute Force 6 lan → DEVICE_BLOCKED (mo Dashboard xem badge do)
+[ 2 phut] 7. S4: Sensor gia lam Gateway → 403 PRIVILEGE_ESCALATION (HTTP 403 vs 401)
+--- KHONG reset — CHAY attack_demo_extended.sh (S5–S10) ---
+[ 1 phut] 8. S5: Sensor HMAC fake (Layer 2) → 401 SENSOR_AUTH_FAIL (doc lap voi Layer 1)
+[ 1 phut] 9. S6: Replay timestamp tuong lai → 401 REPLAY_ATTACK (cuong so ±300s ca 2 chieu)
+[ 1 phut]10. S7: Blocked device HMAC dung → 403 DEVICE_BLOCKED (HMAC pass, status fail)
+[ 1 phut]11. S8: Unregistered device → 401 NOT_FOUND (nhanh)
+[ 1 phut]12. S9: Inactive device qua Admin API → 403 DEVICE_NOT_ACTIVE (tu dong patch/restore)
+[ 2 phut]13. S10: RBAC REST API — viewer goi admin endpoint → 403 FORBIDDEN
+[ 1 phut]14. SQL Injection bonus → prepared statement chan (demo thu cong)
+[ 2 phut]15. Mo Audit Dashboard + chay SQL de doi chieu toan bo event
+[ 1 phut]16. Ket luan rui ro con lai: firmware key, MQTT TLS, DB secret, key rotation
 ```
 
-Lenh script nhanh:
+**Lenh script — chay 2 buoc noi tiep, khong reset giua:**
 
 ```bash
-./scripts/attack_demo.sh "http://localhost:3000" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET"
-```
+# Buoc 1: Core (S0-S4) — Gateway se bi blocked sau S3
+./scripts/attack_demo.sh "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET"
 
-Neu thiet bi bi block sau demo, vao Dashboard doi status ve `active` truoc khi
-chay lai.
+# Buoc 2: Extended (S5-S10) — CHAY NGAY, khong unlock Gateway
+./scripts/attack_demo_extended.sh "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET" "admin" "admin123"
+
+# Buoc 3: Reset sau khi xong (de chay lai)
+docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_managerDeviceIoT -e "UPDATE devices SET status='active', fail_count=0 WHERE device_type='gateway';"
+```

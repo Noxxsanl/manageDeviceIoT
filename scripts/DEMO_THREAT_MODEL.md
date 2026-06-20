@@ -1,6 +1,6 @@
 # Hướng Dẫn Demo: Threat Model & Kịch Bản Tấn Công
 
-> **Mục tiêu tài liệu:** Hướng dẫn từng bước thực hiện demo 6 kịch bản tấn công trên hệ thống IoT, giải thích cơ chế kỹ thuật bên trong, và kiểm tra phản ứng của hệ thống — phục vụ báo cáo/thuyết trình môn An Toàn Hệ Thống Nhúng và IoT.
+> **Mục tiêu tài liệu:** Hướng dẫn từng bước thực hiện demo 11 kịch bản tấn công trên hệ thống IoT, giải thích cơ chế kỹ thuật bên trong, và kiểm tra phản ứng của hệ thống — phục vụ báo cáo/thuyết trình môn An Toàn Hệ Thống Nhúng và IoT.
 
 ---
 
@@ -9,15 +9,20 @@
 2. [Chuẩn bị trước khi demo](#2-chuẩn-bị-trước-khi-demo)
 3. [Chạy script tự động (nhanh)](#3-chạy-script-tự-động-nhanh)
 4. [Scenario 0 — Baseline: Request hợp lệ](#4-scenario-0--baseline-request-hợp-lệ)
-5. [Scenario 1 — Device Spoofing: Giả mạo HMAC](#5-scenario-1--device-spoofing-giả-mạo-hmac)
-6. [Scenario 2 — Replay Attack: Gửi lại request cũ](#6-scenario-2--replay-attack-gửi-lại-request-cũ)
-7. [Scenario 3 — Brute Force → Auto Block](#7-scenario-3--brute-force--auto-block)
-8. [Scenario 4 — Unregistered Device](#8-scenario-4--unregistered-device)
-9. [Scenario 5 — Privilege Escalation: Sensor giả làm Gateway](#9-scenario-5--privilege-escalation-sensor-giả-làm-gateway)
-10. [Scenario 6 — SQL Injection](#10-scenario-6--sql-injection)
-11. [Kiểm tra Audit Log & Dashboard](#11-kiểm-tra-audit-log--dashboard)
-12. [Bảng tổng kết STRIDE](#12-bảng-tổng-kết-stride)
-13. [Điểm yếu còn lại & phân tích rủi ro](#13-điểm-yếu-còn-lại--phân-tích-rủi-ro)
+5. [Scenario 1 — Gateway HMAC giả mạo (Layer 1)](#5-scenario-1--gateway-hmac-giả-mạo-layer-1)
+6. [Scenario 2 — Sensor HMAC giả mạo (Layer 2)](#6-scenario-2--sensor-hmac-giả-mạo-layer-2)
+7. [Scenario 3 — Replay Attack: Timestamp cũ](#7-scenario-3--replay-attack-timestamp-cũ)
+8. [Scenario 4 — Replay Attack: Timestamp tương lai](#8-scenario-4--replay-attack-timestamp-tương-lai)
+9. [Scenario 5 — Brute Force → Auto Block](#9-scenario-5--brute-force--auto-block)
+10. [Scenario 6 — Blocked Device gửi HMAC hợp lệ](#10-scenario-6--blocked-device-gửi-hmac-hợp-lệ)
+11. [Scenario 7 — Unregistered Device](#11-scenario-7--unregistered-device)
+12. [Scenario 8 — Privilege Escalation: Sensor giả làm Gateway](#12-scenario-8--privilege-escalation-sensor-giả-làm-gateway)
+13. [Scenario 9 — Inactive Device](#13-scenario-9--inactive-device)
+14. [Scenario 10 — RBAC Violation qua REST API](#14-scenario-10--rbac-violation-qua-rest-api)
+15. [Scenario SQL Injection (bonus)](#15-scenario-sql-injection-bonus)
+16. [Kiểm tra Audit Log & Dashboard](#16-kiểm-tra-audit-log--dashboard)
+17. [Bảng tổng kết STRIDE](#17-bảng-tổng-kết-stride)
+18. [Điểm yếu còn lại & phân tích rủi ro](#18-điểm-yếu-còn-lại--phân-tích-rủi-ro)
 
 ---
 
@@ -32,7 +37,7 @@ ESP32 Sensor Node                ESP32 Gateway Node              Backend Server
       │   {sensor_id, sn_ts,            │                              │
       │    sn_hmac, data}               │                              │
       │                                 │                              │
-      │                        [Xác thực sn_hmac]                     │
+      │                        [Xác thực sn_hmac]                      │
       │                        (bằng whitelist local)                  │
       │                                 │                              │
       │                                 │── HTTP POST ────────────────►│
@@ -95,132 +100,622 @@ Ví dụ:
 
 ---
 
-## 2. Chuẩn bị trước khi demo
+## 2. Chuẩn bị trước khi demo (chạy bằng Docker)
 
-### 2.1 — Khởi động toàn bộ hệ thống
+> **Nguyên tắc quan trọng:** Các container Docker chạy backend/frontend/DB. Script tấn công (`attack_demo.sh`) chạy **trên máy host** trong **Git Bash** (không phải PowerShell, không phải bên trong container). Script gửi HTTP request đến `localhost:5000` — cổng mà Docker đã expose ra host.
+
+---
+
+### 2.1 — Khởi động Docker
+
+Mở **PowerShell** hoặc **CMD**, chạy:
 
 ```powershell
-cd e:\WorkSpace\managerDeviceIoT
+cd E:\WorkSpace\managerDeviceIoT-RBAC
 docker compose up -d --build
 ```
 
-Đợi ~60 giây rồi kiểm tra:
+Đợi ~60 giây để các container khởi động xong, rồi kiểm tra:
 
 ```powershell
 docker compose ps
 ```
 
-Kết quả mong đợi — tất cả `healthy` hoặc `running`:
+Kết quả mong đợi — tất cả status `running` hoặc `healthy`:
+
 ```
-NAME          STATUS             PORTS
-mysql         running (healthy)  0.0.0.0:3308->3306/tcp
-mosquitto     running            0.0.0.0:1883->1883/tcp
-backend       running (healthy)  0.0.0.0:5000->5000/tcp
-frontend      running            0.0.0.0:3000->3000/tcp
+NAME                  STATUS              PORTS
+iot-mysql             running (healthy)   0.0.0.0:3308->3306/tcp
+iot-mqtt-broker-1     running             0.0.0.0:1883->1883/tcp
+iot-mqtt-broker-2     running             0.0.0.0:1884->1884/tcp
+iot-backend           running (healthy)   0.0.0.0:5000->5000/tcp
+iot-frontend          running             0.0.0.0:3000->3000/tcp
+iot-nginx             running             0.0.0.0:80->80/tcp
 ```
 
-Kiểm tra backend API:
+Xác nhận backend sẵn sàng:
+
 ```powershell
 curl http://localhost:5000/api/health
-# {"status":"ok","db":"connected","mqtt":"connected"}
 ```
 
-### 2.2 — Tạo thiết bị demo trên Frontend
+Kết quả mong đợi:
+```json
+{"status":"ok","db":"connected","mqtt":"connected"}
+```
 
-Truy cập **http://localhost:3000** → đăng nhập `admin / admin123`
+Nếu `db: disconnected` → `docker compose logs backend` để xem lỗi.
+Nếu container nào `exited` → `docker compose up -d <tên-container>` để khởi động lại.
 
-**Tạo Gateway Node:**
-1. Vào **Devices** → **Thêm thiết bị**
+---
+
+### 2.2 — Tạo thiết bị demo trên Dashboard
+
+Mở trình duyệt → `http://localhost:3000` → đăng nhập `admin / admin123`
+
+**Tạo Gateway:**
+1. Vào **Devices** → click **Thêm thiết bị**
 2. Điền: Tên = `Demo-Gateway-01`, Type = `gateway`, Location = `Lab`
-3. Click **Lưu** → Modal hiện `device_id` + `secret_key`
-4. **SAO CHÉP NGAY** — key chỉ hiện 1 lần
+3. Click **Lưu** → Modal hiện `device_id` và `secret_key`
+4. **SAO CHÉP NGAY cả 2 giá trị** — `secret_key` chỉ hiện đúng 1 lần, không thể xem lại
 
-**Tạo Sensor Node:**
-1. Vào **Devices** → **Thêm thiết bị**
+**Tạo Sensor:**
+1. Vào **Devices** → click **Thêm thiết bị**
 2. Điền: Tên = `Demo-Sensor-01`, Type = `sensor`, Location = `Lab`
-3. Click **Lưu** → SAO CHÉP `device_id` + `secret_key`
+3. Click **Lưu** → SAO CHÉP `device_id` và `secret_key`
 
-> **Lý do cần tạo thiết bị trước:** Backend lấy `secret_key` từ DB để tính lại HMAC. Nếu thiết bị chưa đăng ký, không có key để so sánh → `NOT_FOUND`.
+**Kích hoạt cả 2 thiết bị:**
+- Thiết bị mới mặc định status = `inactive`
+- Click từng thiết bị → đổi Status → `active` → **Lưu**
+- Xác nhận badge chuyển xanh trước khi chạy script
 
-### 2.3 — Mở Git Bash / WSL và gán biến
+> Nếu quên copy `secret_key`: xóa thiết bị → tạo lại → copy ngay.
+
+---
+
+### 2.3 — Mở Git Bash và gán biến môi trường
+
+> ⚠️ **Phải dùng Git Bash** (không phải PowerShell). Tìm trong Start Menu: `Git Bash`. Script dùng cú pháp bash — PowerShell không tương thích.
+
+Mở **Git Bash**, điền giá trị thực tế từ bước 2.2:
 
 ```bash
-# Mở Git Bash (Windows) hoặc WSL Ubuntu
-# Điền giá trị thực tế từ bước 2.2
-
 export BACKEND="http://localhost:5000"
-export GW_ID="ESP32-GW-XXXXXXXX"        # device_id Gateway
-export GW_SECRET="aabbcc...64chars"      # secret_key Gateway
-export SN_ID="ESP32-SN-XXXXXXXX"        # device_id Sensor
-export SN_SECRET="112233...64chars"      # secret_key Sensor
-export ENDPOINT="$BACKEND/api/iot/data"
+export GW_ID="ESP32-GW-XXXXXXXX"      # device_id của Gateway vừa tạo
+export GW_SECRET="aabbcc...64chars"   # secret_key của Gateway (64 ký tự hex)
+export SN_ID="ESP32-SN-XXXXXXXX"      # device_id của Sensor
+export SN_SECRET="112233...64chars"   # secret_key của Sensor (64 ký tự hex)
 ```
 
-> **Kiểm tra biến đã gán đúng:**
-> ```bash
-> echo "GW: $GW_ID"
-> echo "SN: $SN_ID"
-> echo "Endpoint: $ENDPOINT"
-> ```
-
-### 2.4 — Dán hàm tiện ích vào terminal
+**Xác nhận biến đúng và HMAC hoạt động:**
 
 ```bash
-# Tính HMAC-SHA256 từ hex key — dùng openssl
+# Kiểm tra biến đã gán
+echo "GW_ID    : $GW_ID"
+echo "SN_ID    : $SN_ID"
+echo "Backend  : $BACKEND"
+
+# Tính thử HMAC — phải ra đúng 64 ký tự hex
+TEST_TS=$(date +%s)
+HMAC_OUT=$(echo -n "${GW_ID}:${TEST_TS}" | openssl dgst -sha256 -hmac "$GW_SECRET" -hex | sed 's/^.* //')
+echo "HMAC test: $HMAC_OUT"
+echo "Độ dài   : ${#HMAC_OUT} ký tự  ← phải bằng 64"
+```
+
+Nếu `Độ dài: 64` → OK, tiếp tục sang bước 2.4.
+Nếu ra `0` hoặc chuỗi rỗng → GW_SECRET sai định dạng (thừa space, newline, hoặc chưa gán).
+
+---
+
+### 2.4 — Dán hàm tiện ích vào terminal (tùy chọn — dùng khi demo thủ công)
+
+Dùng khi muốn gửi từng request riêng lẻ để giải thích, không cần thiết khi chạy script tự động.
+
+```bash
+# Tính HMAC-SHA256 — backend dùng secret_key hex string trực tiếp, không decode sang binary
 hmac() {
     local key="$1" msg="$2"
-    # Chuyển hex key sang bytes trước khi ký
-    echo -n "$msg" | openssl dgst -sha256 \
-        -hmac "$(echo -n "$key" | xxd -r -p 2>/dev/null || echo -n "$key")" \
-        -hex 2>/dev/null | sed 's/^.* //'
+    echo -n "$msg" | openssl dgst -sha256 -hmac "$key" -hex 2>/dev/null \
+        | sed 's/^.* //'
 }
 
-# Lấy Unix timestamp hiện tại (giây)
 ts() { date +%s; }
 
-# Gửi request và hiển thị status code + body
 post_data() {
     local payload="$1"
-    response=$(curl -s -w '\n%{http_code}' -X POST "$ENDPOINT" \
-        -H "Content-Type: application/json" \
-        -d "$payload")
+    response=$(curl -s -w '\n%{http_code}' -X POST "$BACKEND/api/device/data" \
+        -H "Content-Type: application/json" -d "$payload")
     http_code=$(echo "$response" | tail -n1)
     body=$(echo "$response" | head -n -1)
     echo "HTTP $http_code"
     echo "$body" | python3 -m json.tool 2>/dev/null || echo "$body"
 }
 
-# Kiểm tra hàm hmac hoạt động
-TEST_TS=$(ts)
-echo "Test HMAC: $(hmac "$GW_SECRET" "${GW_ID}:${TEST_TS}")"
-# Phải ra 64 ký tự hex, không rỗng
+# Kiểm tra nhanh
+echo "HMAC OK: $(hmac "$GW_SECRET" "${GW_ID}:$(ts)")"
 ```
 
 ---
 
-## 3. Chạy script tự động (nhanh)
+### 2.5 — Lỗi thường gặp khi chạy với Docker
 
-Dùng khi cần demo nhanh toàn bộ 5 kịch bản trong một lệnh:
+| Triệu chứng | Nguyên nhân | Cách xử lý |
+|---|---|---|
+| `bash: openssl: command not found` | Đang dùng PowerShell thay vì Git Bash | Mở Git Bash từ Start Menu |
+| `curl: (7) Failed to connect to localhost:5000` | Container backend chưa sẵn sàng | `docker compose logs -f backend` chờ thấy `Listening on port 5000` |
+| `{"status":"ok","db":"disconnected"}` | MySQL container chưa healthy | `docker compose ps mysql` → đợi thêm 30s |
+| S0 trả về `401` dù credentials đúng | Thiết bị vẫn `inactive` | Vào Dashboard → Devices → đổi cả 2 sang `active` |
+| S9/S10 in `Login admin thất bại` | Sai password | Password mặc định là `admin123` không phải `123456` |
+| Quên copy `secret_key` | Key chỉ hiện 1 lần khi tạo | Xóa thiết bị → tạo lại → copy ngay |
+| Script chạy nhưng không có màu | Terminal không hỗ trợ ANSI | Chạy trong Git Bash hoặc Windows Terminal |
+
+---
+
+## 3. Chạy script tự động – Hướng dẫn step by step
+
+> **Tổng quan:** Có 2 script chạy nối tiếp nhau. Script 1 (`attack_demo.sh`) chạy 5 kịch bản core. Script 2 (`attack_demo_extended.sh`) chạy 6 kịch bản nâng cao. **Không reset thiết bị giữa 2 script** — Scenario 7 trong script 2 cần Gateway vẫn đang bị block từ Scenario 3.
+
+---
+
+### 3.0 — Pre-flight: Kiểm tra trước khi bắt đầu
+
+Kiểm tra đủ 4 điều kiện này trước khi gõ bất kỳ lệnh nào:
+
+**[1] Docker đang chạy và đủ container:**
+```powershell
+docker compose ps
+```
+Kết quả mong đợi — tất cả status `running` hoặc `healthy`:
+```
+NAME                  STATUS
+iot-mysql             running (healthy)
+iot-mqtt-broker-1     running
+iot-mqtt-broker-2     running
+iot-backend           running (healthy)
+iot-frontend          running
+iot-nginx             running
+```
+Nếu container nào `exited`: `docker compose up -d <tên-container>`
+
+**[2] Backend phản hồi bình thường:**
+```powershell
+curl http://localhost:5000/api/health
+```
+Kết quả mong đợi:
+```json
+{"status":"ok","db":"connected","mqtt":"connected"}
+```
+Nếu DB disconnected → `docker compose logs backend` để xem lỗi.
+
+**[3] Hai thiết bị đã tạo và đang active:**
+- Vào **http://localhost:3000** → **Devices**
+- Phải thấy 1 thiết bị `gateway` + 1 thiết bị `sensor`, cả 2 badge xanh `active`
+- Nếu badge xám `inactive` → click thiết bị → đổi status → **Lưu**
+
+**[4] Đã có giá trị GW_ID, GW_SECRET, SN_ID, SN_SECRET:**
+```bash
+echo "GW_ID   : $GW_ID"
+echo "GW_SECRET: ${GW_SECRET:0:8}..."
+echo "SN_ID   : $SN_ID"
+echo "SN_SECRET: ${SN_SECRET:0:8}..."
+```
+Nếu ra rỗng → xem mục 3.1 bên dưới.
+
+---
+
+### 3.1 — Gán biến môi trường
+
+Mở **Git Bash** (Windows) hoặc **WSL** terminal. Copy-paste block dưới đây rồi điền giá trị thực tế từ Dashboard:
 
 ```bash
-cd /e/WorkSpace/managerDeviceIoT   # Git Bash
-# hoặc
-cd /mnt/e/WorkSpace/managerDeviceIoT  # WSL
-
-chmod +x scripts/attack_demo.sh
-
-./scripts/attack_demo.sh \
-    "$BACKEND" \
-    "$GW_ID" "$GW_SECRET" \
-    "$SN_ID" "$SN_SECRET"
+export BACKEND="http://localhost:5000"
+export GW_ID="ESP32-GW-XXXXXXXX"      # device_id Gateway — lấy từ Devices page
+export GW_SECRET="aabbcc...64chars"   # secret_key Gateway — chỉ hiện 1 lần khi tạo
+export SN_ID="ESP32-SN-XXXXXXXX"      # device_id Sensor
+export SN_SECRET="112233...64chars"   # secret_key Sensor
 ```
 
-Script chạy tuần tự Scenario 0 → 5, in màu xanh/đỏ từng kết quả.
+**Xác nhận HMAC hoạt động (bắt buộc):**
+```bash
+TEST_TS=$(date +%s)
+HMAC_OUT=$(echo -n "${GW_ID}:${TEST_TS}" | openssl dgst -sha256 -hmac "$GW_SECRET" -hex | sed 's/^.* //')
+echo "Kết quả: $HMAC_OUT"
+echo "Độ dài : ${#HMAC_OUT} ký tự (phải đúng bằng 64)"
+```
+- Ra 64 ký tự hex → OK, tiếp tục.
+- Ra chuỗi rỗng hoặc khác 64 ký tự → kiểm tra lại GW_SECRET (phải là chuỗi hex 64 ký tự, không có space, không có newline).
 
-**Sau khi script kết thúc:**
-- Mở Dashboard → **Audit** để xem toàn bộ sự kiện
-- Mở **Devices** để xem trạng thái thiết bị (có thể bị `blocked`)
-- Nếu Gateway bị block: click **Unlock** để reset
+---
+
+### 3.2 — Bước 1: Chạy attack_demo.sh (S0–S4)
+
+```bash
+cd /e/WorkSpace/managerDeviceIoT    # Git Bash Windows
+# hoặc: cd /mnt/e/WorkSpace/managerDeviceIoT  # WSL
+
+chmod +x scripts/attack_demo.sh
+./scripts/attack_demo.sh "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET"
+```
+
+Script tự động chạy tuần tự S0 → S4. Theo dõi terminal và Dashboard song song:
+
+---
+
+**S0 — Baseline (kỳ vọng: 200 OK)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 0: Baseline – Request hợp lệ (kỳ vọng: 200 OK)
+══════════════════════════════════════════════════
+  ℹ Xác nhận hệ thống hoạt động bình thường — điểm đối chiếu cho các tấn công
+Payload:
+{ "gateway_id": "ESP32-GW-...", ... }
+
+→ Gửi request hợp lệ...
+✓ HTTP 200
+  Response: {"success":true,"sensor_id":"ESP32-SN-...","received_at":"..."}
+
+  ✓ DATA_RECV ghi vào audit_log
+```
+
+Kiểm tra Dashboard sau S0:
+- **Audit** (`/audit`): có sự kiện `DATA_RECV` badge xanh
+- **Devices**: cả Gateway và Sensor vừa cập nhật `last_seen`
+
+Nếu ra 401 ở S0 → Dừng lại: kiểm tra GW_SECRET/SN_SECRET hoặc status thiết bị chưa active.
+
+---
+
+**S1 — Device Spoofing: HMAC giả mạo Layer 1 (kỳ vọng: 401)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 1: Device Spoofing – HMAC giả mạo (kỳ vọng: 401 GATEWAY_AUTH_FAIL)
+══════════════════════════════════════════════════
+  ℹ Kẻ tấn công biết gateway_id nhưng không có secret_key → tự bịa HMAC 64 hex
+  ℹ Bảo vệ: HMAC-SHA256 + timingSafeEqual() — không thể giả mạo nếu không có key
+Payload (gw_hmac = deadbeef... — bịa đặt):
+{ ..., "gw_hmac": "deadbeefdeadbeef..." }
+
+→ Gửi request với HMAC giả mạo...
+✗ HTTP 401
+  Response: {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+
+  ✓ timingSafeEqual(expected, 'deadbeef...') = false → 401 GATEWAY_AUTH_FAIL + HMAC_MISMATCH
+```
+
+Kiểm tra Dashboard sau S1:
+- **Audit**: thấy `GATEWAY_AUTH_FAIL` với `reason: HMAC_MISMATCH`
+- **Devices**: `fail_count` của Gateway tăng lên 1
+
+---
+
+**S2 — Replay Attack: Timestamp cũ −700s (kỳ vọng: 401 REPLAY_ATTACK)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 2: Replay Attack – Timestamp cũ 12 phút (kỳ vọng: 401 REPLAY_ATTACK)
+══════════════════════════════════════════════════
+  ℹ Kẻ tấn công chặn request hợp lệ và gửi lại sau 12 phút — HMAC đúng kỹ thuật
+  ℹ Bảo vệ: |now() − timestamp| ≤ 300s — mỗi request chỉ hợp lệ trong ±5 phút
+Payload (timestamp = 17XXXXXXX, cách đây 700s — HMAC đúng):
+{ ..., "gw_timestamp": 17XXXXXXX, "gw_hmac": "<hmac đúng kỹ thuật>" }
+
+→ Gửi request với timestamp cũ...
+✗ HTTP 401
+  Response: {"error":"GATEWAY_AUTH_FAIL","reason":"TIMESTAMP_EXPIRED"}
+
+  ✓ HMAC đúng nhưng |now − 17XXXXXXX| > 300s → TIMESTAMP_EXPIRED → audit: REPLAY_ATTACK
+```
+
+Kiểm tra Dashboard sau S2:
+- **Audit**: thấy `REPLAY_ATTACK` với `reason: TIMESTAMP_EXPIRED`
+- Chú ý: HMAC trong payload S2 là **hoàn toàn đúng** về kỹ thuật — chỉ bị từ chối vì timestamp quá cũ
+
+---
+
+**S3 — Brute Force → Auto Block (kỳ vọng: DEVICE_BLOCKED)**
+
+Terminal in 6 dòng liên tiếp:
+```
+══════════════════════════════════════════════════
+  SCENARIO 3: Brute Force → Auto Block (kỳ vọng: 401×5 rồi 403 DEVICE_BLOCKED)
+══════════════════════════════════════════════════
+  ℹ Kẻ tấn công gửi HMAC ngẫu nhiên liên tiếp — bị block sau 5 lần
+  ℹ Bảo vệ: fail_count tăng mỗi lần fail, đạt BLOCK_THRESHOLD=5 → status='blocked'
+  Lần 1: HTTP 401 | {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+  Lần 2: HTTP 401 | {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+  Lần 3: HTTP 401 | {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+  Lần 4: HTTP 401 | {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+  Lần 5: HTTP 401 | {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+  Lần 6: HTTP 401 | {"error":"GATEWAY_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+
+  ✓ Lần 5: fail_count ≥ 5 → blockDevice() → DEVICE_BLOCKED ghi audit
+  ℹ Gateway ESP32-GW-... hiện status='blocked' — chạy attack_demo_extended.sh để demo tiếp
+```
+
+> **Tại sao lần 6 vẫn ra 401 (không phải 403)?** Lần 6 dùng HMAC ngẫu nhiên vẫn sai → fail ở Layer 1 HMAC trước khi đến status check. Demo "HMAC đúng + device blocked → 403" sẽ được thực hiện ở Scenario 7.
+
+> **Fail_count thực tế:** S1 và S2 đã tăng fail_count lên 2. Nên thiết bị có thể bị block ngay từ lần 3 của S3 (tổng fail_count = 5). Cơ chế BLOCK_THRESHOLD = 5 vẫn đúng.
+
+Kiểm tra Dashboard ngay sau S3:
+- **Audit**: thấy nhiều `GATEWAY_AUTH_FAIL` + 1 event `DEVICE_BLOCKED`
+- **Devices**: Gateway hiển thị badge đỏ **Blocked** — trạng thái đã thay đổi
+
+⚠️ **KHÔNG reset Gateway lúc này** — Scenario 7 trong script extended cần Gateway đang blocked.
+
+---
+
+**S4 — Privilege Escalation: Sensor giả làm Gateway (kỳ vọng: 403)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 4: Privilege Escalation – Sensor giả làm Gateway (kỳ vọng: 403 PRIVILEGE_ESCALATION)
+══════════════════════════════════════════════════
+  ℹ Sensor có secret_key hợp lệ → HMAC đúng kỹ thuật, nhưng device_type='sensor' ≠ 'gateway'
+  ℹ Bảo vệ: RBAC device_type check trong data.routes.ts sau khi cả 2 HMAC đã pass
+Payload (gateway_id = SN_ID = ESP32-SN-... | gw_hmac tính từ SN_SECRET — đúng kỹ thuật):
+{ "gateway_id": "ESP32-SN-...", "gw_hmac": "<hmac đúng>" }
+
+→ Gửi request privilege escalation...
+✗ HTTP 403
+  Response: {"error":"INVALID_DEVICE_TYPE","detail":"gateway_id must be a gateway device"}
+
+  ✓ HMAC Layer1+Layer2: PASS | RBAC: device_type='sensor' ≠ 'gateway' → 403 PRIVILEGE_ESCALATION
+```
+
+Kiểm tra Dashboard sau S4:
+- **Audit**: thấy `PRIVILEGE_ESCALATION`
+- **Lưu ý khi thuyết trình:** HTTP 403 (có danh tính, sai quyền) khác với 401 (chưa xác thực). HMAC pass nhưng device_type RBAC fail.
+
+Terminal in tổng kết script core:
+```
+══════════════════════════════════════════════════
+  TỔNG KẾT – CORE 5 SCENARIOS
+══════════════════════════════════════════════════
+  S0  Baseline (hợp lệ)           → 200 DATA_RECV
+  S1  Device Spoofing (HMAC fake) → 401 GATEWAY_AUTH_FAIL (HMAC_MISMATCH)
+  S2  Replay Attack (−700s)        → 401 REPLAY_ATTACK (TIMESTAMP_EXPIRED)
+  S3  Brute Force → Auto Block     → 401×5 GATEWAY_AUTH_FAIL + DEVICE_BLOCKED
+  S4  Privilege Escalation (type)  → 403 PRIVILEGE_ESCALATION
+```
+
+---
+
+### 3.3 — Bước 2: Chạy attack_demo_extended.sh (S5–S10)
+
+Chạy **ngay sau khi script core kết thúc**, không làm gì khác:
+
+```bash
+chmod +x scripts/attack_demo_extended.sh
+./scripts/attack_demo_extended.sh \
+    "$BACKEND" \
+    "$GW_ID" "$GW_SECRET" \
+    "$SN_ID" "$SN_SECRET" \
+    "admin" "admin123"
+```
+
+---
+
+**S5 — Sensor HMAC fake: Layer 2 fail (kỳ vọng: 401 SENSOR_AUTH_FAIL)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 5: Sensor HMAC fake – Layer 2 fail (kỳ vọng: 401 SENSOR_AUTH_FAIL)
+══════════════════════════════════════════════════
+  ℹ Gateway HMAC đúng, nhưng sn_hmac bịa đặt → Layer 2 (Sensor) bị từ chối
+  ℹ Bảo vệ: xác thực 2 lớp độc lập — cả 2 HMAC phải đúng trước khi ghi data
+Payload (gw_hmac đúng | sn_hmac = 'aaa...' — bịa đặt):
+{ ..., "gw_hmac": "<đúng>", "sn_hmac": "aaaa..." }
+
+→ Gửi request Layer 2 attack...
+✗ HTTP 401
+  Response: {"error":"SENSOR_AUTH_FAIL","reason":"HMAC_MISMATCH"}
+
+  ✓ gw_hmac PASS → sn_hmac FAIL → 401 SENSOR_AUTH_FAIL → audit: SENSOR_AUTH_FAIL
+```
+
+Kiểm tra Dashboard:
+- **Audit**: `SENSOR_AUTH_FAIL` — chứng minh Layer 2 kiểm tra độc lập với Layer 1
+
+---
+
+**S6 — Replay Attack: Timestamp tương lai +700s (kỳ vọng: 401 REPLAY_ATTACK)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 6: Replay Attack – Timestamp tương lai +12 phút (kỳ vọng: 401 REPLAY_ATTACK)
+══════════════════════════════════════════════════
+  ℹ Kẻ tấn công pre-sign một request để dùng sau — HMAC đúng nhưng timestamp là tương lai
+  ℹ Bảo vệ: cùng cơ chế với timestamp cũ — |now() − ts| ≤ 300s; cả 2 chiều đều bị từ chối
+Payload (timestamp = 17XXXXXXX, cách đây +700s — HMAC đúng):
+{ "gw_timestamp": 17XXXXXXX, "gw_hmac": "<hmac đúng cho ts tương lai>" }
+
+→ Gửi request với timestamp tương lai...
+✗ HTTP 401
+  Response: {"error":"GATEWAY_AUTH_FAIL","reason":"TIMESTAMP_EXPIRED"}
+
+  ✓ HMAC đúng nhưng ts − now > 300s → TIMESTAMP_EXPIRED → audit: REPLAY_ATTACK
+```
+
+Kiểm tra Dashboard:
+- **Audit**: thêm 1 `REPLAY_ATTACK` — cùng cơ chế với S2 nhưng chiều tương lai
+
+---
+
+**S7 — Blocked Device: HMAC đúng nhưng bị block (kỳ vọng: 403 DEVICE_BLOCKED)**
+
+Đây là scenario cần Gateway vẫn đang blocked từ S3. Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 7: Blocked Device – HMAC hợp lệ nhưng status='blocked' (kỳ vọng: 403 DEVICE_BLOCKED)
+══════════════════════════════════════════════════
+  ℹ Sau Scenario 3 (brute force), Gateway bị block. Bây giờ thử gửi request HMAC đúng.
+  ℹ Kiểm tra thứ tự: status check xảy ra SAU khi 2 lớp HMAC đã pass
+Payload (HMAC hoàn toàn đúng, nhưng device status='blocked'):
+{ "gateway_id": "ESP32-GW-...", "gw_hmac": "<hmac đúng>" }
+
+→ Gửi request với HMAC đúng từ device bị block...
+✗ HTTP 403
+  Response: {"error":"DEVICE_BLOCKED","detail":"Gateway is blocked"}
+
+  ✓ HMAC PASS → status check: 'blocked' → 403 DEVICE_BLOCKED (fail_count KHÔNG tăng thêm)
+```
+
+Nếu ra 200 thay vì 403: Gateway đã được reset (ai đó unlock trước đó). S7 vẫn có thể chạy lại bằng cách dùng brute force thêm lần nữa.
+
+Kiểm tra Dashboard:
+- **Devices**: xác nhận Gateway vẫn badge đỏ `Blocked`
+- **Điểm quan trọng khi thuyết trình:** kể cả có secret_key thật (flash dump ESP32), thiết bị blocked vẫn không gửi được data
+
+---
+
+**S8 — Unregistered Device (kỳ vọng: 401 NOT_FOUND)**
+
+Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 8: Unregistered Device – gateway_id không tồn tại (kỳ vọng: 401)
+══════════════════════════════════════════════════
+  ℹ Kẻ tấn công dùng device ID tự tạo — không có trong database, không thể lookup secret_key
+  ℹ Bảo vệ: lookup secret_key thất bại → không thể tính expected HMAC → 401
+Payload (gateway_id = ESP32-GW-NOTEXIST — không tồn tại trong DB):
+{ "gateway_id": "ESP32-GW-NOTEXIST", ... }
+
+→ Gửi request từ device không đăng ký...
+✗ HTTP 401
+  Response: {"error":"GATEWAY_AUTH_FAIL","reason":"NOT_FOUND"}
+
+  ✓ Device lookup failed → secret_key không tìm được → 401 GATEWAY_AUTH_FAIL (NOT_FOUND)
+```
+
+Kiểm tra Dashboard:
+- **Audit**: `GATEWAY_AUTH_FAIL` với `reason: NOT_FOUND, gateway_id: ESP32-GW-NOTEXIST`
+
+---
+
+**S9 — Inactive Device qua Admin API (kỳ vọng: 403 DEVICE_NOT_ACTIVE)**
+
+Script thực hiện 4 bước tự động. Terminal in từng bước:
+```
+══════════════════════════════════════════════════
+  SCENARIO 9: Inactive Device – deactivate qua API rồi thử gửi data (kỳ vọng: 403 DEVICE_NOT_ACTIVE)
+══════════════════════════════════════════════════
+  Bước 1: Login admin...           [script gọi POST /api/auth/login]
+  Tìm device_id của ESP32-GW-...
+  device.id = 3
+  Bước 2: Deactivate device ESP32-GW-...
+  PATCH status → HTTP 200          [admin đặt status='inactive']
+  Bước 3: Gửi data từ device inactive (HMAC đúng)...
+✗ HTTP 403
+  Response: {"error":"DEVICE_NOT_ACTIVE","detail":"Gateway is not active"}
+
+  ✓ HMAC PASS → status check: 'inactive' → 403 DEVICE_NOT_ACTIVE
+  Bước 4 (cleanup): Reactivate device ESP32-GW-...
+  PATCH status='active' → HTTP 200 [admin khôi phục lại]
+  ✓ Device ESP32-GW-... đã được khôi phục về trạng thái active
+```
+
+Nếu script in `Login admin thất bại — kiểm tra ADMIN_USER/ADMIN_PASS`:
+- Tham số thứ 6 và 7 sai → chạy lại với đúng username/password
+- Thử kiểm tra: `curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123"}'`
+
+Sau S9: Gateway tự động được khôi phục `active`. Tuy nhiên Gateway vẫn có thể bị `blocked` từ S3 (S9 chỉ patch status, không reset fail_count).
+
+---
+
+**S10 — RBAC REST API Violation (kỳ vọng: 403 FORBIDDEN)**
+
+Script tạo viewer tạm, test 3 case, rồi tự cleanup. Terminal in:
+```
+══════════════════════════════════════════════════
+  SCENARIO 10: RBAC REST API – Viewer cố xóa audit log (kỳ vọng: 403 FORBIDDEN)
+══════════════════════════════════════════════════
+  Tạo tài khoản viewer tạm thời...
+  Tạo viewer 'demo_viewer_1750000000' → HTTP 201
+  Test 1: Viewer login...
+  Test 2: Viewer gọi GET /api/audit-log (được phép)...
+  ✓ GET /api/audit-log → HTTP 200 (viewer có quyền đọc)
+  Test 3: Viewer gọi DELETE /api/audit-log/data-recv (bị cấm)...
+  ✓ DELETE /api/audit-log/data-recv → HTTP 403 FORBIDDEN (chỉ admin được xóa)
+  Test 4: Viewer gọi GET /api/users (admin only)...
+  ✓ GET /api/users → HTTP 403 FORBIDDEN (RBAC admin-only)
+  Cleanup: Xóa tài khoản viewer tạm 'demo_viewer_1750000000'...
+  DELETE user/5 → HTTP 200
+  ✓ Viewer tạm đã được xóa
+```
+
+Terminal in tổng kết script extended:
+```
+══════════════════════════════════════════════════
+  TỔNG KẾT – EXTENDED 6 SCENARIOS
+══════════════════════════════════════════════════
+  S5  Sensor HMAC fake (Layer 2)  → 401 SENSOR_AUTH_FAIL
+  S6  Replay Attack (+700s future) → 401 REPLAY_ATTACK (TIMESTAMP_EXPIRED)
+  S7  Blocked device valid HMAC    → 403 DEVICE_BLOCKED
+  S8  Unregistered device          → 401 GATEWAY_AUTH_FAIL (NOT_FOUND)
+  S9  Inactive device (API demo)   → 403 DEVICE_NOT_ACTIVE
+  S10 RBAC REST API violation      → 403 FORBIDDEN
+```
+
+---
+
+### 3.4 — Kiểm tra kết quả tổng thể
+
+**Dashboard Audit** (`http://localhost:3000/audit`) — phải thấy đủ 7 loại event:
+
+| Event Type | Từ Scenario | Ghi chú |
+|---|---|---|
+| `DATA_RECV` | S0 | Badge xanh |
+| `GATEWAY_AUTH_FAIL` (HMAC_MISMATCH) | S1, S3 | Badge đỏ |
+| `REPLAY_ATTACK` (TIMESTAMP_EXPIRED) | S2, S6 | Badge cam |
+| `DEVICE_BLOCKED` | S3 | Badge đỏ đậm |
+| `PRIVILEGE_ESCALATION` | S4 | Badge tím |
+| `SENSOR_AUTH_FAIL` (HMAC_MISMATCH) | S5 | Badge cam |
+| `GATEWAY_AUTH_FAIL` (NOT_FOUND) | S8 | Badge đỏ |
+
+**Kiểm tra DB trực tiếp:**
+```powershell
+docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_managerDeviceIoT
+```
+```sql
+-- Thống kê số lần mỗi loại event
+SELECT event_type, COUNT(*) AS so_lan
+FROM audit_log
+GROUP BY event_type
+ORDER BY so_lan DESC;
+
+-- Trạng thái thiết bị sau demo
+SELECT device_id, device_type, status, fail_count
+FROM devices;
+-- Gateway: status='blocked', fail_count >= 5
+-- Sensor : status='active',  fail_count = 0 (hoặc thấp)
+```
+
+---
+
+### 3.5 — Reset sau khi demo
+
+Sau khi cả 2 script chạy xong, Gateway vẫn bị `blocked`. Reset để chạy lại:
+
+**Cách 1 — Qua Dashboard (khuyên dùng):**
+1. Vào `http://localhost:3000/devices`
+2. Tìm Gateway có badge đỏ `Blocked`
+3. Click vào → đổi Status về `active` → lưu
+4. Xác nhận badge chuyển xanh
+
+**Cách 2 — SQL (nhanh hơn):**
+```powershell
+docker exec -it iot-mysql mysql -u iot_managerIoT -piot_managerIoTpassword iot_managerDeviceIoT -e "UPDATE devices SET status='active', fail_count=0 WHERE device_type='gateway';"
+```
+
+Sau khi reset, có thể chạy lại toàn bộ 11 scenario từ đầu bất kỳ lúc nào.
 
 ---
 
@@ -311,7 +806,7 @@ ORDER BY sd.received_at DESC LIMIT 3;
 
 ---
 
-## 5. Scenario 1 — Device Spoofing: Giả mạo HMAC
+## 5. Scenario 1 — Gateway HMAC giả mạo (Layer 1)
 
 ### Mô tả tấn công
 Kẻ tấn công **biết `device_id`** (có thể sniff từ MQTT broker, log công khai, hoặc reverse engineering firmware) nhưng **không có `secret_key`**. Hắn tự tạo một chuỗi hex 64 ký tự giả để gửi vào trường `gw_hmac`.
@@ -423,7 +918,50 @@ ORDER BY created_at DESC LIMIT 5;
 
 ---
 
-## 6. Scenario 2 — Replay Attack: Gửi lại request cũ
+## 6. Scenario 2 — Sensor HMAC giả mạo (Layer 2)
+
+### Mô tả tấn công
+Gateway HMAC **đúng** (pass Layer 1), nhưng Sensor HMAC **sai**. Chứng minh hai lớp xác thực HMAC hoạt động độc lập: qua Layer 1 không đồng nghĩa qua được Layer 2.
+
+### Luồng code
+```
+validateDevice:
+  Layer 1: verifyGatewayHMAC(gw_id, gw_ts, gw_hmac_real) → ok: true ✓
+  Layer 2: verifyDeviceHMAC(sn_id, sn_ts, "badc0ffee...") → ok: false ✗
+    → snEventType = "SENSOR_AUTH_FAIL"
+    → log("SENSOR_AUTH_FAIL", sensor_db_id, ip, ua, {sensor_id, reason: "HMAC_MISMATCH"})
+    → incrementFailCount(sensor)
+    → 401 { error: "SENSOR_AUTH_FAIL", reason: "HMAC_MISMATCH" }
+```
+
+### Lệnh thực hiện
+```bash
+echo "=== SCENARIO 2: Sensor HMAC fail (Layer 2) ==="
+GW_TS=$(ts); SN_TS=$(ts)
+GW_HMAC_REAL=$(hmac "$GW_SECRET" "${GW_ID}:${GW_TS}")
+
+post_data "{
+  \"gateway_id\":   \"$GW_ID\",
+  \"gw_timestamp\": $GW_TS,
+  \"gw_hmac\":      \"$GW_HMAC_REAL\",
+  \"sensor_payload\": {
+    \"sensor_id\":    \"$SN_ID\",
+    \"sn_timestamp\": $SN_TS,
+    \"sn_hmac\":      \"badc0ffeebadc0ffeebadc0ffeebadc0ffeebadc0ffeebadc0ffeebadc0ffee0\",
+    \"data\":         { \"temperature\": 0.0, \"humidity\": 0.0 }
+  }
+}"
+```
+
+### Kết quả mong đợi
+```json
+HTTP 401
+{ "error": "SENSOR_AUTH_FAIL", "reason": "HMAC_MISMATCH" }
+```
+
+---
+
+## 7. Scenario 3 — Replay Attack: Timestamp cũ
 
 ### Mô tả tấn công
 Kẻ tấn công **chặn được 1 request hợp lệ hoàn toàn** (ví dụ sniff traffic, MITM) và cố gửi lại sau 10 phút để đưa dữ liệu giả vào hệ thống. HMAC trong request này **hoàn toàn đúng** — chỉ có timestamp là cũ.
@@ -538,7 +1076,42 @@ post_data "{
 
 ---
 
-## 7. Scenario 3 — Brute Force → Auto Block
+## 8. Scenario 4 — Replay Attack: Timestamp tương lai
+
+### Mô tả tấn công
+Kẻ tấn công pre-sign request với timestamp **trong tương lai** (+700s). Cùng cơ chế `isTimestampValid()` nhưng theo hướng ngược lại. Chứng minh cửa sổ ±300s hoạt động cả hai chiều.
+
+### Lệnh thực hiện
+```bash
+echo "=== SCENARIO 4: Replay — timestamp tương lai ==="
+FUTURE_TS=$(($(ts) + 700))
+GW_HMAC_FUT=$(hmac "$GW_SECRET" "${GW_ID}:${FUTURE_TS}")
+SN_HMAC_FUT=$(hmac "$SN_SECRET" "${SN_ID}:${FUTURE_TS}")
+
+post_data "{
+  \"gateway_id\":   \"$GW_ID\",
+  \"gw_timestamp\": $FUTURE_TS,
+  \"gw_hmac\":      \"$GW_HMAC_FUT\",
+  \"sensor_payload\": {
+    \"sensor_id\":    \"$SN_ID\",
+    \"sn_timestamp\": $FUTURE_TS,
+    \"sn_hmac\":      \"$SN_HMAC_FUT\",
+    \"data\":         { \"temperature\": 25.0, \"humidity\": 60.0 }
+  }
+}"
+```
+
+### Kết quả mong đợi
+```json
+HTTP 401
+{ "error": "GATEWAY_AUTH_FAIL", "reason": "TIMESTAMP_EXPIRED" }
+```
+
+> **Điểm quan trọng:** `|now() - future_ts|` = 700s > 300s → `TIMESTAMP_EXPIRED`. Cùng error code với timestamp cũ. Audit log ghi `REPLAY_ATTACK`.
+
+---
+
+## 9. Scenario 5 — Brute Force → Auto Block
 
 ### Mô tả tấn công
 Kẻ tấn công không cần biết HMAC — hắn dùng script gửi liên tiếp với HMAC ngẫu nhiên, hy vọng ngẫu nhiên đúng (xác suất 1/2^256 ≈ 0). Mục đích thực tế hơn: gây rối hệ thống, cố khai thác lỗ hổng brute-force nếu có rate limit yếu.
@@ -653,7 +1226,53 @@ Vào **Devices** → click `Demo-Gateway-01` → nút **Unlock** → `status = '
 
 ---
 
-## 8. Scenario 4 — Unregistered Device
+## 10. Scenario 6 — Blocked Device gửi HMAC hợp lệ
+
+### Mô tả tấn công
+Sau khi bị auto-block ở Scenario 5, kẻ tấn công có được `secret_key` (ví dụ flash dump ESP32) và tính HMAC đúng hoàn toàn — vẫn bị từ chối.
+
+### Tại sao tấn công thất bại
+```
+validateDevice (hmacService — KHÔNG check status):
+  Layer 1: verifyGatewayHMAC() → ok: true  ✓ (HMAC đúng)
+  Layer 2: verifyDeviceHMAC()  → ok: true  ✓ (HMAC đúng)
+  → next()
+
+data.routes.ts handler:
+  gwRow = { id: X, device_type: 'gateway', status: 'blocked' }
+  if (gwRow.status === 'blocked')
+    → res.status(403).json({ error: "DEVICE_BLOCKED" })  ← BỊ CHẶN TẠI ĐÂY
+```
+
+### Lệnh thực hiện
+```bash
+echo "=== SCENARIO 6: Blocked device — HMAC đúng nhưng status=blocked ==="
+GW_TS=$(ts); SN_TS=$(ts)
+GW_HMAC_OK=$(hmac "$GW_SECRET" "${GW_ID}:${GW_TS}")
+SN_HMAC_OK=$(hmac "$SN_SECRET" "${SN_ID}:${SN_TS}")
+
+post_data "{
+  \"gateway_id\":   \"$GW_ID\",
+  \"gw_timestamp\": $GW_TS,
+  \"gw_hmac\":      \"$GW_HMAC_OK\",
+  \"sensor_payload\": {
+    \"sensor_id\":    \"$SN_ID\",
+    \"sn_timestamp\": $SN_TS,
+    \"sn_hmac\":      \"$SN_HMAC_OK\",
+    \"data\":         { \"temperature\": 28.0, \"humidity\": 65.0 }
+  }
+}"
+```
+
+### Kết quả mong đợi
+```json
+HTTP 403
+{ "error": "DEVICE_BLOCKED", "detail": "Gateway is blocked" }
+```
+
+---
+
+## 11. Scenario 7 — Unregistered Device
 
 ### Mô tả tấn công
 Một ESP32 chưa bao giờ được đăng ký vào hệ thống (mua ngoài, do kẻ tấn công mang vào) cố gửi dữ liệu lên server.
@@ -732,7 +1351,7 @@ HTTP 401
 
 ---
 
-## 9. Scenario 5 — Privilege Escalation: Sensor giả làm Gateway
+## 12. Scenario 8 — Privilege Escalation: Sensor giả làm Gateway
 
 ### Mô tả tấn công
 Một Sensor Node (thiết bị `device_type = 'sensor'`) cố gạt qua lớp Gateway bằng cách **đặt chính `sensor_id` của mình vào trường `gateway_id`**. Nó có `secret_key` hợp lệ của chính nó, nên HMAC tính đúng — nhưng sai vai trò.
@@ -827,7 +1446,141 @@ HTTP 403
 
 ---
 
-## 10. Scenario 6 — SQL Injection
+## 13. Scenario 9 — Inactive Device
+
+### Mô tả tấn công
+Thiết bị mới đăng ký nhưng chưa được admin kích hoạt (status=`inactive`) cố gửi dữ liệu. HMAC đúng hoàn toàn — bị chặn bởi status check.
+
+### Điều kiện
+```
+Thiết bị mới đăng ký:
+  status   = 'inactive'   ← mặc định khi register
+  fail_count = 0
+  secret_key = <valid key>
+```
+
+### Luồng code
+```
+validateDevice → PASS (HMAC đúng)
+data.routes.ts:
+  gwRow.status = 'inactive'
+  gwRow.status !== 'active' → TRUE
+  → res.status(403).json({ error: "DEVICE_NOT_ACTIVE" })
+```
+
+### Lệnh thực hiện (cần admin JWT)
+```bash
+echo "=== SCENARIO 9: Inactive device ==="
+
+# Đăng nhập admin lấy cookie
+curl -s -c /tmp/admin_cookie.jar -X POST "$BACKEND/api/auth/login" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","password":"admin123"}' > /dev/null
+
+# Đăng ký gateway mới (status=inactive)
+REG=$(curl -s -b /tmp/admin_cookie.jar -X POST "$BACKEND/api/devices/register" \
+    -H "Content-Type: application/json" \
+    -d '{"device_name":"Demo-Inactive","device_type":"gateway"}')
+NEW_GW_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('device_id',''))" "$REG")
+NEW_GW_SEC=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('secret_key',''))" "$REG")
+echo "Gateway mới: $NEW_GW_ID (status=inactive)"
+
+# Gửi data với HMAC đúng
+NEW_TS=$(ts)
+NEW_GW_HMAC=$(hmac "$NEW_GW_SEC" "${NEW_GW_ID}:${NEW_TS}")
+NEW_SN_HMAC=$(hmac "$SN_SECRET" "${SN_ID}:${NEW_TS}")
+
+post_data "{
+  \"gateway_id\":   \"$NEW_GW_ID\",
+  \"gw_timestamp\": $NEW_TS,
+  \"gw_hmac\":      \"$NEW_GW_HMAC\",
+  \"sensor_payload\": {
+    \"sensor_id\":    \"$SN_ID\",
+    \"sn_timestamp\": $NEW_TS,
+    \"sn_hmac\":      \"$NEW_SN_HMAC\",
+    \"data\":         { \"temperature\": 27.0, \"humidity\": 63.0 }
+  }
+}"
+```
+
+### Kết quả mong đợi
+```json
+HTTP 403
+{ "error": "DEVICE_NOT_ACTIVE", "detail": "Gateway is not active" }
+```
+
+---
+
+## 14. Scenario 10 — RBAC Violation qua REST API
+
+### Mô tả tấn công
+Người dùng có tài khoản hợp lệ (role=`viewer`) cố gọi các endpoint yêu cầu quyền cao hơn. Đây là vector tấn công **hoàn toàn khác** — không liên quan đến HMAC, tấn công qua giao diện web.
+
+### Quy tắc RBAC cho REST API
+```
+GET    /api/users           → requireRole("admin")
+POST   /api/users           → requireRole("admin")
+PATCH  /api/devices/:id/status → requireRole("admin", "operator")
+DELETE /api/devices/:id     → requireRole("admin")
+DELETE /api/audit-log/*     → requireRole("admin")
+```
+
+### Luồng code khi viewer gọi admin endpoint
+```
+viewer JWT → verifyJWT() → ok (JWT hợp lệ)
+           → requireRole("admin") → role="viewer" ∉ ["admin"]
+           → res.status(403).json({ error: "FORBIDDEN" })
+```
+
+### Lệnh thực hiện
+```bash
+echo "=== SCENARIO 10: RBAC Violation — Viewer gọi admin API ==="
+
+# Đăng nhập admin
+curl -s -c /tmp/admin_cookie.jar -X POST "$BACKEND/api/auth/login" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","password":"admin123"}' > /dev/null
+
+# Tạo viewer tạm thời
+curl -s -b /tmp/admin_cookie.jar -X POST "$BACKEND/api/users" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"tmp_viewer","password":"ViewerPass1!","role":"viewer"}' > /dev/null
+
+# Đăng nhập viewer
+curl -s -c /tmp/viewer_cookie.jar -X POST "$BACKEND/api/auth/login" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"tmp_viewer","password":"ViewerPass1!"}' > /dev/null
+
+# Test 1: Viewer cố GET /api/users (admin-only)
+echo "--- Test 1: Viewer GET /api/users ---"
+curl -s -w '\nHTTP %{http_code}' -b /tmp/viewer_cookie.jar "$BACKEND/api/users"
+
+# Test 2: Viewer cố PATCH device status (admin/operator only)
+echo ""
+echo "--- Test 2: Viewer PATCH /api/devices/:id/status ---"
+curl -s -w '\nHTTP %{http_code}' -b /tmp/viewer_cookie.jar \
+    -X PATCH "$BACKEND/api/devices/1/status" \
+    -H "Content-Type: application/json" \
+    -d '{"status":"blocked"}'
+
+# Test 3: Viewer cố DELETE device (admin-only)
+echo ""
+echo "--- Test 3: Viewer DELETE /api/devices/1 ---"
+curl -s -w '\nHTTP %{http_code}' -b /tmp/viewer_cookie.jar \
+    -X DELETE "$BACKEND/api/devices/1"
+```
+
+### Kết quả mong đợi (cả 3 test)
+```json
+HTTP 403
+{ "error": "FORBIDDEN" }
+```
+
+> **Điểm phân biệt với device attacks:** HTTP là **403** (có JWT hợp lệ, đúng danh tính, sai quyền), không phải 401 (chưa xác thực). JWT bảo vệ API quản trị, HMAC bảo vệ luồng dữ liệu IoT — hai cơ chế độc lập.
+
+---
+
+## 15. Scenario SQL Injection (bonus)
 
 ### Mô tả tấn công
 Kẻ tấn công nhúng mã SQL vào trường `gateway_id` với mục tiêu:
@@ -942,7 +1695,7 @@ SELECT COUNT(*) FROM devices;
 
 ---
 
-## 11. Kiểm tra Audit Log & Dashboard
+## 16. Kiểm tra Audit Log & Dashboard
 
 ### Xem Audit Log trên giao diện Web
 
@@ -1014,17 +1767,22 @@ Log backend sẽ in ra từng request, HTTP status, và lỗi chi tiết.
 
 ---
 
-## 12. Bảng tổng kết STRIDE
+## 17. Bảng tổng kết STRIDE
 
 | # | Kịch bản | STRIDE | Điểm bị chặn trong code | HTTP | Audit Event |
 |---|---|---|---|---|---|
-| 0 | Baseline hợp lệ | — | (Pass toàn bộ) | `200` | `DATA_RECV` |
-| 1 | Device Spoofing | **S**poofing | `safeCompare()` → false | `401` | `GATEWAY_AUTH_FAIL` reason: `HMAC_MISMATCH` |
-| 2 | Replay Attack | **T**ampering | `isTimestampValid()` → false | `401` | `GATEWAY_AUTH_FAIL` reason: `TIMESTAMP_EXPIRED` |
-| 3 | Brute Force | **D**enial of Service | `fail_count ≥ 5` → `blockDevice()` | `401→403` | `AUTH_FAIL` ×5 + `DEVICE_BLOCKED` |
-| 4 | Unregistered Device | **S**poofing | `fetchDevice()` → null | `401` | `GATEWAY_AUTH_FAIL` reason: `NOT_FOUND` |
-| 5 | Privilege Escalation | **E**levation | `device_type !== 'gateway'` | `403` | (không ghi — bị chặn sau HMAC) |
-| 6 | SQL Injection | **T**ampering | Prepared statements escape | `401` | `GATEWAY_AUTH_FAIL` reason: `NOT_FOUND` |
+| 0 | Baseline hợp lệ | — | Pass toàn bộ | `200` | `DATA_RECV` |
+| 1 | Gateway HMAC giả mạo | **S**poofing | `safeCompare()` → false (Layer 1) | `401` | `GATEWAY_AUTH_FAIL` reason: `HMAC_MISMATCH` |
+| 2 | Sensor HMAC giả mạo | **S**poofing | `safeCompare()` → false (Layer 2) | `401` | `SENSOR_AUTH_FAIL` reason: `HMAC_MISMATCH` |
+| 3 | Replay – timestamp cũ | **T**ampering | `isTimestampValid()` → false | `401` | `REPLAY_ATTACK` reason: `TIMESTAMP_EXPIRED` |
+| 4 | Replay – timestamp tương lai | **T**ampering | `isTimestampValid()` → false | `401` | `REPLAY_ATTACK` reason: `TIMESTAMP_EXPIRED` |
+| 5 | Brute Force → Auto Block | **D**oS | `fail_count ≥ 5` → `blockDevice()` | `401×5` | `GATEWAY_AUTH_FAIL` ×5 + `DEVICE_BLOCKED` |
+| 6 | Blocked device HMAC đúng | **T**ampering | `data.routes: status='blocked'` | `403` | — |
+| 7 | Unregistered Device | **S**poofing | `fetchDevice()` → null | `401` | `GATEWAY_AUTH_FAIL` reason: `NOT_FOUND` |
+| 8 | Privilege Escalation (type) | **E**levation | `device_type !== 'gateway'` | `403` | `PRIVILEGE_ESCALATION` |
+| 9 | Inactive Device | **T**ampering | `data.routes: status='inactive'` | `403` | — |
+| 10 | RBAC Violation (REST API) | **E**levation | `requireRole()` → role mismatch | `403` | — |
+| — | SQL Injection (bonus) | **T**ampering | Prepared statements escape | `401` | `GATEWAY_AUTH_FAIL` reason: `NOT_FOUND` |
 
 ### Cơ chế phòng thủ theo lớp
 
@@ -1054,7 +1812,7 @@ Lớp 6 – Adaptive Defense
 
 ---
 
-## 13. Điểm yếu còn lại & phân tích rủi ro
+## 18. Điểm yếu còn lại & phân tích rủi ro
 
 Phần này dùng cho báo cáo — phân tích các rủi ro mà hệ thống **chưa** giải quyết hoàn toàn.
 
@@ -1094,26 +1852,37 @@ Khi phát hiện key bị lộ:
 
 ---
 
-## Thứ tự demo khuyên dùng (16 phút)
+## Thứ tự demo khuyên dùng (25 phút)
 
 ```
-[ 2 phút] Giới thiệu: sơ đồ kiến trúc, luồng dữ liệu, 4 lớp bảo vệ
-[ 1 phút] Scenario 0: Baseline → 200 OK (hệ thống hoạt động bình thường)
-[ 2 phút] Scenario 1: Spoofing → giải thích HMAC, timingSafeEqual
-[ 2 phút] Scenario 2: Replay → giải thích timestamp window, xem 289s vs 700s
-[ 2 phút] Scenario 3: Brute Force → xem Dashboard đổi sang Blocked, xem audit log
-[ 1 phút] Scenario 4: Unregistered → nhanh
-[ 2 phút] Scenario 5: Privilege Escalation → giải thích RBAC, HTTP 403 vs 401
-[ 1 phút] Scenario 6: SQL Injection → chạy nhanh 3 payload
-[ 2 phút] Audit Log Dashboard → tổng hợp toàn bộ sự kiện
+[ 2 phút] Giới thiệu: sơ đồ kiến trúc, 5 lớp bảo vệ
+[ 1 phút] S0:  Baseline → 200 OK
+[ 2 phút] S1:  Gateway HMAC fake → giải thích timingSafeEqual, Layer 1
+[ 1 phút] S2:  Sensor HMAC fake → giải thích Layer 2 độc lập với Layer 1
+[ 2 phút] S3:  Replay cũ → giải thích timestamp window ±300s
+[ 1 phút] S4:  Replay tương lai → cùng cơ chế, hai chiều
+[ 2 phút] S5:  Brute Force → xem Dashboard đổi sang Blocked, xem audit log
+[ 1 phút] S6:  Blocked device HMAC đúng → vẫn bị từ chối (403 vs 401)
+[ 1 phút] S7:  Unregistered → nhanh
+[ 2 phút] S8:  Privilege Escalation → RBAC device_type, HTTP 403 vs 401
+[ 1 phút] S9:  Inactive device → phân biệt inactive vs blocked
+[ 2 phút] S10: RBAC REST API → viewer cố gọi admin API, 3 test cases
+[ 1 phút] SQL Injection bonus → prepared statements, nhanh
+[ 2 phút] Audit Log Dashboard → tổng hợp toàn bộ event types
 [ 1 phút] Điểm yếu còn lại → flash dump, key rotation
 ```
 
-**Script tự động (5 scenario cùng lúc):**
+**Script tự động (2 file, 11 scenario):**
 ```bash
+# Bước 1 — 5 kịch bản core (S0–S4): Spoofing, Replay, Brute Force, Privilege Escalation
 ./scripts/attack_demo.sh "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET"
+
+# Unlock Gateway sau Scenario 3 (Brute Force → blocked), rồi chạy tiếp:
+
+# Bước 2 — 6 kịch bản nâng cao (S5–S10): Sensor Layer 2, Future Replay, Blocked, Unregistered, Inactive, RBAC REST
+./scripts/attack_demo_extended.sh "$BACKEND" "$GW_ID" "$GW_SECRET" "$SN_ID" "$SN_SECRET" "admin" "admin123"
 ```
 
 **Reset sau demo:**
-- Vào **Devices** → **Unlock** Gateway bị block
-- `fail_count` tự về 0 khi unlock
+- Vào **Devices** → **Unlock** Gateway bị block (Scenario 3 core)
+- Scenario 9 và 10 (extended) tự cleanup thiết bị/user demo
