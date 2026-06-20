@@ -1,1 +1,1 @@
-export { default } from "@/containers/Audit";
+export { default } from "@/features/audit/pages/AuditPage";

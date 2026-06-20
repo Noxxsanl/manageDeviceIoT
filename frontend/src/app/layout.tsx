@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/providers/AuthContext";
+import { AuthProvider } from "@/features/auth/providers/AuthProvider";
 
 export const metadata: Metadata = {
   title: "IoT Manager",

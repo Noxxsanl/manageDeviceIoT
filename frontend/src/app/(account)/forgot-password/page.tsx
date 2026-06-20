@@ -1,1 +1,1 @@
-export { default } from "@/containers/ForgotPassword";
+export { default } from "@/features/auth/pages/ForgotPasswordPage";
