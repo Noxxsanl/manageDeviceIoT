@@ -4,6 +4,27 @@ import { useEffect, useRef, useState } from "react";
 import {
   Bell, UserCheck, Server, Lock, Unlock, Activity, Trash2, CheckCheck,
 } from "lucide-react";
+
+const DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+function pad(n: number) { return String(n).padStart(2, "0"); }
+
+function ClockDisplay() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!now) return null;
+  const date = `${DAYS[now.getDay()]} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return (
+    <div className="flex flex-col items-end leading-tight select-none">
+      <span className="font-mono text-base font-bold tabular-nums text-gray-800">{time}</span>
+      <span className="text-[11px] text-gray-400">{date}</span>
+    </div>
+  );
+}
 import Breadcrumb from "@/widgets/app-shell/Breadcrumb";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import type { AppNotification } from "@/shared/types/api";
@@ -82,6 +103,9 @@ export default function Header() {
     <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#E5EAF0] bg-[#F8F9FB] px-6">
       <Breadcrumb />
 
+      <div className="flex items-center gap-4">
+        <ClockDisplay />
+
       {isAdmin && (
         <div ref={notifRef} className="relative">
           {/* Bell button */}
@@ -142,6 +166,7 @@ export default function Header() {
           )}
         </div>
       )}
+      </div>
     </header>
   );
 }

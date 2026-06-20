@@ -118,6 +118,7 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-400">No recent events to display.</p>
           </div>
         </div>
+
       </div>
     </div>
   );
