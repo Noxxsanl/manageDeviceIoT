@@ -11,11 +11,11 @@ export default function DashboardLayout({
   return (
     <DevicesProvider>
       <AddDeviceProvider>
-        <div className="bg-[#F6F8FB] text-gray-900">
+        <div className="bg-[#F6F8FB] dark:bg-slate-900 text-gray-900 dark:text-slate-100">
           <Sidebar />
           <div className="ml-60 flex h-screen flex-col overflow-hidden">
             <Header />
-            <main className="flex-1 overflow-y-auto bg-[#F6F8FB] px-5 py-4 sm:px-6 lg:px-7">
+            <main className="flex-1 overflow-y-auto bg-[#F6F8FB] dark:bg-slate-900 px-5 py-4 sm:px-6 lg:px-7">
               {children}
             </main>
           </div>

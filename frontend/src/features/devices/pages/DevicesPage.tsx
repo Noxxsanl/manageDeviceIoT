@@ -103,8 +103,8 @@ export default function DevicesPage() {
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">Fleet registry</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Quản lý trạng thái, quyền truy cập và bảo mật thiết bị.</p>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Fleet registry</h1>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">Quản lý trạng thái, quyền truy cập và bảo mật thiết bị.</p>
         </div>
         {canCreateDevice && (
           <button
@@ -123,8 +123,8 @@ export default function DevicesPage() {
         <button
           type="button"
           onClick={() => setActiveTab("gateway")}
-          className={`rounded-md border bg-white p-3.5 text-left transition
-            ${activeTab === "gateway" ? "border-blue-200 ring-1 ring-blue-400/30" : "border-[#E5EAF0] hover:border-gray-300"}`}
+          className={`rounded-md border bg-white dark:bg-slate-800 p-3.5 text-left transition
+            ${activeTab === "gateway" ? "border-blue-200 ring-1 ring-blue-400/30" : "border-[#E5EAF0] dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600"}`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -132,16 +132,16 @@ export default function DevicesPage() {
                 <Server className="h-4 w-4 text-blue-600" />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Gateways</p>
-                <p className="text-2xl font-bold text-gray-900">{gateways.length}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500">Gateways</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{gateways.length}</p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-xl font-bold text-emerald-600">{activeGateways}</p>
-              <p className="text-xs text-gray-400">active</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500">active</p>
             </div>
           </div>
-          <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
             <div
               className="h-full rounded-full bg-emerald-500 transition-all"
               style={{ width: gateways.length ? `${(activeGateways / gateways.length) * 100}%` : "0%" }}
@@ -152,8 +152,8 @@ export default function DevicesPage() {
         <button
           type="button"
           onClick={() => setActiveTab("sensor")}
-          className={`rounded-md border bg-white p-3.5 text-left transition
-            ${activeTab === "sensor" ? "border-violet-200 ring-1 ring-violet-400/30" : "border-[#E5EAF0] hover:border-gray-300"}`}
+          className={`rounded-md border bg-white dark:bg-slate-800 p-3.5 text-left transition
+            ${activeTab === "sensor" ? "border-violet-200 ring-1 ring-violet-400/30" : "border-[#E5EAF0] dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600"}`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -161,16 +161,16 @@ export default function DevicesPage() {
                 <Cpu className="h-4 w-4 text-violet-600" />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Sensors</p>
-                <p className="text-2xl font-bold text-gray-900">{sensors.length}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500">Sensors</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{sensors.length}</p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-xl font-bold text-emerald-600">{activeSensors}</p>
-              <p className="text-xs text-gray-400">active</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500">active</p>
             </div>
           </div>
-          <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
             <div
               className="h-full rounded-full bg-emerald-500 transition-all"
               style={{ width: sensors.length ? `${(activeSensors / sensors.length) * 100}%` : "0%" }}
@@ -180,11 +180,11 @@ export default function DevicesPage() {
       </div>
 
       {/* Table card */}
-      <div className="overflow-hidden rounded-md border border-[#E5EAF0] bg-white">
+      <div className="overflow-hidden rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800">
 
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2.5 border-b border-gray-200 bg-[#F4F5F7] px-4 py-2.5">
-          <div className="flex items-center rounded border border-gray-200 bg-white p-0.5 gap-0.5">
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-gray-200 dark:border-slate-700 bg-[#F4F5F7] dark:bg-slate-900 px-4 py-2.5">
+          <div className="flex items-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-0.5 gap-0.5">
             {(["gateway", "sensor"] as const).map((tab) => {
               const isGw = tab === "gateway";
               const count = isGw ? gateways.length : sensors.length;
@@ -196,7 +196,7 @@ export default function DevicesPage() {
                   className={`flex items-center gap-1.5 rounded px-3 py-1 text-xs font-semibold transition
                     ${activeTab === tab
                       ? isGw ? "bg-blue-50 text-blue-600" : "bg-violet-50 text-violet-600"
-                      : "text-gray-500 hover:text-gray-700"
+                      : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
                     }`}
                 >
                   {isGw ? <Server className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
@@ -204,7 +204,7 @@ export default function DevicesPage() {
                   <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold
                     ${activeTab === tab
                       ? isGw ? "bg-blue-100 text-blue-700" : "bg-violet-100 text-violet-700"
-                      : "bg-gray-100 text-gray-500"
+                      : "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400"
                     }`}>
                     {count}
                   </span>
@@ -214,22 +214,22 @@ export default function DevicesPage() {
           </div>
 
           <div className="relative min-w-48 max-w-72 flex-1">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Tìm tên hoặc Device ID…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-full rounded border border-gray-200 bg-white pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+              className="h-8 w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 pl-8 pr-3 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-300 dark:placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
             />
           </div>
 
-          <div className="ml-auto flex items-center gap-2 text-xs text-gray-400">
+          <div className="ml-auto flex items-center gap-2 text-xs text-gray-400 dark:text-slate-500">
             {isLoading && <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Đang tải…</>}
             {isError   && <span className="text-red-500">Không có quyền truy cập</span>}
             {!isLoading && !isError && (
               <span>
-                <span className="font-semibold text-gray-700">{tableDevices.length}</span> thiết bị
+                <span className="font-semibold text-gray-700 dark:text-slate-300">{tableDevices.length}</span> thiết bị
               </span>
             )}
           </div>
@@ -239,10 +239,10 @@ export default function DevicesPage() {
         {!isError && tableDevices.length === 0 && !isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             {activeTab === "gateway"
-              ? <Server className="mb-3 h-9 w-9 text-gray-200" />
-              : <Cpu className="mb-3 h-9 w-9 text-gray-200" />
+              ? <Server className="mb-3 h-9 w-9 text-gray-200 dark:text-slate-700" />
+              : <Cpu className="mb-3 h-9 w-9 text-gray-200 dark:text-slate-700" />
             }
-            <p className="text-sm font-medium text-gray-400">
+            <p className="text-sm font-medium text-gray-400 dark:text-slate-500">
               {search ? "Không tìm thấy thiết bị phù hợp" : `Chưa có ${activeTab} nào`}
             </p>
             {!search && canCreateDevice && (
@@ -258,21 +258,21 @@ export default function DevicesPage() {
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-200 bg-[#F4F5F7]">
-                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Thiết bị</th>
-                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Trạng thái</th>
-                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Kết nối</th>
-                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Vị trí</th>
-                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Hoạt động</th>
-                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Thao tác</th>
+                <tr className="border-b border-gray-200 dark:border-slate-700 bg-[#F4F5F7] dark:bg-slate-900">
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Thiết bị</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Trạng thái</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Kết nối</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Vị trí</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Hoạt động</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                 {tableDevices.map((device) => (
-                  <tr key={device.id} className="bg-white transition-colors hover:bg-blue-50/40">
+                  <tr key={device.id} className="bg-white dark:bg-slate-800 transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-900/20">
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-gray-900">{device.device_name}</p>
-                      <p className="mt-0.5 font-mono text-xs text-gray-400">{device.device_id}</p>
+                      <p className="font-semibold text-gray-900 dark:text-slate-100">{device.device_name}</p>
+                      <p className="mt-0.5 font-mono text-xs text-gray-400 dark:text-slate-500">{device.device_id}</p>
                     </td>
                     <td className="px-4 py-3">
                       <DeviceStatusBadge status={device.status} />
@@ -280,17 +280,17 @@ export default function DevicesPage() {
                     <td className="px-4 py-3">
                       <OnlineIndicator lastSeen={device.last_seen} />
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {device.location || <span className="text-gray-300">—</span>}
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400">
+                      {device.location || <span className="text-gray-300 dark:text-slate-600">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-400">
+                    <td className="px-4 py-3 text-sm text-gray-400 dark:text-slate-500">
                       {formatLastSeen(device.last_seen)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         <Link
                           href={`/devices/${device.id}`}
-                          className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                          className="inline-flex items-center gap-1 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-slate-300 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:border-blue-700 dark:hover:bg-blue-900/30 dark:hover:text-blue-300"
                         >
                           <Eye className="h-3 w-3" />
                           Chi tiết

@@ -155,11 +155,11 @@ export default function AuditPage() {
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">Audit Log</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Audit Log</h1>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">
             Nhật ký bảo mật và sự kiện hệ thống.
             {!isLoading && !isError && (
-              <span className="ml-1.5 font-medium text-gray-700">{logs.length} sự kiện{hasFilters ? " (đã lọc)" : ""}.</span>
+              <span className="ml-1.5 font-medium text-gray-700 dark:text-slate-300">{logs.length} sự kiện{hasFilters ? " (đã lọc)" : ""}.</span>
             )}
           </p>
         </div>
@@ -167,7 +167,9 @@ export default function AuditPage() {
           <button
             onClick={() => setShowFilters((v) => !v)}
             className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium transition
-              ${showFilters ? "border-blue-200 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
+              ${showFilters
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"}`}
           >
             <Filter className="h-3.5 w-3.5" />
             Bộ lọc
@@ -179,7 +181,7 @@ export default function AuditPage() {
           </button>
           <button
             onClick={() => refresh()}
-            className="inline-flex items-center gap-1.5 rounded border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-slate-400 transition hover:bg-gray-50 dark:hover:bg-slate-700"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             Làm mới
@@ -189,17 +191,17 @@ export default function AuditPage() {
 
       {/* Filter card */}
       {showFilters && (
-        <div className="overflow-hidden rounded-md border border-[#E5EAF0] bg-white">
-          <div className="border-b border-gray-100 bg-[#F4F5F7] px-4 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Bộ lọc</p>
+        <div className="overflow-hidden rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800">
+          <div className="border-b border-gray-100 dark:border-slate-700 bg-[#F4F5F7] dark:bg-slate-900 px-4 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Bộ lọc</p>
           </div>
           <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Event Type</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Event Type</label>
               <select
                 value={eventType}
                 onChange={(e) => { setEventType(e.target.value); setPage(1); }}
-                className="h-9 w-full rounded border border-gray-200 bg-white px-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+                className="h-9 w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2.5 text-sm text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
               >
                 <option value="">Tất cả loại</option>
                 {EVENT_TYPES.map((t) => (
@@ -209,40 +211,40 @@ export default function AuditPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Device ID</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Device ID</label>
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                 <input
                   type="number" min={1} placeholder="VD: 3"
                   value={deviceId}
                   onChange={(e) => { setDeviceId(e.target.value); setPage(1); }}
-                  className="h-9 w-full rounded border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+                  className="h-9 w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 py-2 pl-8 pr-3 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-300 dark:placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Từ ngày</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Từ ngày</label>
               <input
                 type="datetime-local" value={fromDate}
                 onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
-                className="h-9 w-full rounded border border-gray-200 bg-white px-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+                className="h-9 w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2.5 text-sm text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Đến ngày</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Đến ngày</label>
               <input
                 type="datetime-local" value={toDate}
                 onChange={(e) => { setToDate(e.target.value); setPage(1); }}
-                className="h-9 w-full rounded border border-gray-200 bg-white px-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+                className="h-9 w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2.5 text-sm text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
               />
             </div>
           </div>
 
-          <div className="border-t border-gray-100 px-3 py-2">
+          <div className="border-t border-gray-100 dark:border-slate-700 px-3 py-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-gray-500">Loại thiết bị:</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-slate-400">Loại thiết bị:</span>
               <div className="flex items-center gap-1">
                 {(
                   [
@@ -261,8 +263,8 @@ export default function AuditPage() {
                           ? "bg-blue-600 text-white"
                           : value === "sensor"
                           ? "bg-violet-600 text-white"
-                          : "bg-gray-800 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          : "bg-gray-800 dark:bg-slate-100 text-white dark:text-slate-900"
+                        : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600"
                       }`}
                   >
                     {icon}
@@ -274,7 +276,7 @@ export default function AuditPage() {
               {hasFilters && (
                 <button
                   onClick={clearFilters}
-                  className="ml-auto inline-flex items-center gap-1 rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500 transition hover:bg-gray-200"
+                  className="ml-auto inline-flex items-center gap-1 rounded bg-gray-100 dark:bg-slate-700 px-2.5 py-1 text-xs font-medium text-gray-500 dark:text-slate-400 transition hover:bg-gray-200 dark:hover:bg-slate-600"
                 >
                   <X size={11} /> Xoá bộ lọc
                 </button>
@@ -286,13 +288,13 @@ export default function AuditPage() {
 
       {/* Admin Actions bar */}
       {isAdmin && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+        <div className="rounded-md border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800">Admin Actions</span>
+              <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Admin Actions</span>
               {selectedIds.size > 0 && (
-                <span className="rounded bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800">
+                <span className="rounded bg-amber-200 dark:bg-amber-800/50 px-2 py-0.5 text-xs font-bold text-amber-800 dark:text-amber-300">
                   {selectedIds.size} đã chọn
                 </span>
               )}
@@ -311,15 +313,15 @@ export default function AuditPage() {
               )}
 
               {selectedIds.size > 0 && (
-                <div className="h-4 w-px bg-amber-300" />
+                <div className="h-4 w-px bg-amber-300 dark:bg-amber-700" />
               )}
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-amber-700">Dọn theo loại:</span>
+                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Dọn theo loại:</span>
                 <select
                   value={cleanType}
                   onChange={(e) => setCleanType(e.target.value)}
-                  className="h-8 rounded border border-amber-300 bg-white px-2.5 text-sm text-gray-800 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                  className="h-8 rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-2.5 text-sm text-gray-800 dark:text-slate-200 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                 >
                   <option value="">-- Chọn loại --</option>
                   {EVENT_TYPES_BY_ROLE.admin.map((t) => (
@@ -329,7 +331,7 @@ export default function AuditPage() {
                 <button
                   onClick={() => cleanType && setConfirmAction("byType")}
                   disabled={!cleanType || isDeleting}
-                  className="inline-flex items-center gap-1.5 rounded border border-amber-400 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded border border-amber-400 dark:border-amber-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm font-semibold text-amber-800 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {isDeleting ? "Đang xóa…" : "Dọn"}
@@ -341,26 +343,26 @@ export default function AuditPage() {
       )}
 
       {/* Table card */}
-      <div className="overflow-hidden rounded-md border border-[#E5EAF0] bg-white">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-[#F4F5F7] px-4 py-2">
+      <div className="overflow-hidden rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 bg-[#F4F5F7] dark:bg-slate-900 px-4 py-2">
           <div className="flex items-center gap-3">
             {isError ? (
               <span className="text-sm text-red-500">Không có quyền truy cập</span>
             ) : (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-gray-500 dark:text-slate-400">
                 {isLoading
                   ? <span className="flex items-center gap-1.5"><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Đang tải…</span>
-                  : <><span className="font-semibold text-gray-900">{logs.length}</span> sự kiện{hasFilters ? <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-600">đã lọc</span> : ""}</>
+                  : <><span className="font-semibold text-gray-900 dark:text-slate-100">{logs.length}</span> sự kiện{hasFilters ? <span className="ml-1.5 rounded bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">đã lọc</span> : ""}</>
                 }
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
             <span className="text-xs">Hiển thị</span>
             <select
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-              className="h-7 rounded border border-gray-200 bg-white px-2 text-xs text-gray-700 focus:outline-none"
+              className="h-7 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 text-xs text-gray-700 dark:text-slate-300 focus:outline-none"
             >
               {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -377,24 +379,24 @@ export default function AuditPage() {
         />
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2.5">
-            <span className="text-xs text-gray-400">
-              Trang <span className="font-semibold text-gray-700">{safePage}</span> / {totalPages}
-              <span className="mx-1.5 text-gray-300">·</span>
+          <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700 px-4 py-2.5">
+            <span className="text-xs text-gray-400 dark:text-slate-500">
+              Trang <span className="font-semibold text-gray-700 dark:text-slate-300">{safePage}</span> / {totalPages}
+              <span className="mx-1.5 text-gray-300 dark:text-slate-600">·</span>
               {logs.length} bản ghi
             </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-400 transition hover:bg-gray-50 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ChevronLeft size={13} />
               </button>
 
               {buildPageNumbers().map((item, idx) =>
                 item === "…" ? (
-                  <span key={`ellipsis-${idx}`} className="flex h-7 w-7 items-center justify-center text-xs text-gray-400">…</span>
+                  <span key={`ellipsis-${idx}`} className="flex h-7 w-7 items-center justify-center text-xs text-gray-400 dark:text-slate-500">…</span>
                 ) : (
                   <button
                     key={item}
@@ -402,7 +404,7 @@ export default function AuditPage() {
                     className={`flex h-7 w-7 items-center justify-center rounded text-xs font-medium transition
                       ${item === safePage
                         ? "bg-blue-600 text-white"
-                        : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                        : "border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-600"
                       }`}
                   >
                     {item}
@@ -413,7 +415,7 @@ export default function AuditPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-400 transition hover:bg-gray-50 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ChevronRight size={13} />
               </button>
