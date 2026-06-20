@@ -40,7 +40,7 @@ const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-1001 max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-md border border-[#E5EAF0] bg-white text-gray-900 shadow-lg"
+        className="relative z-1001 max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 shadow-lg"
       >
         {children}
       </div>
@@ -73,7 +73,7 @@ const DialogTitle: React.FC<{ className?: string; children: React.ReactNode }> =
   className,
   children,
 }) => {
-  return <h2 className={cn("text-base font-semibold text-gray-900", className)}>{children}</h2>;
+  return <h2 className={cn("text-base font-semibold text-gray-900 dark:text-slate-100", className)}>{children}</h2>;
 };
 
 export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle };

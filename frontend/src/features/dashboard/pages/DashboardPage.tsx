@@ -30,10 +30,10 @@ export default function DashboardPage() {
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
             Welcome back, {user?.username ?? "admin"}
           </h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">
             IoT device management, alerts and security monitoring.
           </p>
         </div>
@@ -71,9 +71,9 @@ export default function DashboardPage() {
       <div className="grid gap-3 xl:grid-cols-3">
 
         {/* Device resiliency */}
-        <div className="rounded-md border border-[#E5EAF0] bg-white p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Health overview</p>
-          <h2 className="mt-1 text-sm font-semibold text-gray-900">Device resiliency</h2>
+        <div className="rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500">Health overview</p>
+          <h2 className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-100">Device resiliency</h2>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {[
               { label: "Total Gateway",  value: isLoading ? "—" : totalGateway },
@@ -81,20 +81,20 @@ export default function DashboardPage() {
               { label: "Total Sensor",   value: isLoading ? "—" : totalSensor },
               { label: "Sensor online",  value: isLoading ? "—" : sensorOnline },
             ].map(({ label, value }) => (
-              <div key={label} className="rounded border border-gray-100 bg-gray-50 p-3">
-                <p className="text-xs font-medium text-gray-400">{label}</p>
-                <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
+              <div key={label} className="rounded border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 p-3">
+                <p className="text-xs font-medium text-gray-400 dark:text-slate-500">{label}</p>
+                <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-slate-100">{value}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Security preview */}
-        <div className="rounded-md border border-[#E5EAF0] bg-white p-4">
+        <div className="rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Security preview</p>
-              <h3 className="mt-1 text-sm font-semibold text-gray-900">Recent threat alerts</h3>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500">Security preview</p>
+              <h3 className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-100">Recent threat alerts</h3>
             </div>
             <span className="rounded bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">Live</span>
           </div>
@@ -105,17 +105,17 @@ export default function DashboardPage() {
                 <p className="mt-1 text-red-500">Kiểm tra trang Devices để biết chi tiết.</p>
               </div>
             ) : (
-              <p className="text-sm text-gray-400">No active threat alerts.</p>
+              <p className="text-sm text-gray-400 dark:text-slate-500">No active threat alerts.</p>
             )}
           </div>
         </div>
 
         {/* Recent events */}
-        <div className="rounded-md border border-[#E5EAF0] bg-white p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Activity</p>
-          <h3 className="mt-1 text-sm font-semibold text-gray-900">Recent events</h3>
+        <div className="rounded-md border border-[#E5EAF0] dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-500">Activity</p>
+          <h3 className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-100">Recent events</h3>
           <div className="mt-3">
-            <p className="text-sm text-gray-400">No recent events to display.</p>
+            <p className="text-sm text-gray-400 dark:text-slate-500">No recent events to display.</p>
           </div>
         </div>
 

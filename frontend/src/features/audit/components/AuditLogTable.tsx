@@ -35,7 +35,7 @@ function formatTime(dateStr: string): string {
 
 function JsonDetails({ details }: { details: Record<string, unknown> | null }) {
   const [open, setOpen] = useState(false);
-  if (!details) return <span className="text-gray-300">—</span>;
+  if (!details) return <span className="text-gray-300 dark:text-slate-600">—</span>;
 
   const keys = Object.keys(details);
   const preview = keys.slice(0, 2).join(", ");
@@ -45,13 +45,13 @@ function JsonDetails({ details }: { details: Record<string, unknown> | null }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100"
+        className="inline-flex items-center gap-1 rounded border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-300 transition hover:bg-gray-100 dark:hover:bg-slate-600"
       >
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         <span className="font-mono">{open ? "Ẩn" : `{${preview}…}`}</span>
       </button>
       {open && (
-        <pre className="mt-2 max-w-xs overflow-x-auto rounded border border-gray-200 bg-gray-50 p-2 text-xs leading-relaxed text-gray-700">
+        <pre className="mt-2 max-w-xs overflow-x-auto rounded border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 p-2 text-xs leading-relaxed text-gray-700 dark:text-slate-300">
           {JSON.stringify(details, null, 2)}
         </pre>
       )}
@@ -63,9 +63,9 @@ export default function AuditLogTable({ logs, isAdmin, selectedIds, onToggle, on
   if (logs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <FileSearch className="mb-3 h-9 w-9 text-gray-200" />
-        <p className="text-sm font-medium text-gray-400">Không có sự kiện nào</p>
-        <p className="mt-0.5 text-xs text-gray-300">Thử điều chỉnh bộ lọc để tìm kết quả khác</p>
+        <FileSearch className="mb-3 h-9 w-9 text-gray-200 dark:text-slate-700" />
+        <p className="text-sm font-medium text-gray-400 dark:text-slate-500">Không có sự kiện nào</p>
+        <p className="mt-0.5 text-xs text-gray-300 dark:text-slate-600">Thử điều chỉnh bộ lọc để tìm kết quả khác</p>
       </div>
     );
   }
@@ -77,7 +77,7 @@ export default function AuditLogTable({ logs, isAdmin, selectedIds, onToggle, on
     <div className="overflow-x-auto">
       <table className="min-w-full table-auto text-left text-sm">
         <thead>
-          <tr className="border-b border-gray-200 bg-[#F4F5F7]">
+          <tr className="border-b border-gray-200 dark:border-slate-700 bg-[#F4F5F7] dark:bg-slate-900">
             {isAdmin && (
               <th className="w-10 px-4 py-2.5">
                 <input
@@ -90,20 +90,20 @@ export default function AuditLogTable({ logs, isAdmin, selectedIds, onToggle, on
                 />
               </th>
             )}
-            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Thời gian</th>
-            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Event Type</th>
-            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Device ID</th>
-            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">IP Address</th>
-            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Chi tiết</th>
+            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Thời gian</th>
+            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Event Type</th>
+            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Device ID</th>
+            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">IP Address</th>
+            <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Chi tiết</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
           {logs.map((log) => {
             const checked = selectedIds?.has(log.id) ?? false;
             return (
               <tr
                 key={log.id}
-                className={`transition-colors hover:bg-blue-50/40 ${checked ? "bg-blue-50/60" : "bg-white"}`}
+                className={`transition-colors hover:bg-blue-50/40 dark:hover:bg-blue-900/20 ${checked ? "bg-blue-50/60 dark:bg-blue-900/30" : "bg-white dark:bg-slate-800"}`}
               >
                 {isAdmin && (
                   <td className="px-4 py-2.5">
@@ -116,7 +116,7 @@ export default function AuditLogTable({ logs, isAdmin, selectedIds, onToggle, on
                   </td>
                 )}
                 <td className="whitespace-nowrap px-4 py-2.5">
-                  <span className="font-mono text-xs text-gray-500">{formatTime(log.created_at)}</span>
+                  <span className="font-mono text-xs text-gray-500 dark:text-slate-400">{formatTime(log.created_at)}</span>
                 </td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold ${EVENT_STYLES[log.event_type] ?? DEFAULT_EVENT_STYLE}`}>
@@ -125,20 +125,20 @@ export default function AuditLogTable({ logs, isAdmin, selectedIds, onToggle, on
                 </td>
                 <td className="px-4 py-2.5">
                   {log.device_identifier ? (
-                    <span className="font-mono text-xs text-gray-700" title={log.device_name ?? undefined}>
+                    <span className="font-mono text-xs text-gray-700 dark:text-slate-300" title={log.device_name ?? undefined}>
                       {log.device_identifier}
                     </span>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-gray-300 dark:text-slate-600">—</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5">
                   {log.device_ip ? (
-                    <span className="font-mono text-xs text-gray-500">{log.device_ip}</span>
+                    <span className="font-mono text-xs text-gray-500 dark:text-slate-400">{log.device_ip}</span>
                   ) : log.ip_address ? (
-                    <span className="font-mono text-xs text-gray-400" title="IP của client">{log.ip_address}</span>
+                    <span className="font-mono text-xs text-gray-400 dark:text-slate-500" title="IP của client">{log.ip_address}</span>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-gray-300 dark:text-slate-600">—</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5">
