@@ -1,1 +1,1 @@
-export { default } from "@/containers/Logs";
+export { default } from "@/features/logs/pages/LogsPage";

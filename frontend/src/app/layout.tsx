@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/providers/AuthContext";
+import { AuthProvider } from "@/features/auth/providers/AuthProvider";
 
 export const metadata: Metadata = {
   title: "IoT Manager",
@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-screen bg-slate-950 text-slate-100">
+      <body className="min-h-screen bg-[#F6F8FB] text-gray-900">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

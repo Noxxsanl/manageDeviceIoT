@@ -1,1 +1,1 @@
-export { default } from "@/containers/Users";
+export { default } from "@/features/users/pages/UsersPage";

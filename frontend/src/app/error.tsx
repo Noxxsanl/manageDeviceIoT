@@ -15,11 +15,11 @@ export default function ErrorPage({
   }, [error]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800/80 bg-slate-900/95 p-8 text-center shadow-2xl shadow-slate-950/40 sm:p-10">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 ring-1 ring-rose-500/30">
+    <main className="flex min-h-screen items-center justify-center bg-[#F6F8FB] px-4 text-gray-900">
+      <div className="w-full max-w-md rounded-2xl border border-[#E5EAF0] bg-white p-8 text-center shadow-sm sm:p-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 ring-1 ring-red-200">
           <svg
-            className="h-7 w-7 text-rose-400"
+            className="h-7 w-7 text-red-500"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={1.5}
@@ -33,18 +33,18 @@ export default function ErrorPage({
           </svg>
         </div>
 
-        <p className="mt-6 text-sm uppercase tracking-[0.3em] text-slate-500">
+        <p className="mt-6 text-xs font-semibold uppercase tracking-widest text-gray-400">
           Đã xảy ra lỗi
         </p>
-        <h1 className="mt-3 text-2xl font-semibold text-white">
+        <h1 className="mt-3 text-2xl font-semibold text-gray-900">
           Có gì đó không ổn
         </h1>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-gray-500">
           {error.message || "Lỗi không xác định. Vui lòng thử lại hoặc liên hệ quản trị viên."}
         </p>
 
         {error.digest && (
-          <p className="mt-3 font-mono text-xs text-slate-600">
+          <p className="mt-3 font-mono text-xs text-gray-400">
             Mã lỗi: {error.digest}
           </p>
         )}
@@ -52,13 +52,13 @@ export default function ErrorPage({
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
             onClick={reset}
-            className="inline-flex items-center justify-center rounded-2xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
+            className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             Thử lại
           </button>
           <Link
             href="/dashboard"
-            className="inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-800/60 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700"
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
           >
             Về trang chủ
           </Link>

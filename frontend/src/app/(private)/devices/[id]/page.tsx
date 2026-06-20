@@ -1,1 +1,1 @@
-export { default } from "@/containers/DeviceDetail";
+export { default } from "@/features/devices/pages/DeviceDetailPage";

@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import pool from "../config/db";
 import { verifyJWT } from "../middleware/verifyJWT";
+import { createNotification } from "../services/notificationService";
 
 const router = Router();
 
@@ -35,6 +36,19 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
   }
 
   await pool.execute("UPDATE users SET last_login = NOW() WHERE id = ?", [user.id]);
+
+  // Notify admin when operator or viewer logs in
+  if (user.role === "operator" || user.role === "viewer") {
+    const roleLabel = user.role === "operator" ? "Operator" : "Viewer";
+    createNotification({
+      title: `${roleLabel} đã đăng nhập`,
+      message: `${roleLabel} ${user.username} đã đăng nhập hệ thống`,
+      type: "LOGIN",
+      actor_id: user.id,
+      actor_username: user.username,
+      actor_role: user.role,
+    }).catch(() => {});
+  }
 
   const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role },

@@ -1,7 +1,7 @@
-import Sidebar from "@/layout/Sidebar";
-import Header from "@/layout/Header";
-import { DevicesProvider } from "@/providers/DevicesContext";
-import { AddDeviceProvider } from "@/providers/AddDeviceContext";
+import Sidebar from "@/widgets/app-shell/Sidebar";
+import Header from "@/widgets/app-shell/Header";
+import { DevicesProvider } from "@/features/devices/providers/DevicesProvider";
+import { AddDeviceProvider } from "@/features/devices/providers/AddDeviceProvider";
 
 export default function DashboardLayout({
   children,
@@ -11,11 +11,11 @@ export default function DashboardLayout({
   return (
     <DevicesProvider>
       <AddDeviceProvider>
-        <div className="bg-slate-950 text-slate-100">
+        <div className="bg-[#F6F8FB] text-gray-900">
           <Sidebar />
           <div className="ml-60 flex h-screen flex-col overflow-hidden">
             <Header />
-            <main className="flex-1 overflow-y-auto bg-slate-950 px-4 py-6 sm:px-6 lg:px-10 xl:px-12">
+            <main className="flex-1 overflow-y-auto bg-[#F6F8FB] px-5 py-4 sm:px-6 lg:px-7">
               {children}
             </main>
           </div>
