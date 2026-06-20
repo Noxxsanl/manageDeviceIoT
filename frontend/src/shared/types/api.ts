@@ -83,13 +83,21 @@ export type ApiUser = {
   last_login: string | null;
 };
 
-export type NotificationType = "offline" | "attack" | "registration";
-
-export type Notification = {
-  id: string;
+export type AppNotification = {
+  id: number;
   title: string;
-  description: string;
-  time: string;
-  type: NotificationType;
-  isNew: boolean;
+  message: string;
+  type: string;
+  actor_id: number;
+  actor_username: string;
+  actor_role: string;
+  target_role: string;
+  related_device_id: number | null;
+  is_read: boolean;
+  created_at: string;
+};
+
+export type NotificationsResponse = {
+  notifications: AppNotification[];
+  unread_count: number;
 };

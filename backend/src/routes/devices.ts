@@ -4,6 +4,7 @@ import pool from "../config/db";
 import { verifyJWT } from "../middleware/verifyJWT";
 import { requireRole } from "../middleware/rbac";
 import { log } from "../services/auditLogger";
+import { createNotification } from "../services/notificationService";
 
 function sanitize(value: unknown, maxLength: number): string {
   if (typeof value !== "string") return "";
@@ -56,6 +57,18 @@ router.post(
       device_type,
       registered_by: user.username,
     });
+
+    if (user.role === "operator") {
+      createNotification({
+        title: "Thiết bị mới được đăng ký",
+        message: `Operator ${user.username} đã đăng ký thiết bị ${device_id}`,
+        type: "DEVICE_REGISTER",
+        actor_id: user.id,
+        actor_username: user.username,
+        actor_role: user.role,
+        related_device_id: insertedId,
+      }).catch(() => {});
+    }
 
     // Return credentials exactly once – secret_key is never returned again
     res.status(201).json({
@@ -117,10 +130,6 @@ router.get("/:id/data", verifyJWT, async (req: Request, res: Response): Promise<
     [id]
   );
 
-  // limit/offset are already sanitized to integers above, so inlining them is
-  // safe; mysql2's execute() (prepared statements) throws
-  // "Incorrect arguments to mysqld_stmt_execute" when LIMIT/OFFSET are passed
-  // as placeholders.
   const [dataRows] = await pool.execute<any[]>(
     `SELECT sd.id, sd.device_id, sd.gateway_id, gw.device_id AS gateway_device_id, sd.payload, sd.received_at
      FROM sensor_data sd
@@ -225,6 +234,34 @@ router.patch(
       new_status: status,
       changed_by: user.username,
     });
+
+    if (user.role === "operator") {
+      let title: string;
+      let message: string;
+      let type: string;
+      if (status === "blocked") {
+        title = "Thiết bị bị chặn";
+        message = `Operator ${user.username} đã chặn thiết bị ${deviceRows[0].device_id}`;
+        type = "DEVICE_BLOCKED";
+      } else if (status === "active") {
+        title = "Thiết bị được mở khóa";
+        message = `Operator ${user.username} đã bỏ chặn thiết bị ${deviceRows[0].device_id}`;
+        type = "DEVICE_UNBLOCKED";
+      } else {
+        title = "Cập nhật trạng thái thiết bị";
+        message = `Operator ${user.username} đã cập nhật trạng thái thiết bị ${deviceRows[0].device_id}`;
+        type = "DEVICE_STATUS_CHANGE";
+      }
+      createNotification({
+        title,
+        message,
+        type,
+        actor_id: user.id,
+        actor_username: user.username,
+        actor_role: user.role,
+        related_device_id: Number(id),
+      }).catch(() => {});
+    }
 
     res.json({ success: true, id: Number(id), status });
   }

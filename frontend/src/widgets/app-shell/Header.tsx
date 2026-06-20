@@ -1,12 +1,73 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell } from "lucide-react";
+import {
+  Bell, UserCheck, Server, Lock, Unlock, Activity, Trash2, CheckCheck,
+} from "lucide-react";
 import Breadcrumb from "@/widgets/app-shell/Breadcrumb";
+import { useNotifications } from "@/features/notifications/hooks/useNotifications";
+import type { AppNotification } from "@/shared/types/api";
+
+function relativeTime(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60)     return "Vừa xong";
+  if (diff < 3600)   return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400)  return `${Math.floor(diff / 3600)} giờ trước`;
+  return `${Math.floor(diff / 86400)} ngày trước`;
+}
+
+const TYPE_META: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+  LOGIN:               { icon: UserCheck, color: "text-blue-500",    bg: "bg-blue-50" },
+  DEVICE_REGISTER:     { icon: Server,    color: "text-emerald-500", bg: "bg-emerald-50" },
+  DEVICE_BLOCKED:      { icon: Lock,      color: "text-red-500",     bg: "bg-red-50" },
+  DEVICE_UNBLOCKED:    { icon: Unlock,    color: "text-emerald-500", bg: "bg-emerald-50" },
+  DEVICE_STATUS_CHANGE:{ icon: Activity,  color: "text-amber-500",   bg: "bg-amber-50" },
+  DEVICE_DELETE:       { icon: Trash2,    color: "text-red-500",     bg: "bg-red-50" },
+};
+
+function NotifItem({
+  n,
+  onMarkRead,
+}: {
+  n: AppNotification;
+  onMarkRead: (id: number) => void;
+}) {
+  const meta = TYPE_META[n.type] ?? { icon: Bell, color: "text-gray-400", bg: "bg-gray-100" };
+  const Icon = meta.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={() => !n.is_read && onMarkRead(n.id)}
+      className={`flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-0
+        ${n.is_read ? "bg-white hover:bg-gray-50" : "bg-blue-50/40 hover:bg-blue-50/70"}`}
+    >
+      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded ${meta.bg}`}>
+        <Icon size={14} className={meta.color} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className={`truncate text-sm ${n.is_read ? "font-medium text-gray-700" : "font-semibold text-gray-900"}`}>
+            {n.title}
+          </p>
+          {!n.is_read && (
+            <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+          )}
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{n.message}</p>
+        <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-400">
+          <span className="rounded bg-gray-100 px-1.5 py-0.5 font-medium capitalize">{n.actor_role}</span>
+          <span>{relativeTime(n.created_at)}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export default function Header() {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const { notifications, unreadCount, markRead, markAllRead, isAdmin } = useNotifications();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -20,22 +81,67 @@ export default function Header() {
   return (
     <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#E5EAF0] bg-[#F8F9FB] px-6">
       <Breadcrumb />
-      <div ref={notifRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setNotifOpen((prev) => !prev)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-        </button>
-        {notifOpen && (
-          <div className="absolute right-0 z-50 mt-1.5 w-64 rounded border border-[#E5EAF0] bg-white p-4 shadow-md">
-            <p className="text-base font-semibold text-gray-900">Thông báo</p>
-            <p className="mt-2.5 text-center text-sm text-gray-400">Không có thông báo.</p>
-          </div>
-        )}
-      </div>
+
+      {isAdmin && (
+        <div ref={notifRef} className="relative">
+          {/* Bell button */}
+          <button
+            type="button"
+            onClick={() => setNotifOpen((prev) => !prev)}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Notifications"
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Dropdown */}
+          {notifOpen && (
+            <div className="absolute right-0 z-50 mt-1.5 w-80 overflow-hidden rounded border border-[#E5EAF0] bg-white shadow-lg">
+
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-gray-100 bg-[#F4F5F7] px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-900">Thông báo</p>
+                  {unreadCount > 0 && (
+                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                      {unreadCount} chưa đọc
+                    </span>
+                  )}
+                </div>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 transition hover:text-blue-700"
+                  >
+                    <CheckCheck size={12} />
+                    Đánh dấu tất cả
+                  </button>
+                )}
+              </div>
+
+              {/* Notification list */}
+              <div className="max-h-96 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <Bell className="mb-2 h-8 w-8 text-gray-200" />
+                    <p className="text-sm text-gray-400">Chưa có thông báo mới</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <NotifItem key={n.id} n={n} onMarkRead={markRead} />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }
