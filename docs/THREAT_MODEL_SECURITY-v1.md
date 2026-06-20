@@ -512,7 +512,7 @@ Quy trình này thủ công và không có rollout tự động.
 | Constant-time compare | `hmacService.ts:safeCompare()` | `crypto.timingSafeEqual()` |
 | Timestamp window ±300s | `hmacService.ts` | Kiểm tra tại backend, độc lập với gateway |
 | Auto-block (fail_count=5) | `mqttDataService.ts`, `validateDevice.ts` | Block cả luồng MQTT và HTTP |
-| Audit log đầy đủ | `auditLogger.ts` | 7 event types, ghi async |
+| Audit log đầy đủ | `auditLogger.ts` | 9 event types, ghi async |
 | Helmet headers | `app.ts` | XSS, clickjack, MIME protection |
 | CORS restricted | `app.ts` | Chỉ cho phép origin frontend |
 | Rate limiting | `app.ts` | 3 tier: login, device data, API |

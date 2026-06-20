@@ -89,14 +89,14 @@ bắt mọi exception chưa được xử lý, trả `{ status: "error", message
 
 ## 3. Frontend xử lý status code thế nào
 
-- [`frontend/src/package/services/api.ts`](frontend/src/package/services/api.ts):
+- [`frontend/src/shared/api/client.ts`](frontend/src/shared/api/client.ts) (hoặc `frontend/src/features/auth/api/auth.api.ts`):
   mọi response không `ok` được ném thành `FetchError(status, data)`.
   Riêng **401** (trừ khi gọi `/api/auth/login` hoặc `/api/auth/me`) sẽ tự
   redirect về `/login` ngay tại lớp fetch, không cần component tự xử lý.
-- [`frontend/src/containers/Login/index.tsx`](frontend/src/containers/Login/index.tsx#L28-L35):
+- [`frontend/src/features/auth/pages/LoginPage.tsx`](frontend/src/features/auth/pages/LoginPage.tsx):
   bắt riêng `401` → "Sai tên đăng nhập hoặc mật khẩu.", `429` → "Quá nhiều lần
   thử. Vui lòng đợi và thử lại.", còn lại → lỗi kết nối chung.
-- [`frontend/src/containers/Users/index.tsx`](frontend/src/containers/Users/index.tsx#L161):
+- [`frontend/src/features/users/pages/UsersPage.tsx`](frontend/src/features/users/pages/UsersPage.tsx):
   bắt riêng error code `USERNAME_TAKEN` (409) để hiển thị thông báo tương ứng.
 
 ## 4. Quy ước chung trong dự án

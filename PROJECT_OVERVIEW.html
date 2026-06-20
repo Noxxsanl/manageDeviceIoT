@@ -612,7 +612,17 @@ flowchart TB
           <tr>
             <td class="tc1"><span class="method m-del">DELETE</span><span class="ep">/api/audit-log/data-recv</span></td>
             <td class="tc2">Xoá toàn bộ DATA_RECV logs</td>
-            <td class="tc3"><span class="role-badge r-admin">admin</span><span class="role-badge r-op">operator</span></td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-del">DELETE</span><span class="ep">/api/audit-log/by-type</span></td>
+            <td class="tc2">Xoá logs theo event_type</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
+          </tr>
+          <tr>
+            <td class="tc1"><span class="method m-del">DELETE</span><span class="ep">/api/audit-log/bulk</span></td>
+            <td class="tc2">Xoá nhiều logs theo danh sách id</td>
+            <td class="tc3"><span class="role-badge r-admin">admin</span></td>
           </tr>
           <tr>
             <td class="tc1"><span class="method m-get">GET</span><span class="ep">/api/health</span></td>
@@ -726,20 +736,21 @@ erDiagram
     device_tokens {
         INT id PK
         INT device_id FK
-        VARCHAR token
+        VARCHAR token_hash
         DATETIME expires_at
+        TINYINT revoked
         DATETIME created_at
     }
     audit_log {
         INT id PK
         VARCHAR event_type
         INT device_id FK
-        INT user_id FK
+        VARCHAR ip_address
+        TEXT user_agent
         JSON details
         DATETIME created_at
     }
     users ||--o{ devices : "created_by"
-    users ||--o{ audit_log : "user_id"
     devices ||--o{ sensor_data : "device_id (sensor)"
     devices ||--o{ sensor_data : "gateway_id"
     devices ||--o{ device_tokens : "device_id"
@@ -752,12 +763,15 @@ erDiagram
       <div class="card">
         <h4 style="color:var(--c-yellow)">Audit Event Types</h4>
         <ul>
-          <li>DEVICE_REGISTER — thiết bị đăng ký mới</li>
-          <li>DEVICE_STATUS_CHANGE — thay đổi trạng thái</li>
-          <li>GATEWAY_AUTH_FAIL — lỗi xác thực HMAC gateway</li>
-          <li>SENSOR_AUTH_FAIL — lỗi xác thực HMAC sensor</li>
-          <li>DEVICE_BLOCKED — thiết bị bị auto-block</li>
-          <li>DATA_RECV — nhận dữ liệu cảm biến thành công</li>
+          <li>DATA_RECV — nhận dữ liệu cảm biến thành công (admin/operator/viewer)</li>
+          <li>DEVICE_REGISTER — thiết bị đăng ký mới (admin/operator/viewer)</li>
+          <li>DEVICE_BLOCKED — thiết bị bị auto-block (admin/operator/viewer)</li>
+          <li>DEVICE_STATUS_CHANGE — thay đổi trạng thái (admin/operator/viewer)</li>
+          <li>GATEWAY_AUTH_FAIL — lỗi xác thực HMAC gateway (admin/operator)</li>
+          <li>SENSOR_AUTH_FAIL — lỗi xác thực HMAC sensor (admin/operator)</li>
+          <li>REPLAY_ATTACK — timestamp ngoài cửa sổ ±300s (admin/operator)</li>
+          <li>PRIVILEGE_ESCALATION — thiết bị sai device_type (admin/operator)</li>
+          <li>DEVICE_DELETE — thiết bị bị xóa (admin)</li>
         </ul>
       </div>
       <div class="card">
@@ -815,6 +829,11 @@ erDiagram
             <td class="tc1 ep">/audit</td>
             <td class="tc2">Audit Log</td>
             <td class="tc3">Lọc theo event type, device_id, date range · hiển thị 500 events mới nhất</td>
+          </tr>
+          <tr>
+            <td class="tc1 ep">/logs</td>
+            <td class="tc2">Logs</td>
+            <td class="tc3">Stub page — hiện chưa có dữ liệu (<code>&lt;LogTable logs={[]} /&gt;</code>)</td>
           </tr>
         </tbody>
       </table>

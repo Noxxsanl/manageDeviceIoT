@@ -195,13 +195,13 @@ Có **hai con đường vật lý khác nhau** để request từ trình duyệt
 **(b) Qua route proxy nội bộ của Next.js (khi chạy frontend độc lập, không qua Nginx):**
 [frontend/src/app/api/[...path]/route.ts](../frontend/src/app/api/%5B...path%5D/route.ts) là một **catch-all route** bắt mọi path `/api/*` ngay trong Next.js, tự fetch sang `BACKEND_URL` (env, mặc định `http://localhost:5000`, hoặc `http://backend:5000` trong Docker), forward gần như nguyên vẹn headers + cookie + body, và set lại header `x-forwarded-for` cho đúng IP client gốc ([route.ts:18-22](../frontend/src/app/api/%5B...path%5D/route.ts#L18-L22)).
 
-→ Lý do tồn tại cả hai: route (b) cho phép code frontend **luôn gọi same-origin `/api/...`** (không bao giờ cần CORS, cookie luôn được trình duyệt gửi vì cùng origin) dù chạy `next dev` đơn độc không có Nginx; route (a) là kiến trúc triển khai thật khi đủ stack Docker. *(File [frontend/proxy.ts](../frontend/proxy.ts) ở gốc dự án là bản nháp cũ, import `@/lib/auth` không còn tồn tại — đã được thay thế bởi `frontend/middleware.ts` + `src/package/services/auth.ts`, có thể coi là tàn dư cần dọn.)*
+→ Lý do tồn tại cả hai: route (b) cho phép code frontend **luôn gọi same-origin `/api/...`** (không bao giờ cần CORS, cookie luôn được trình duyệt gửi vì cùng origin) dù chạy `next dev` đơn độc không có Nginx; route (a) là kiến trúc triển khai thật khi đủ stack Docker. *(File [frontend/proxy.ts](../frontend/proxy.ts) ở gốc dự án export hàm `proxy()` — không phải `middleware()` — nên Next.js không auto-chạy nó. File này import đúng `@/features/auth/routes` nhưng về mặt chức năng là tàn dư (dead code), logic đã được triển khai đầy đủ trong [frontend/middleware.ts](../frontend/middleware.ts) với export tên `middleware`.)*
 
 ### 6.1. Bắt tay đăng nhập (login handshake)
 
 1. Form Login → `useAuth().login()` → `POST /api/auth/login {username, password}` ([frontend/src/package/services/auth.ts:9-15](../frontend/src/package/services/auth.ts#L9-L15)).
 2. Backend bcrypt-compare, set cookie `token` (HttpOnly, SameSite=Strict, 8h) như mô tả ở [RBAC_CHI_TIET.md §3.1](RBAC_CHI_TIET.md#31-phát-hành-thẻ-vai-trò-lúc-đăng-nhập).
-3. `AuthProvider` ([frontend/src/providers/AuthContext.tsx](../frontend/src/providers/AuthContext.tsx)) nhận `user` trả về, lưu vào React Context, `router.replace("/dashboard")`.
+3. `AuthProvider` ([frontend/src/features/auth/providers/AuthProvider.tsx](../frontend/src/features/auth/providers/AuthProvider.tsx)) nhận `user` trả về, lưu vào React Context, `router.replace("/dashboard")`.
 4. Mỗi lần app khởi động lại (refresh trang), `AuthProvider` gọi `GET /api/auth/me` để **hỏi lại backend** "JWT trong cookie của tôi còn hợp lệ không, tôi là ai" — không tự giải mã JWT ở client, luôn để backend là nguồn sự thật.
 5. `frontend/middleware.ts` chạy ở Edge **trước khi** trang được render: chỉ cần thấy cookie `token` tồn tại (không verify chữ ký) là cho qua trang protected, ngược lại redirect `/login`. Bảo vệ thật vẫn ở bước 4 + ở từng API call.
 

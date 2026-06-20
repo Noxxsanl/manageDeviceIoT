@@ -43,14 +43,14 @@ Hệ thống gồm 8 thành phần chính, được triển khai qua Docker Comp
 | **MQTT Broker 2** | Eclipse Mosquitto 2 (port 1884) | Tầng backend: nhận dữ liệu từ gateway, Backend subscribe để xử lý |
 | **Backend Server** | Node.js + Express + TypeScript | Xác thực HMAC thiết bị, kiểm tra RBAC, lưu dữ liệu, ghi audit log |
 | **MySQL 8.0** | MySQL 8.0 | Lưu thông tin thiết bị, dữ liệu cảm biến, người dùng, audit log |
-| **Frontend** | Next.js 14 + React + TailwindCSS | Dashboard quản lý, hiển thị trạng thái, phân quyền theo role |
+| **Frontend** | Next.js 16 + React + TailwindCSS | Dashboard quản lý, hiển thị trạng thái, phân quyền theo role |
 | **Nginx** | Nginx Alpine | Reverse proxy: định tuyến `/api/*` → Backend, `/` → Frontend |
 
 ### 1.3 Công Nghệ Sử Dụng
 
 **Backend:** Node.js, Express, TypeScript, mysql2, jsonwebtoken, bcrypt, express-rate-limit, helmet, morgan, mqtt (npm)
 
-**Frontend:** Next.js 14, React, TailwindCSS, lucide-react
+**Frontend:** Next.js 16, React, TailwindCSS, lucide-react
 
 **Firmware:** PlatformIO (C++/Arduino), mbedTLS (HMAC-SHA256), PubSubClient, ArduinoJson, DHT sensor library
 

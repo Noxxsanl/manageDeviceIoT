@@ -576,8 +576,10 @@ Response:
 
 | Method | Endpoint | Quyền | Mô tả |
 |--------|----------|-------|-------|
-| `GET` | `/api/audit-log` | Tất cả | Xem nhật ký bảo mật |
-| `DELETE` | `/api/audit-log/data-recv` | admin, operator | Xóa log dữ liệu cảm biến |
+| `GET` | `/api/audit-log` | Tất cả (nội dung lọc theo role) | Xem nhật ký bảo mật |
+| `DELETE` | `/api/audit-log/data-recv` | admin | Xóa log DATA_RECV |
+| `DELETE` | `/api/audit-log/by-type` | admin | Xóa log theo loại event |
+| `DELETE` | `/api/audit-log/bulk` | admin | Xóa nhiều log theo ID |
 
 ---
 

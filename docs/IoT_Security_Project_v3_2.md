@@ -12,7 +12,7 @@
 |**Phần cứng Edge**|2 con ESP32 DOIT DevKit V1 – Sensor Node & Gateway Node|
 |**Backend**|Node.js + Express + MQTT (Mosquitto)|
 |**Database**|MySQL 8.0|
-|**Frontend**|Next.js 14 + Tailwind CSS|
+|**Frontend**|Next.js 16 + Tailwind CSS|
 |**Cơ chế bảo mật**|HMAC-SHA256 + JWT + RBAC/ABAC + TLS|
 
 

@@ -348,7 +348,7 @@ role ENUM('admin', 'operator', 'viewer') NOT NULL DEFAULT 'viewer'
 | Vai trò | Quyền chính |
 |---------|------------|
 | `admin` | Toàn quyền: quản lý thiết bị, người dùng, audit log, xóa dữ liệu |
-| `operator` | Đăng ký thiết bị, kích hoạt/khóa, xem dữ liệu, xóa DATA_RECV log |
+| `operator` | Đăng ký thiết bị, kích hoạt/khóa, xem dữ liệu |
 | `viewer` | Chỉ xem: thiết bị, dữ liệu cảm biến, audit log |
 
 Tài khoản mặc định: `admin` / `admin123` (bcrypt hash trong seed data).
@@ -382,7 +382,9 @@ router.delete("/:id",    verifyJWT, requireRole("admin"),             handler);
 | `GET /api/audit-log` | Xem nhật ký | ✓ | ✓ | ✓ |
 | `POST /api/devices/register` | Đăng ký thiết bị | ✗ | ✓ | ✓ |
 | `PATCH /api/devices/:id/status` | Kích hoạt / khóa | ✗ | ✓ | ✓ |
-| `DELETE /api/audit-log/data-recv` | Xóa log DATA_RECV | ✗ | ✓ | ✓ |
+| `DELETE /api/audit-log/data-recv` | Xóa log DATA_RECV | ✗ | ✗ | ✓ |
+| `DELETE /api/audit-log/by-type` | Xóa log theo loại | ✗ | ✗ | ✓ |
+| `DELETE /api/audit-log/bulk` | Xóa nhiều log theo ID | ✗ | ✗ | ✓ |
 | `DELETE /api/devices/:id` | Xóa thiết bị | ✗ | ✗ | ✓ |
 | `GET/POST/PATCH/DELETE /api/users` | Quản lý người dùng | ✗ | ✗ | ✓ |
 
@@ -527,15 +529,9 @@ Next.js proxy mọi API call qua `frontend/src/app/api/[...path]/route.ts` — k
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:5000";
 ```
 
-`AuthContext` (`frontend/src/providers/AuthContext.tsx`) gọi `GET /api/auth/me` khi load — nếu JWT không hợp lệ, redirect về `/login`. Toàn bộ trang private nằm trong route group `(private)` yêu cầu đăng nhập.
+`AuthProvider` (`frontend/src/features/auth/providers/AuthProvider.tsx`) gọi `GET /api/auth/me` khi load — nếu JWT không hợp lệ, redirect về `/login`. Toàn bộ trang private nằm trong route group `(private)` yêu cầu đăng nhập.
 
-API client tự động redirect về `/login` khi nhận `401`:
-```typescript
-// frontend/src/package/services/api.ts
-if (res.status === 401 && !url.includes("/api/auth/login")) {
-  window.location.href = "/login";
-}
-```
+API client tự động redirect về `/login` khi nhận `401`.
 
 ### 8.2. Các trang đã triển khai
 
@@ -544,8 +540,9 @@ if (res.status === 401 && !url.includes("/api/auth/login")) {
 | **Dashboard** | `/dashboard` | Thống kê: tổng gateway, sensor, gateway online, sensor online, total data points |
 | **Devices** | `/devices` | Tab gateway/sensor, bảng với trạng thái online/offline, kích hoạt/khóa/xóa |
 | **Device Detail** | `/devices/[id]` | Info cards (status, fail_count, last_seen), biểu đồ cảm biến (Recharts), bảng dữ liệu gần nhất |
-| **Audit Log** | `/audit` | Bảng audit log, filter theo event_type/device_id/thời gian, xóa DATA_RECV |
+| **Audit Log** | `/audit` | Bảng audit log, filter theo event_type/device_id/thời gian/loại thiết bị; Admin Actions: xóa bulk, xóa theo loại |
 | **Users** | `/users` | Tạo user (operator/viewer), đổi mật khẩu, xóa user |
+| **Logs** | `/logs` | Trang placeholder — chưa triển khai rõ, hiển thị bảng rỗng |
 | **Login** | `/login` | Form đăng nhập, hiển thị lỗi 401/429 |
 
 ### 8.3. Realtime qua SWR polling
@@ -562,7 +559,7 @@ Mọi trang dữ liệu tự động refresh mỗi **10 giây**. Không dùng We
 
 ### 8.4. Biểu đồ dữ liệu cảm biến
 
-`frontend/src/components/compound/device/SensorChart.tsx` dùng Recharts:
+`frontend/src/features/devices/components/SensorChart.tsx` dùng Recharts:
 - LineChart với hai trục Y độc lập: nhiệt độ (màu cam) và độ ẩm (màu xanh)
 - Filter thời gian: 1h / 6h / 24h
 - Lấy tối đa 200 bản ghi gần nhất qua `GET /api/devices/:id/data?limit=200`
@@ -589,7 +586,7 @@ Mọi trang dữ liệu tự động refresh mỗi **10 giây**. Không dùng We
 | Chống timing attack (`safeEq64`, `timingSafeEqual`) | Hoàn thành — cả firmware lẫn backend |
 | Chống brute force (auto-block fail_count >= 5) | Hoàn thành |
 | Chống user enumeration login (dummy bcrypt hash) | Hoàn thành |
-| Audit log đầy đủ 7 event types | Hoàn thành |
+| Audit log đầy đủ 9 event types | Hoàn thành |
 | Rate limiting 3 mức | Hoàn thành |
 | Sensor whitelist + lazy refresh tại Gateway firmware | Hoàn thành |
 | NTP guard (không gửi nếu clock không đồng bộ) | Hoàn thành |

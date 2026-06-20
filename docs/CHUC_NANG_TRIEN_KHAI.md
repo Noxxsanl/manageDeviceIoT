@@ -255,8 +255,10 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 6 servic
 
 **Đã triển khai đầy đủ.**
 
-- `GET /api/audit-log`: Lọc theo `event_type`, `device_id`, `from`, `to`; giới hạn tối đa 500 bản ghi.
-- `DELETE /api/audit-log/data-recv`: Xóa toàn bộ event `DATA_RECV` (chỉ admin và operator).
+- `GET /api/audit-log`: Lọc theo `event_type`, `device_id`, `from`, `to`; giới hạn tối đa 500 bản ghi. Nội dung được lọc theo vai trò qua `ALLOWED_EVENT_TYPES_BY_ROLE`: admin thấy tất cả 9 loại, operator thấy 8 loại (trừ `DEVICE_DELETE`), viewer thấy 4 loại (`DATA_RECV`, `DEVICE_REGISTER`, `DEVICE_BLOCKED`, `DEVICE_STATUS_CHANGE`).
+- `DELETE /api/audit-log/data-recv`: Xóa toàn bộ event `DATA_RECV` (**chỉ admin** — không phải operator).
+- `DELETE /api/audit-log/by-type?event_type=XXX`: Xóa toàn bộ log theo loại cụ thể (chỉ admin).
+- `DELETE /api/audit-log/bulk`: Xóa nhiều log theo danh sách ID (chỉ admin).
 
 #### 3.2.11. HTTP Fallback Endpoint
 
@@ -299,7 +301,7 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 6 servic
 
 ### 3.4. Dashboard Frontend (`frontend/`)
 
-#### 3.4.1. Trang Dashboard (`frontend/src/containers/Dashboard/index.tsx`)
+#### 3.4.1. Trang Dashboard (`frontend/src/features/dashboard/pages/DashboardPage.tsx`)
 
 **Đã triển khai đầy đủ.**
 
@@ -308,46 +310,57 @@ Toàn bộ hạ tầng được đóng gói bằng Docker Compose với 6 servic
 - Security Preview panel: Xem trước các sự kiện bảo mật.
 - Dữ liệu từ `GET /api/dashboard/stats`, tự refresh theo SWR.
 
-#### 3.4.2. Trang Devices (`frontend/src/containers/Devices/index.tsx`)
+#### 3.4.2. Trang Devices (`frontend/src/features/devices/pages/DevicesPage.tsx`)
 
 **Đã triển khai đầy đủ.**
 
 - Tab phân loại: Gateway / Sensor.
 - Bảng hiển thị: Device ID, Name, Type, Location, Status, Connection (Online/Offline), Last Seen, Actions.
-- Actions: View (chi tiết), Activate (kích hoạt), Lock (khóa), Unlock (mở khóa), Delete (xóa).
-- SWR polling mỗi 10 giây (`frontend/src/package/features/useDeviceList.ts`, `refreshInterval: 10000`).
-- Gọi `PATCH /api/devices/:id/status` và `DELETE /api/devices/:id`.
+- Actions theo quyền (dùng `usePermissions()`): View (chi tiết — mọi role), Activate/Lock/Unlock (`canUpdateDeviceStatus` = admin/operator), Delete (`canDeleteDevice` = chỉ admin).
+- Nút "Thêm thiết bị" chỉ hiển thị khi `canCreateDevice` (admin/operator).
+- SWR polling mỗi 10 giây, gọi `PATCH /api/devices/:id/status` và `DELETE /api/devices/:id`.
 
-#### 3.4.3. Trang Device Detail (`frontend/src/containers/DeviceDetail/index.tsx`)
+#### 3.4.3. Trang Device Detail (`frontend/src/features/devices/pages/DeviceDetailPage.tsx`)
 
 **Đã triển khai đầy đủ.**
 
 - Info cards: Type, Status, Connection, Last Seen, Location, Fail Count, Device ID.
-- **SensorChart** (chỉ hiển thị với sensor): Biểu đồ Recharts LineChart, dual Y-axis (nhiệt độ màu cam, độ ẩm màu xanh), filter theo khoảng thời gian 1h / 6h / 24h (`frontend/src/components/compound/device/SensorChart.tsx`).
+- **SensorChart** (chỉ hiển thị với sensor): Biểu đồ Recharts LineChart, dual Y-axis (nhiệt độ màu cam, độ ẩm màu xanh), filter theo khoảng thời gian 1h / 6h / 24h (`frontend/src/features/devices/components/SensorChart.tsx`).
 - Bảng Recent Data: Hiển thị time, temperature, humidity, gateway.
-- SWR polling mỗi 10 giây (`frontend/src/package/features/useSensorData.ts`, limit 200 bản ghi mới nhất).
+- SWR polling mỗi 10 giây, limit 200 bản ghi mới nhất.
 
-#### 3.4.4. Trang Audit Log (`frontend/src/containers/Audit/index.tsx`)
-
-**Đã triển khai đầy đủ.**
-
-- Filter: `event_type` (dropdown), `device_id` (number input), `from`/`to` (datetime-local).
-- Phân trang (pagination).
-- Nút xóa DATA_RECV (chỉ hiện với admin/operator).
-
-#### 3.4.5. Trang Users (`frontend/src/containers/Users/index.tsx`)
+#### 3.4.4. Trang Audit Log (`frontend/src/features/audit/pages/AuditPage.tsx`)
 
 **Đã triển khai đầy đủ.**
 
+- Filter: `event_type` (dropdown — chỉ hiển thị types theo role), `device_id` (number input), `from`/`to` (datetime-local), lọc thêm theo loại thiết bị (Gateway/Sensor).
+- Phân trang (pagination): 10/25/50/100 bản ghi/trang.
+- **Admin Actions** (chỉ hiện với admin): Xóa log đã chọn (bulk delete), dọn theo loại event (by-type delete).
+- Nội dung event type hiển thị theo role (mirror với backend `ALLOWED_EVENT_TYPES_BY_ROLE`).
+
+#### 3.4.5. Trang Users (`frontend/src/features/users/pages/UsersPage.tsx`)
+
+**Đã triển khai đầy đủ.**
+
+- Trang chỉ admin truy cập được (redirect nếu không phải admin).
 - Form tạo user mới (chỉ role operator/viewer).
 - Bảng user: Đổi mật khẩu, Xóa.
 - Logic frontend: Không hiển thị nút xóa cho chính mình và cho tài khoản admin.
 
-#### 3.4.6. Cơ chế realtime
+#### 3.4.6. Trang Logs (`frontend/src/features/logs/pages/LogsPage.tsx`)
+
+**Chưa triển khai rõ — trang placeholder.**
+
+- Route `/logs` tồn tại và accessible qua sidebar.
+- Hiển thị component `LogTable` với dữ liệu rỗng (`logs={[]}`).
+- Chưa có API call hay logic lấy dữ liệu thực — chỉ là stub UI.
+
+#### 3.4.7. Cơ chế realtime
 
 **Đã triển khai bằng SWR polling — KHÔNG dùng WebSocket/Socket.io.**
 
 - Tất cả các trang dùng `useSWR` với `refreshInterval: 10000` (10 giây).
+- `socket.io-client` có trong `frontend/package.json` nhưng **không được sử dụng** ở bất kỳ file nào trong `frontend/src/` — chưa thấy triển khai rõ.
 - Không có WebSocket endpoint nào được triển khai trong hệ thống này.
 
 ---
@@ -493,7 +506,7 @@ Frontend hiển thị:
 | 8 | Dashboard quản lý thiết bị | Đã triển khai | Xem, kích hoạt, khóa, xóa, xem dữ liệu |
 | 9 | Biểu đồ dữ liệu cảm biến theo thời gian thực | Đã triển khai | SWR 10s, Recharts, filter 1h/6h/24h |
 | 10 | Trạng thái online/offline thiết bị | Đã triển khai | `TIMESTAMPDIFF < 60s`, refresh 10s |
-| 11 | Audit log đầy đủ | Đã triển khai | 4 event types, filter, export |
+| 11 | Audit log đầy đủ | Đã triển khai | 9 event types, filter, phân trang, xóa theo loại (admin) |
 | 12 | Đóng gói Docker Compose | Đã triển khai | 6 service (2 MQTT broker), Nginx entry point |
 | 13 | Giới hạn lưu trữ dữ liệu (max 150/sensor) | Đã triển khai | Auto-cleanup trong `mqttDataService.ts` |
 | 14 | Rate limiting API | Đã triển khai | 3 mức giới hạn khác nhau |
