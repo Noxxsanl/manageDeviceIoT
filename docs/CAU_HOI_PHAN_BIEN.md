@@ -221,7 +221,134 @@ Có. Schema có foreign key `ON DELETE CASCADE` cho bảng `sensor_data` tham ch
 
 Có. Backend dùng query có tham số với `pool.execute(sql, [params])` và placeholder `?` cho tất cả input — username, `device_id`, id, status không được nối chuỗi trực tiếp vào SQL. Đây là prepared statements, giúp database engine phân biệt rõ câu lệnh SQL và dữ liệu người dùng, ngăn chặn SQL injection.
 
-### Câu 40. Điểm hạn chế lớn nhất của hệ thống hiện tại là gì?
+### Câu 40. Gateway đã xác thực HMAC sensor, backend lại xác thực thêm một lần nữa bằng cùng thuật toán HMAC — như vậy có bị thừa không, và có đảm bảo bảo mật không?
+
+**Câu trả lời ngắn:** Không thừa — vì hai lớp bảo vệ chống lại hai điểm tấn công khác nhau. Tuy nhiên, hai lớp này không thật sự độc lập nếu gateway bị compromise.
+
+---
+
+**Cùng thuật toán không phải vấn đề**
+
+HMAC-SHA256 dùng ở cả hai lớp không làm giảm bảo mật. Sức mạnh của HMAC đến từ **key bí mật**, không phải từ sự đa dạng thuật toán. Hai lớp dùng hai key hoàn toàn khác nhau:
+
+- Lớp sensor: `HMAC-SHA256(SENSOR_SECRET_KEY, "sensor_id:sn_timestamp")`
+- Lớp gateway: `HMAC-SHA256(GW_SECRET_KEY, "gateway_id:gw_timestamp")`
+
+Hai key khác nhau → hai chữ ký độc lập → không thừa về mặt toán học.
+
+---
+
+**Mỗi lớp bảo vệ một điểm tấn công khác nhau**
+
+**Lớp 1 — Gateway firmware xác thực sensor HMAC** (`firmware/gateway-node/lib/forwarder/forwarder.cpp`):
+
+```
+Chống: Sensor lạ hoặc không đăng ký publish lên Broker 1
+
+Kịch bản:
+  ESP32 bất kỳ → publish local/sensors/+/data với HMAC sai
+  → Gateway lookup sensor registry → không tìm thấy hoặc HMAC fail
+  → DROP ngay tại firmware, không forward lên Broker 2
+  → Backend không phải xử lý traffic rác
+```
+
+**Lớp 2 — Backend xác thực lại cả Gateway HMAC lẫn Sensor HMAC** (`backend/src/services/hmacService.ts`):
+
+```
+Chống: Attacker bypass hoàn toàn gateway firmware
+
+Kịch bản:
+  Broker 2 allow_anonymous true → attacker kết nối thẳng port 1884
+  → Publish gateway/+/data với GW_HMAC hợp lệ (biết GW_SECRET_KEY)
+  → Nếu backend chỉ check Gateway HMAC: dữ liệu sensor giả PASS
+  → Vì backend cũng check Sensor HMAC:
+     attacker cần thêm SENSOR_SECRET_KEY → không có → FAIL
+```
+
+Tóm lại:
+
+```
+[Attacker tấn công Broker 1]
+  → Bị chặn bởi Lớp 1 (Gateway firmware)
+  → Lớp 2 không cần xử lý
+
+[Attacker bypass lên Broker 2 trực tiếp]
+  → Lớp 1 không tham gia (đã bị bypass)
+  → Lớp 2 là tuyến bảo vệ duy nhất
+  → Cần CẢ HAI key: GW_SECRET + SENSOR_SECRET
+```
+
+Hai lớp bảo vệ **hai điểm tấn công khác nhau**, không phải cùng một điểm.
+
+---
+
+**Điểm yếu thật sự: Hai lớp không độc lập về nguồn lộ key**
+
+Vấn đề không nằm ở thuật toán, mà nằm ở chỗ **gateway đang giữ cả hai loại secret**:
+
+```cpp
+// sensor_registry.cpp — Gateway fetch sensor secret từ backend
+bool fetchSensorList() {
+    // GET /api/device/sensors → { device_id, secret_key }
+    strlcpy(_entries[_count].secret_key, s["secret_key"] | "", ...);
+}
+
+// config_gw.h — Còn hardcode sẵn
+static const SensorCredential KNOWN_SENSORS[] = {
+    {"ESP32-SN-CBF05770", "c07f902691c6..."},
+};
+```
+
+Nếu gateway bị compromise (dump firmware qua JTAG), attacker có:
+
+```
+GW_SECRET_KEY     → từ config_gw.h trong firmware
+SENSOR_SECRET_KEY → từ KNOWN_SENSORS[] hoặc RAM sau fetchSensorList()
+```
+
+→ **Cả hai lớp HMAC đều bị phá vỡ cùng lúc từ một điểm lộ duy nhất.**
+
+---
+
+**Bảng tóm tắt các kịch bản**
+
+| Kịch bản | Lớp 1 Gateway | Lớp 2 Backend | Kết quả |
+|---|---|---|---|
+| Sensor lạ tấn công Broker 1 | ✅ Chặn | Không cần | Bảo vệ tốt |
+| Bypass Broker 2, không có secret | Không liên quan | ✅ Chặn | Bảo vệ tốt |
+| Có GW_SECRET, không có SENSOR_SECRET | Không liên quan | ✅ Chặn sensor HMAC | Bảo vệ tốt |
+| Có cả GW_SECRET + SENSOR_SECRET (dump 1 gateway) | ❌ Vô hiệu | ❌ Vô hiệu | **Cả 2 lớp sụp đổ** |
+
+---
+
+**Để hai lớp thật sự độc lập cần gì?**
+
+Gateway không được biết sensor secret — chỉ backend mới giữ sensor key. Khi đó:
+
+```
+Gateway chỉ biết: GW_SECRET_KEY
+Backend biết: GW_SECRET_KEY + SENSOR_SECRET_KEY
+
+→ Compromise gateway chỉ phá được Lớp 1, Lớp 2 vẫn giữ
+→ Attacker cần tấn công thêm backend hoặc DB để có SENSOR_SECRET
+```
+
+Trade-off: Gateway không thể lọc sensor giả tại firmware nữa — Backend phải gánh toàn bộ xác thực. Đây là bài toán kiến trúc tùy thuộc yêu cầu thực tế của hệ thống.
+
+---
+
+**Kết luận**
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Cùng thuật toán có thừa không? | Không — bảo mật đến từ key khác nhau, không phải thuật toán khác nhau |
+| Hai lớp có giá trị thật sự không? | Có — bảo vệ hai điểm tấn công khác nhau: Broker 1 và Broker 2 bypass |
+| Hai lớp có hoàn toàn độc lập không? | Không — gateway nắm cả GW_SECRET lẫn SENSOR_SECRET; lộ một gateway = lộ cả hai lớp |
+| Điểm yếu thật sự là gì? | Không phải thuật toán — mà là gateway là single point of failure về key material |
+
+---
+
+### Câu 41. Điểm hạn chế lớn nhất của hệ thống hiện tại là gì?
 
 Một số hạn chế chính:
 - Chưa có cơ chế rotate/revoke `secret_key` — phải đăng ký lại thiết bị nếu key bị lộ.
