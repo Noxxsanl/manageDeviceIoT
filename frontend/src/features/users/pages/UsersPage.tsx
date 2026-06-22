@@ -264,6 +264,8 @@ export default function UsersPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [createOpen, setCreateOpen]     = useState(false);
 
+  // Bảo vệ phía client: trùng với requireRole("admin") của backend nhưng ngăn
+  // user không phải admin thấy trang trắng/lỗi khi điều hướng trực tiếp vào đây.
   if (currentUser?.role !== "admin") {
     return (
       <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center">

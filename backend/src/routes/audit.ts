@@ -17,6 +17,9 @@ const VALID_EVENT_TYPES = [
   "DEVICE_DELETE",
 ];
 
+// Lọc log theo role: viewer chỉ thấy sự kiện vận hành,
+// operator thấy thêm sự kiện bảo mật, admin thấy tất cả bao gồm
+// DEVICE_DELETE (có thể lộ ID thiết bị đã xóa).
 const ALLOWED_EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
   admin: VALID_EVENT_TYPES,
   operator: ["GATEWAY_AUTH_FAIL", "SENSOR_AUTH_FAIL", "REPLAY_ATTACK", "PRIVILEGE_ESCALATION", "DATA_RECV", "DEVICE_REGISTER", "DEVICE_BLOCKED", "DEVICE_STATUS_CHANGE"],

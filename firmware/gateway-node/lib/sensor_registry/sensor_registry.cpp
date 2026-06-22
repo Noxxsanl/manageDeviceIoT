@@ -39,7 +39,7 @@ bool fetchSensorList() {
     if (code != 200) {
         Serial.printf("[REG] Fetch failed HTTP %d\n", code);
         http.end();
-        _lastFetchMs = millis(); // tránh retry liên tục
+        _lastFetchMs = millis(); // backoff: tránh spam request liên tục lên backend khi thất bại liên tiếp
         return false;
     }
 

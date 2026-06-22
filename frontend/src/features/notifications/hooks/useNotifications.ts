@@ -13,6 +13,9 @@ export function useNotifications() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
+  // Truyền null làm key SWR để tắt polling cho user không phải admin.
+  // GET /api/notifications của backend chỉ dành cho admin (requireRole("admin")),
+  // nên non-admin sẽ nhận 403 mỗi lần poll – vô hiệu hóa ngay tại hook thay vì để lỗi.
   const { data, mutate } = useSWR(
     isAdmin ? "/api/notifications" : null,
     fetchNotifications,

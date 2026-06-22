@@ -52,6 +52,8 @@ export default function DeviceDetailPage() {
 
   const { device, isLoading, isError, updateStatus, deleteDevice } = useDeviceDetail(id);
   const isSensor = device?.device_type === "sensor";
+  // Chỉ fetch dữ liệu sensor cho thiết bị loại sensor; truyền null để tắt SWR polling
+  // cho gateway vì gateway không có hàng nào trong bảng sensor_data.
   const { sensorData, isLoading: chartLoading } = useSensorData(isSensor ? id : null);
 
   const [pending, setPending]             = useState<PendingAction>(null);
@@ -74,10 +76,12 @@ export default function DeviceDetailPage() {
     }
   };
 
+  // Hiển thị 20 bản ghi gần nhất trong bảng (biểu đồ dùng toàn bộ 200 bản ghi)
   const recentData = [...sensorData]
     .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
     .slice(0, 20);
 
+  // Suy ra gateway liên kết từ bản ghi mới nhất; có thể null trước khi có dữ liệu đầu tiên
   const linkedGateway = recentData[0]?.gateway_id;
 
   if (isLoading) {

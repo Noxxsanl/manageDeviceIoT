@@ -7,6 +7,8 @@ interface CreateNotificationParams {
   actor_id: number;
   actor_username: string;
   actor_role: string;
+  // target_role xác định role nào trong admin panel sẽ thấy thông báo này.
+  // Hiện tại GET /api/notifications chỉ hỗ trợ "admin".
   target_role?: string;
   related_device_id?: number | null;
 }

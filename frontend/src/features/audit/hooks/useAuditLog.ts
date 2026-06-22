@@ -24,6 +24,8 @@ const fetcher = (url: string) =>
 
 export function useAuditLog(filters: AuditLogFilters = {}) {
   const key = buildQuery(filters);
+  // Làm mới mỗi 30 giây – audit log chỉ ghi thêm và tần suất thấp, nên interval ngắn hơn
+  // sẽ lãng phí mà không cải thiện độ tươi có ý nghĩa cho việc review bảo mật.
   const { data, error, isLoading, mutate } = useSWR<AuditLogEntry[]>(
     key,
     fetcher,

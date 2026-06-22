@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import pool from "../config/db";
 
+// Cửa sổ chống replay attack ±300 giây. Đồng hồ cảm biến có thể lệch nhẹ,
+// cửa sổ quá hẹp sẽ gây lỗi TIMESTAMP_EXPIRED giả; 5 phút là tiêu chuẩn ngành
+// (giống AWS Signature v4 và TOTP).
 const TIMESTAMP_WINDOW_SECONDS = 300;
 
 interface DeviceRow {
@@ -26,6 +29,9 @@ function computeHMAC(secret: string, message: string): Buffer {
   return crypto.createHmac("sha256", secret).update(message).digest();
 }
 
+// timingSafeEqual ngăn tấn công side-channel dựa trên thời gian so sánh từng ký tự,
+// qua đó kẻ tấn công không thể đoán được giá trị HMAC mong đợi.
+// Độ dài hai buffer phải bằng nhau trước khi gọi timingSafeEqual, không nó sẽ throw.
 function safeCompare(a: string, b: string): boolean {
   try {
     const bufA = Buffer.from(a, "hex");

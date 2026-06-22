@@ -1,3 +1,7 @@
+// POST /api/device/data – đường fallback HTTP để firmware đẩy dữ liệu lên.
+// Đường chính là MQTT (mqttDataService.ts); endpoint này tồn tại để các thiết bị
+// không kết nối được tới MQTT broker (ví dụ: khác network segment) vẫn có thể
+// gửi dữ liệu qua HTTP thông thường. Cả hai đường đều xác thực HMAC 2 lớp.
 import { Router, Request, Response } from "express";
 import pool from "../config/db";
 import { validateDevice } from "../middleware/validateDevice";

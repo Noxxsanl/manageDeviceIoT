@@ -20,6 +20,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Khôi phục trạng thái auth khi mount bằng cách gọi /api/auth/me.
+  // Spinner loading chặn render các component con cho đến khi kiểm tra session xong,
+  // tránh các trang private bị flash nội dung chưa xác thực trước khi middleware redirect.
   useEffect(() => {
     getUser()
       .then(setUser)

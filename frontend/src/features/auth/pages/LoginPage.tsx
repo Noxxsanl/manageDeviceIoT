@@ -24,11 +24,13 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       await login(username.trim(), password);
+      // Khi thành công, AuthProvider.login() sẽ redirect đến /dashboard – không cần code ở đây
     } catch (err) {
       const status = err instanceof FetchError ? err.status : 0;
       if (status === 401) {
         setError("Sai tên đăng nhập hoặc mật khẩu.");
       } else if (status === 429) {
+        // Rate limiter backend: 10 lần thử đăng nhập mỗi 15 phút theo IP
         setError("Quá nhiều lần thử. Vui lòng đợi và thử lại.");
       } else {
         setError("Không thể kết nối đến máy chủ. Vui lòng thử lại.");

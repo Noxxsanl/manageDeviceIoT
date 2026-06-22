@@ -12,6 +12,9 @@ import ConfirmDialog from "@/shared/ui/ConfirmDialog";
 import api from "@/shared/api/client";
 import { FetchError } from "@/shared/api/errors";
 
+// Bản sao frontend của ALLOWED_EVENT_TYPES_BY_ROLE từ backend/src/routes/audit.ts.
+// Dùng để hiển thị dropdown event-type chỉ với các loại role hiện tại có thể thấy.
+// Backend vẫn thực thi các giới hạn này; đây chỉ là UX (không hiện option bị cấm).
 const EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
   admin: [
     "GATEWAY_AUTH_FAIL", "SENSOR_AUTH_FAIL", "REPLAY_ATTACK", "PRIVILEGE_ESCALATION",
@@ -21,7 +24,7 @@ const EVENT_TYPES_BY_ROLE: Record<string, string[]> = {
     "GATEWAY_AUTH_FAIL", "SENSOR_AUTH_FAIL", "REPLAY_ATTACK", "PRIVILEGE_ESCALATION",
     "DATA_RECV", "DEVICE_REGISTER", "DEVICE_BLOCKED", "DEVICE_STATUS_CHANGE",
   ],
-  viewer: ["DATA_RECV", "DEVICE_REGISTER", "DEVICE_BLOCKED", "DEVICE_STATUS_CHANGE"],
+  viewer: ["DATA_RECV", "DEVICE_REGISTER", "DEVICE_STATUS_CHANGE", "DEVICE_BLOCKED"],
 };
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -62,6 +65,9 @@ export default function AuditPage() {
 
   const logs = useMemo(() => {
     if (!deviceType) return rawLogs;
+    // API không hỗ trợ lọc theo device_type nên lọc phía client
+    // dựa trên quy ước đặt tên device_id: "ESP32-SN-XXXX" cho sensor và
+    // "ESP32-GW-XXXX" cho gateway (được đặt lúc đăng ký trong devices.ts).
     const marker = deviceType === "sensor" ? "-SN-" : "-GW-";
     return rawLogs.filter((l) => l.device_identifier?.includes(marker) ?? false);
   }, [rawLogs, deviceType]);

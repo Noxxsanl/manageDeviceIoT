@@ -5,8 +5,11 @@ async function seed() {
   const password = process.env.ADMIN_PASSWORD || "admin123";
   const username = process.env.ADMIN_USERNAME || "admin";
 
+  // cost 12 khớp với cost dùng trong routes/users.ts ở môi trường production.
   const hash = await bcrypt.hash(password, 12);
 
+  // INSERT IGNORE bỏ qua lặng lẽ nếu admin đã tồn tại,
+  // cho phép chạy script này an toàn mỗi lần container khởi động.
   const [result] = await pool.execute(
     `INSERT IGNORE INTO users (username, password_hash, role) VALUES (?, ?, 'admin')`,
     [username, hash]

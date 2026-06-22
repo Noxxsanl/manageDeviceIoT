@@ -9,7 +9,7 @@
 #include <WiFi.h>
 #include <string.h>
 
-// Constant-time compare – prevents timing attacks on HMAC verification
+// So sánh constant-time – ngăn tấn công timing attack vào xác minh HMAC
 static bool safeEq64(const char* a, const char* b) {
     uint8_t diff = 0;
     for (int i = 0; i < 64; i++) diff |= (uint8_t)(a[i] ^ b[i]);
@@ -86,7 +86,9 @@ bool forwardSensorData(const char* topic, const char* payload, unsigned int leng
     }
     Serial.printf("[FWD] ├─ HMAC OK – sensor '%s' authenticated\n", sensor_id);
 
-    // 5. Sign with gateway HMAC: HMAC-SHA256(GW_SECRET_KEY, "gw_id:gw_timestamp")
+    // 5. Ký bằng HMAC gateway: HMAC-SHA256(GW_SECRET_KEY, "<gw_id>:<gw_timestamp>")
+    // Dùng timestamp mới cho mỗi lần forward để HMAC không trùng lặp;
+    // cửa sổ ±300 giây của backend đủ để bù trừ độ trễ xử lý.
     unsigned long gw_timestamp = getCurrentTimestamp();
     char gwMsg[96];
     snprintf(gwMsg, sizeof(gwMsg), "%s:%lu", GW_DEVICE_ID, gw_timestamp);

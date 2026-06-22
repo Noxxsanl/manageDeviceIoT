@@ -1,5 +1,8 @@
 import LogTable from "@/features/logs/components/LogTable";
 
+// Trang placeholder – hiện chỉ hiển thị bảng rỗng.
+// Log sự kiện bảo mật được phục vụ bởi trang Audit Log (/audit).
+// Trang này được dựng sẵn cho luồng log thời gian thực trong tương lai (WebSocket / SSE).
 export default function LogsPage() {
   return (
     <div className="min-h-[calc(100vh-5rem)] w-full">

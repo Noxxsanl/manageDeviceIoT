@@ -1,8 +1,13 @@
+// Middleware Express thực thi xác thực HMAC 2 lớp cho các endpoint thiết bị.
+// Lớp 1 xác minh chữ ký của gateway; Lớp 2 xác minh chữ ký của sensor.
+// Nếu một trong hai lớp thất bại, fail_count của thiết bị đó sẽ tăng lên và
+// tự động bị khóa khi đạt ngưỡng.
 import { NextFunction, Request, Response } from "express";
 import pool from "../config/db";
 import { log } from "../services/auditLogger";
 import { verifyDeviceHMAC, verifyGatewayHMAC } from "../services/hmacService";
 
+// Phải khớp với BLOCK_THRESHOLD trong mqttDataService.ts – cả hai đường đều dùng cùng giá trị.
 const BLOCK_THRESHOLD = 5;
 
 async function incrementFailCount(deviceDbId: number): Promise<number> {

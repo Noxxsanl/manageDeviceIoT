@@ -1,3 +1,6 @@
+// Biến thể Arduino-String của HMAC-SHA256, dùng trên sensor node.
+// Gateway node dùng biến thể C-string (hmac_util.cpp trong gateway-node/lib).
+// Cả hai đều cho output hex chữ thường khớp với Node.js crypto.createHmac("sha256").toString("hex").
 #include "hmac_util.h"
 #include "mbedtls/md.h"
 

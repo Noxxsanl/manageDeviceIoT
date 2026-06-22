@@ -1,5 +1,8 @@
 import pool from "./db";
 
+// Hệ thống migration tuần tự đơn giản.
+// Mỗi entry chỉ được áp dụng đúng một lần, theo dõi qua bảng _migrations.
+// Migration được thiết kế idempotent (dùng IF NOT EXISTS / INSERT IGNORE).
 const migrations: { name: string; sql: string }[] = [
   {
     name: "add_last_ip_to_devices",
@@ -25,6 +28,8 @@ const migrations: { name: string; sql: string }[] = [
     )`,
   },
   {
+    // Dọn dữ liệu cũ một lần duy nhất khi migration chạy lần đầu.
+    // Từ đây về sau, mqttDataService và data.routes.ts đều tự prune sau mỗi lần insert.
     name: "trim_sensor_data_to_150_per_sensor",
     sql: `DELETE FROM sensor_data WHERE id NOT IN (
       SELECT id FROM (
@@ -40,6 +45,7 @@ const migrations: { name: string; sql: string }[] = [
 export async function runMigrations(): Promise<void> {
   const conn = await pool.getConnection();
   try {
+    // Tạo bảng theo dõi migration nếu chưa tồn tại
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS _migrations (
         name VARCHAR(128) PRIMARY KEY,
@@ -52,7 +58,7 @@ export async function runMigrations(): Promise<void> {
         "SELECT name FROM _migrations WHERE name = ?",
         [m.name]
       );
-      if (rows.length > 0) continue;
+      if (rows.length > 0) continue; // đã áp dụng rồi – bỏ qua
 
       await conn.execute(m.sql);
       await conn.execute("INSERT INTO _migrations (name) VALUES (?)", [m.name]);

@@ -93,6 +93,9 @@ export default function Header() {
   const notifRef = useRef<HTMLDivElement>(null);
   const { notifications, unreadCount, markRead, markAllRead, isAdmin } = useNotifications();
 
+  // Đóng dropdown thông báo khi người dùng click ra ngoài panel.
+  // Dùng mousedown (không phải click) để panel đóng trước khi click handler bên trong
+  // dropdown kích hoạt, tránh nhấp nháy do thứ tự sự kiện.
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node))

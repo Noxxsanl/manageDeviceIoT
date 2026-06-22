@@ -1,8 +1,12 @@
 import pool from "../config/db";
 
-// In-memory cache: updated every 30 seconds by the heartbeat monitor
+// Cache in-memory: cập nhật mỗi 30 giây bởi heartbeat monitor.
+// Tránh truy vấn DB cho mỗi API request cần biết trạng thái online.
+// Có thể trễ tối đa 30s nhưng chấp nhận được cho màn hình dashboard.
 let onlineDeviceIds = new Set<number>();
 
+// isOnline kiểm tra last_seen trực tiếp với thời gian hiện tại (dùng trong câu SQL).
+// isOnlineFromCache dùng Set in-memory (dùng trong code Node.js để tránh query thêm).
 export function isOnline(lastSeen: Date | string | null): boolean {
   if (!lastSeen) return false;
   const diffSeconds = (Date.now() - new Date(lastSeen).getTime()) / 1000;

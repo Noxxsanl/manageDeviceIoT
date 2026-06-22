@@ -10,6 +10,8 @@ function pad(n: number) {
 }
 
 export default function RealtimeClock() {
+  // Khởi tạo null để tránh lỗi SSR/hydration mismatch: server render nothing,
+  // client mới set thời gian thực trong useEffect sau khi mount.
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {

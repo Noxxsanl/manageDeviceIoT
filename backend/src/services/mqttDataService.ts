@@ -1,8 +1,13 @@
+// Đường nhận dữ liệu chính: subscribe Broker 2 (gateway → backend) và
+// thực hiện xác thực HMAC 2 lớp giống hệt đường fallback HTTP (data.routes.ts).
+// Hai đường phải luôn đồng bộ logic xác thực khi có thay đổi.
 import mqtt from "mqtt";
 import pool from "../config/db";
 import { verifyGatewayHMAC, verifyDeviceHMAC } from "./hmacService";
 import { log, logDataRecvWithPrune } from "./auditLogger";
 
+// Thiết bị bị tự động khóa sau số lần xác thực thất bại liên tiếp này
+// để ngăn tấn công brute-force vào secret key HMAC.
 const BLOCK_THRESHOLD = 5;
 
 async function incrementAndMaybeBlock(deviceDbId: number, deviceLabel: string): Promise<void> {

@@ -4,6 +4,8 @@ type OnlineIndicatorProps = {
   lastSeen: string | null;
 };
 
+// Ngưỡng 60 giây phản chiếu điều kiện TIMESTAMPDIFF(SECOND, last_seen, NOW()) < 60
+// trong các câu SQL của backend và helper isOnline() trong deviceStatus.ts.
 function isOnline(lastSeen: string | null): boolean {
   if (!lastSeen) return false;
   const diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;

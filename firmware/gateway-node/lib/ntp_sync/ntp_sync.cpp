@@ -5,7 +5,11 @@
 static bool _synced = false;
 
 void ntpSetup() {
-    configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");  // UTC+7
+    // UTC+7 (Asia/Ho_Chi_Minh). Backend xác minh timestamp HMAC theo UTC Unix seconds
+    // (Date.now() / 1000), nên giá trị epoch tuyệt đối phải khớp.
+    // Offset này chỉ để hiển thị trên Serial log; getCurrentTimestamp() trả về
+    // time_t luôn là UTC epoch bất kể múi giờ cục bộ.
+    configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
 
     Serial.print("[NTP] Syncing");
     struct tm timeinfo;

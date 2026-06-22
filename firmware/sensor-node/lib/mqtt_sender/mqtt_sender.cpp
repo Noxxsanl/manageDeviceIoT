@@ -61,6 +61,9 @@ bool mqttPublishSensorData(const SensorData& data) {
 
     unsigned long timestamp = getCurrentTimestamp();
 
+    // Định dạng message HMAC: "<device_id>:<unix_timestamp>"
+    // Phải khớp với định dạng mà verifyDeviceHMAC() ở backend mong đợi:
+    //   computeHMAC(secret, `${sensor_id}:${sn_timestamp}`)
     String message = String(DEVICE_ID) + ":" + String(timestamp);
     String hmac    = computeHMAC(String(SECRET_KEY), message);
 

@@ -6,7 +6,9 @@ static DHT dht(DHT_PIN, DHT_TYPE);
 
 void sensorSetup() {
     dht.begin();
-    delay(2000);  // DHT22 cần ~2s warmup sau khi cấp nguồn
+    // DHT22 cần ~2 giây sau khi bật nguồn trước khi lần đọc đầu tiên hợp lệ.
+    // Bỏ qua delay này khiến lần đọc đầu trả về NaN, lãng phí một chu kỳ gửi.
+    delay(2000);
     Serial.printf("[DHT] DHT22 khởi tạo trên GPIO %d\n", DHT_PIN);
 }
 
