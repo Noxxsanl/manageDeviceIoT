@@ -116,6 +116,34 @@ Vòng lặp chính cứ mỗi `SEND_INTERVAL` (mặc định 5000ms) kiểm tra 
 
 → Gateway đóng vai trò **"bộ lọc biên" (edge filter)**: chặn sớm sensor giả mạo/không quen biết ngay tại lớp mạng cục bộ, trước khi gói tin đi ra Internet/WAN tới backend.
 
+### 3.3. Nhiều Sensor Node — Gateway xử lý độc lập từng message
+
+Gateway **không gom nhiều sensor lại thành 1 payload**. Nó xử lý **độc lập từng message** nhờ wildcard topic `local/sensors/+/data`.
+
+```
+Sensor-1 ──[local/sensors/ESP32-SN-CBF05770/data]──▶ ┐
+                                                        Gateway ──[gateway/ESP32-GW-.../data]──▶ Backend
+Sensor-2 ──[local/sensors/ESP32-SN-6A7F4B74/data]──▶ ┘
+```
+
+Mỗi message kích hoạt `forwardSensorData()` **riêng biệt**, publish **2 message riêng** lên cùng 1 topic backend. Backend phân biệt 2 sensor qua `sensor_payload.sensor_id` trong từng message.
+
+**Message từ Sensor-1:**
+```json
+{
+  "gateway_id": "ESP32-GW-78867B14",
+  "sensor_payload": { "sensor_id": "ESP32-SN-CBF05770", "data": { "temperature": 28.5, "humidity": 65.2 } }
+}
+```
+
+**Message từ Sensor-2:**
+```json
+{
+  "gateway_id": "ESP32-GW-78867B14",
+  "sensor_payload": { "sensor_id": "ESP32-SN-6A7F4B74", "data": { "temperature": 27.1, "humidity": 63.8 } }
+}
+```
+
 ---
 
 ## 4. Gateway Node ⇄ Backend — bắt tay MQTT với double-HMAC (HMAC #2)

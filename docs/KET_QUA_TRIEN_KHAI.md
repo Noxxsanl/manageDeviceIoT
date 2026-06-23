@@ -607,7 +607,56 @@ Mọi trang dữ liệu tự động refresh mỗi **10 giây**. Không dùng We
 
 ---
 
-## 10. Kết luận
+## 10. Stack công nghệ sử dụng
+
+| Lớp | Công nghệ | Ghi chú |
+|-----|-----------|---------|
+| Firmware | C++/Arduino (PlatformIO), esp32doit-devkit-v1 | Cả Sensor Node và Gateway Node |
+| Hardware | ESP32 DOIT DevKit V1 (cả 2 board) | — |
+| Cảm biến | DHT22 (1-Wire protocol, GPIO4) | NOT I2C |
+| Protocol | MQTT (Eclipse Mosquitto 2) | Luồng chính; HTTP là fallback |
+| Backend | Node.js + Express + TypeScript | — |
+| Database | MySQL 8.0 | 5 bảng, tự động migrate khi khởi động |
+| Frontend | Next.js 16 | SWR polling, Recharts |
+| Container | Docker Compose | 6 service (2 MQTT broker độc lập) |
+| Proxy | Nginx alpine | `/api/*` → backend, `/*` → frontend |
+
+---
+
+## 11. Những phần có thể triển khai tiếp
+
+Dựa trên cấu trúc hiện tại, các phần sau có thể bổ sung mà không cần thay đổi kiến trúc lõi:
+
+### 11.1. Device Token (`device_tokens` table)
+- Schema (`database/migrations/001_schema.sql`) đã có bảng `device_tokens`.
+- Cần bổ sung: route `POST /api/device/token` để cấp token, middleware verify token, cơ chế revoke.
+- Mục đích: Cho phép thiết bị xác thực bằng long-lived token thay vì HMAC per-request.
+
+### 11.2. MQTT TLS/SSL
+- Hiện tại cả 2 broker chạy plain TCP: Broker 1 (`mosquitto/broker1/mosquitto.conf` :1883) và Broker 2 (`mosquitto/broker2/mosquitto.conf` :1884).
+- Cần bổ sung: Cấu hình TLS cert trong cả 2 file mosquitto.conf, cập nhật firmware để dùng `WiFiClientSecure`.
+
+### 11.3. Realtime WebSocket
+- Frontend hiện dùng SWR polling 10 giây. Có thể nâng cấp lên WebSocket (Socket.io hoặc ws native) để giảm latency.
+- Nginx (`nginx/nginx.conf`) đã có `proxy_set_header Upgrade $http_upgrade` cho WebSocket.
+
+### 11.4. Hỗ trợ nhiều loại cảm biến
+- Firmware sensor-node hiện chỉ đọc DHT22 (nhiệt độ + độ ẩm).
+- Cơ chế `data: {}` trong payload đã generic — có thể thêm các trường cảm biến khác (CO2, áp suất, ánh sáng) mà không cần thay đổi schema DB.
+
+### 11.5. Cảnh báo ngưỡng (Threshold Alert)
+- Chưa có cơ chế gửi cảnh báo khi nhiệt độ/độ ẩm vượt ngưỡng.
+- Có thể thêm bảng `alert_rules` và notification service (email/webhook) trong backend.
+
+### 11.6. Export dữ liệu
+- Chưa có tính năng export CSV/Excel từ dashboard.
+
+### 11.7. Refresh token
+- JWT hiện không có refresh token. Sau 8 giờ, người dùng phải đăng nhập lại.
+
+---
+
+## 12. Kết luận
 
 Hệ thống đã triển khai đầy đủ mục tiêu đề ra — xây dựng một nền tảng IoT với:
 
