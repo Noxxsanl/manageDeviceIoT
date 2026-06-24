@@ -1,81 +1,145 @@
-# RBAC (Role-Based Access Control) đã triển khai trong hệ thống
+# RBAC — Luồng từ Database đến Backend đến Frontend
 
-> Tài liệu này mô tả **chi tiết, đối chiếu trực tiếp với code** cơ chế phân quyền đang chạy trong dự án `managerDeviceIoT-RBAC`. Tham chiếu file dùng đường dẫn tương đối từ gốc repo.
+> Tài liệu này đi theo đúng một request vòng đời: từ lúc role được lưu trong DB, qua quá trình đăng nhập, qua middleware backend, đến lúc frontend quyết định render gì. Mọi đoạn code được đối chiếu trực tiếp với file thực tế trong repo.
 
-## 1. Hai lớp kiểm soát truy cập trong hệ thống
+---
 
-Đề bài cho phép chọn RBAC hoặc ABAC để "kiểm soát thiết bị được phép truy cập". Dự án này triển khai **đồng thời hai cơ chế độc lập**, áp cho hai nhóm chủ thể khác nhau:
+## Tổng quan luồng
 
-| Lớp | Chủ thể | Cơ chế | Mục đích |
-|---|---|---|---|
-| **(A) RBAC người dùng** | Người dùng Dashboard (admin / operator / viewer) | JWT + bảng vai trò cố định, gác bằng middleware `requireRole` | Ai được đăng ký, khoá, xoá thiết bị; ai được quản lý tài khoản |
-| **(B) Kiểm soát truy cập thiết bị** | Thiết bị IoT (sensor / gateway) | HMAC-SHA256 + thuộc tính `device_type`, `status` trong DB | Thiết bị nào được phép gửi dữ liệu vào hệ thống |
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  DATABASE                                                                 │
+│  users.role  ENUM('admin','operator','viewer')                            │
+└────────────────────────┬─────────────────────────────────────────────────┘
+                         │  SELECT id, username, password_hash, role
+                         │  WHERE username = ?
+                         ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  BACKEND — Login  (POST /api/auth/login)                                  │
+│  bcrypt.compare(password, hash)                                           │
+│  jwt.sign({ id, username, role }, JWT_SECRET, { expiresIn: "8h" })       │
+│  res.cookie("token", token, { httpOnly: true, sameSite: "strict" })      │
+└────────────────────────┬─────────────────────────────────────────────────┘
+                         │  Cookie: token=<JWT>  (HttpOnly)
+                         ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  BACKEND — Middleware Chain  (mọi route được bảo vệ)                     │
+│                                                                           │
+│  verifyJWT  →  req.user = { id, username, role }                         │
+│       │                                                                   │
+│       └──▶  requireRole("admin","operator")  →  403 nếu không đủ quyền  │
+└────────────────────────┬─────────────────────────────────────────────────┘
+                         │  Response JSON  (200 / 403 / 401)
+                         ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  FRONTEND                                                                 │
+│  AuthProvider  ←  GET /api/auth/me  →  user.role lưu vào React Context  │
+│  usePermissions()  →  canCreateDevice, canDeleteDevice, isAdmin, …       │
+│  Pages  →  ẩn/hiện nút dựa trên permission flags                         │
+│  middleware.ts  →  redirect /login nếu không có cookie                   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
 
-Hai lớp này **không dùng chung middleware**: (A) bảo vệ các route quản trị (`/api/devices`, `/api/users`, …) bằng `verifyJWT` + `requireRole`; (B) bảo vệ route nhận dữ liệu cảm biến (`/api/device/data`) bằng `validateDevice` (HMAC), hoàn toàn không liên quan JWT. Phần dưới đi sâu vào lớp (A) — đúng nghĩa "RBAC" theo yêu cầu đề bài — và nói rõ lớp (B) đóng vai trò bổ trợ kiểu ABAC (dựa trên thuộc tính `device_type`/`status`) ở cuối tài liệu.
+---
 
-## 2. Mô hình vai trò (Role Model)
+## Lớp 1 — Database
 
-Định nghĩa tại [database/migrations/001_schema.sql:19](../database/migrations/001_schema.sql#L19):
+### Định nghĩa role
+
+[`database/migrations/001_schema.sql`](../database/migrations/001_schema.sql):
 
 ```sql
-role ENUM('admin','operator','viewer') NOT NULL DEFAULT 'viewer'
-```
-
-→ Vai trò được ràng buộc **ngay ở tầng database** (ENUM), không phải chuỗi tự do — tránh việc một bản ghi user lọt vào với role rác.
-
-Ba vai trò, theo thứ tự quyền giảm dần:
-
-- **admin** — toàn quyền: quản lý người dùng + toàn bộ vòng đời thiết bị.
-- **operator** — vận hành thiết bị: đăng ký thiết bị mới, khoá/mở khoá thiết bị; **không** được quản lý người dùng, **không** được xoá thiết bị.
-- **viewer** — chỉ đọc: xem dashboard, danh sách thiết bị, dữ liệu cảm biến, audit log; không có quyền ghi ở đâu cả.
-
-## 3. Cơ chế kỹ thuật: JWT mang role + middleware gác cổng
-
-### 3.1. Phát hành "thẻ vai trò" lúc đăng nhập
-
-[backend/src/routes/auth.ts:39-49](../backend/src/routes/auth.ts#L39-L49):
-
-```ts
-const token = jwt.sign(
-  { id: user.id, username: user.username, role: user.role },
-  process.env.JWT_SECRET!,
-  { expiresIn: "8h" }
+CREATE TABLE users (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  username      VARCHAR(64) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role          ENUM('admin','operator','viewer') NOT NULL DEFAULT 'viewer',
+  last_login    DATETIME,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
-res.cookie("token", token, {
-  httpOnly: true,
-  maxAge: 8 * 60 * 60 * 1000,
-  sameSite: "strict",
-});
 ```
 
-Điểm quan trọng:
-- **Role được "đóng dấu" (sign) vào JWT** ngay tại thời điểm đăng nhập, lấy từ giá trị `role` đang lưu trong bảng `users` ở DB — không tin role do client tự gửi lên.
-- JWT được đặt trong cookie `HttpOnly` (JavaScript trên trình duyệt không đọc được → giảm rủi ro đánh cắp token qua XSS) và `SameSite=Strict` (trình duyệt không gửi cookie này kèm request cross-site → giảm rủi ro CSRF).
-- Hạn dùng 8 giờ, đồng bộ giữa `expiresIn` của JWT và `maxAge` của cookie.
-- Mật khẩu so sánh bằng `bcrypt.compare`, và khi username không tồn tại vẫn chạy một lượt `bcrypt.compare` với "dummy hash" để giữ **thời gian phản hồi không đổi**, chống dò username qua timing attack.
+Role được ràng buộc bằng **`ENUM` ngay ở tầng DB** — không phải VARCHAR tự do. Nếu backend cố ghi một giá trị nằm ngoài 3 giá trị này, MySQL sẽ báo lỗi trước khi lưu vào disk.
 
-### 3.2. Xác thực JWT — `verifyJWT`
+**Ba vai trò theo thứ tự quyền giảm dần:**
 
-[backend/src/middleware/verifyJWT.ts](../backend/src/middleware/verifyJWT.ts):
+| Role | Ý nghĩa |
+|------|---------|
+| `admin` | Toàn quyền: quản lý user, toàn bộ vòng đời thiết bị, xóa audit log |
+| `operator` | Vận hành: đăng ký và kích hoạt/khóa thiết bị; không được xóa thiết bị, không quản lý user |
+| `viewer` | Chỉ đọc: xem dashboard, danh sách thiết bị, dữ liệu cảm biến; không có quyền ghi ở đâu |
 
-```ts
-const token = parseCookie(req.headers.cookie, "token");
-if (!token) { res.status(401).json({ error: "NO_TOKEN" }); return; }
-const payload = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
-(req as any).user = payload;   // { id, username, role }
-next();
+### Admin seed
+
+Admin mặc định được tạo một lần duy nhất lúc backend khởi động lần đầu, từ biến môi trường `ADMIN_USERNAME` / `ADMIN_PASSWORD`. API `POST /api/users` **chặn cứng** không cho tạo thêm user có `role = "admin"` — chỉ `operator` hoặc `viewer` mới được tạo qua API.
+
+---
+
+## Lớp 2 — Backend: Đăng nhập và phát hành JWT
+
+### Luồng đăng nhập — `POST /api/auth/login`
+
+[`backend/src/routes/auth.ts`](../backend/src/routes/auth.ts):
+
+```
+Browser gửi { username, password }
+        │
+        ▼
+SELECT id, username, password_hash, role
+FROM users WHERE username = ?
+        │
+        ├─ User không tồn tại → bcrypt.compare(password, dummyHash) → false
+        │   (chạy bcrypt dù không cần, để response time không đổi → chống timing attack dò username)
+        │
+        └─ User tồn tại → bcrypt.compare(password, user.password_hash)
+                │
+                ├─ sai → 401 INVALID_CREDENTIALS
+                │
+                └─ đúng → jwt.sign({ id, username, role }, JWT_SECRET, { expiresIn: "8h" })
+                           res.cookie("token", token, { httpOnly: true, sameSite: "strict" })
+                           res.json({ user: { id, username, role } })
 ```
 
-Middleware này **tự đọc cookie thủ công** (không dùng `cookie-parser`), verify chữ ký JWT bằng `JWT_SECRET`, rồi gắn `req.user`. Mọi route phía sau nó coi `req.user.role` là **nguồn sự thật duy nhất** về vai trò của người gọi trong suốt request — không truy vấn lại DB mỗi lần (đánh đổi: nếu admin đổi role của một user giữa lúc JWT còn hạn 8h, JWT cũ vẫn mang role cũ cho tới khi hết hạn/đăng nhập lại).
+**Điểm quan trọng:**
 
-### 3.3. Gác quyền theo vai trò — `requireRole`
+- `role` được **đọc từ DB** và **đóng dấu vào JWT** — client không thể tự chọn role của mình.
+- Cookie được set với `httpOnly: true` → JavaScript phía trình duyệt không đọc được `document.cookie` → giảm rủi ro XSS đánh cắp token.
+- `sameSite: "strict"` → trình duyệt không gửi cookie này trong request cross-site → giảm rủi ro CSRF.
+- JWT chứa `{ id, username, role }` — không cần query DB ở mỗi request tiếp theo (đánh đổi: nếu admin đổi role của user trong lúc JWT còn hạn 8h, JWT cũ vẫn mang role cũ đến khi hết hạn).
 
-Toàn bộ logic RBAC thực sự nằm trong **9 dòng** ở [backend/src/middleware/rbac.ts](../backend/src/middleware/rbac.ts):
+---
+
+## Lớp 3 — Backend: Middleware kiểm tra quyền
+
+### `verifyJWT` — Xác thực danh tính
+
+[`backend/src/middleware/verifyJWT.ts`](../backend/src/middleware/verifyJWT.ts):
+
+```
+Request đến
+     │
+     ▼
+parseCookie(req.headers.cookie, "token")
+     │
+     ├─ Không có cookie → 401 NO_TOKEN
+     │
+     └─ Có token → jwt.verify(token, JWT_SECRET)
+                    │
+                    ├─ Sai chữ ký / hết hạn → 401 INVALID_TOKEN
+                    │
+                    └─ Hợp lệ → req.user = { id, username, role }
+                                 next()
+```
+
+Middleware tự parse cookie thủ công (không dùng `cookie-parser`) để hạn chế dependency. Sau khi `verifyJWT` chạy xong, `req.user.role` là **nguồn sự thật duy nhất** về vai trò của người gọi trong suốt request — không truy vấn lại DB.
+
+### `requireRole` — Kiểm tra vai trò
+
+[`backend/src/middleware/rbac.ts`](../backend/src/middleware/rbac.ts):
 
 ```ts
 export function requireRole(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req, res, next) => {
     const user = (req as any).user;
     if (!user || !roles.includes(user.role)) {
       res.status(403).json({ error: "FORBIDDEN" });
@@ -86,65 +150,208 @@ export function requireRole(...roles: string[]) {
 }
 ```
 
-Đây là một **factory middleware** (higher-order function) nhận danh sách role được phép (`...roles`) và trả về middleware kiểm tra `req.user.role` có nằm trong danh sách đó hay không. Vì nhận `req.user` đã được `verifyJWT` gắn sẵn, `requireRole` luôn phải đứng **sau** `verifyJWT` trong chuỗi middleware của route:
+`requireRole` là **factory function** — nhận danh sách role được phép, trả về middleware. Nó **phải đứng sau** `verifyJWT` trong chuỗi middleware vì cần `req.user` đã có sẵn.
+
+**Cách khai báo trên route:**
 
 ```ts
+// Chỉ admin và operator mới đăng ký được thiết bị
 router.post("/register", verifyJWT, requireRole("admin", "operator"), handler);
+
+// Chỉ admin mới xóa được thiết bị
+router.delete("/:id", verifyJWT, requireRole("admin"), handler);
+
+// Mọi người đã đăng nhập đều xem được (không cần requireRole)
+router.get("/", verifyJWT, handler);
 ```
 
-Thiết kế này cho phép khai báo RBAC **khai báo (declarative), tại chỗ, ngay trên route**, dễ đọc và dễ audit — chỉ cần nhìn dòng định nghĩa route là biết route đó dành cho vai trò nào, không cần tra bảng permission riêng.
+---
 
-## 4. Ma trận phân quyền đầy đủ (đối chiếu từng route)
+## Lớp 4 — Backend: Ma trận quyền từng route
 
-| Method & Route | Middleware áp dụng | Vai trò được phép | File |
-|---|---|---|---|
-| `POST /api/auth/login` | — (public) | Ai cũng gọi được | [auth.ts:10](../backend/src/routes/auth.ts#L10) |
-| `GET /api/auth/me` | `verifyJWT` | admin, operator, viewer (đã đăng nhập) | [auth.ts:61](../backend/src/routes/auth.ts#L61) |
-| `POST /api/devices/register` | `verifyJWT` + `requireRole("admin","operator")` | **admin, operator** | [devices.ts:16-19](../backend/src/routes/devices.ts#L16-L19) |
-| `GET /api/devices` | `verifyJWT` | admin, operator, **viewer** | [devices.ts:77](../backend/src/routes/devices.ts#L77) |
-| `GET /api/devices/:id` | `verifyJWT` | admin, operator, **viewer** | [devices.ts:142](../backend/src/routes/devices.ts#L142) |
-| `GET /api/devices/:id/data` | `verifyJWT` | admin, operator, **viewer** | [devices.ts:100](../backend/src/routes/devices.ts#L100) |
-| `PATCH /api/devices/:id/status` (lock/unlock) | `verifyJWT` + `requireRole("admin","operator")` | **admin, operator** | [devices.ts:183-186](../backend/src/routes/devices.ts#L183-L186) |
-| `DELETE /api/devices/:id` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** | [devices.ts:223-226](../backend/src/routes/devices.ts#L223-L226) |
-| `GET /api/users` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** | [users.ts:10](../backend/src/routes/users.ts#L10) |
-| `POST /api/users` (tạo operator/viewer) | `verifyJWT` + `requireRole("admin")` | **chỉ admin** | [users.ts:18](../backend/src/routes/users.ts#L18) |
-| `PATCH /api/users/:id/password` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** | [users.ts:59](../backend/src/routes/users.ts#L59) |
-| `DELETE /api/users/:id` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** | [users.ts:84](../backend/src/routes/users.ts#L84) |
-| `GET /api/audit-log` | `verifyJWT` (không `requireRole`, nội dung lọc bởi `ALLOWED_EVENT_TYPES_BY_ROLE`) | admin, operator, **viewer** (nội dung khác nhau theo role) | [audit.ts:69](../backend/src/routes/audit.ts#L69) |
-| `GET /api/dashboard/stats` | `verifyJWT` (không `requireRole`) | admin, operator, **viewer** | [dashboard.ts:8](../backend/src/routes/dashboard.ts#L8) |
-| `POST /api/device/data` | `validateDevice` (HMAC, **không dùng JWT/role**) | Không áp dụng — đây là kênh máy-với-máy (M2M) | [data.routes.ts:13](../backend/src/routes/data.routes.ts#L13) |
+| Route | Middleware | Ai được phép |
+|-------|------------|-------------|
+| `POST /api/auth/login` | — (public) | Tất cả |
+| `GET /api/auth/me` | `verifyJWT` | admin, operator, viewer |
+| `POST /api/devices/register` | `verifyJWT` + `requireRole("admin","operator")` | admin, operator |
+| `GET /api/devices` | `verifyJWT` | admin, operator, viewer |
+| `GET /api/devices/:id` | `verifyJWT` | admin, operator, viewer |
+| `GET /api/devices/:id/data` | `verifyJWT` | admin, operator, viewer |
+| `PATCH /api/devices/:id/status` | `verifyJWT` + `requireRole("admin","operator")` | admin, operator |
+| `DELETE /api/devices/:id` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** |
+| `GET /api/users` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** |
+| `POST /api/users` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** |
+| `PATCH /api/users/:id/password` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** |
+| `DELETE /api/users/:id` | `verifyJWT` + `requireRole("admin")` | **chỉ admin** |
+| `GET /api/audit-log` | `verifyJWT` | admin, operator, viewer *(nội dung lọc theo role)* |
+| `GET /api/dashboard/stats` | `verifyJWT` | admin, operator, viewer |
 
-Nhận xét từ ma trận:
+**Lưu ý đặc biệt — Audit Log lọc nội dung theo role:**
 
-- **viewer** có quyền đọc rộng (devices, audit-log, dashboard) nhưng **không một route ghi nào** chấp nhận viewer — đúng tinh thần "read-only".
-- **operator** được trao quyền vận hành thiết bị (đăng ký, khoá/mở) nhưng **không** được đụng vào tài khoản người dùng và **không** được xoá thiết bị (hành động phá hủy dữ liệu nhất) — chỉ admin mới xoá được, kèm cascade xoá `sensor_data` + `device_tokens` liên quan ([devices.ts:243-245](../backend/src/routes/devices.ts#L243-L245)).
-- Endpoint tạo user ([users.ts:25](../backend/src/routes/users.ts#L25)) **chặn cứng role được tạo** chỉ còn `["operator", "viewer"]` — API không cho tạo thêm admin mới. Admin "gốc" duy nhất được tạo qua script seed ([backend/src/scripts/seed.ts](../backend/src/scripts/seed.ts)) hoặc đã có sẵn trong migration SQL ([001_schema.sql:95-100](../database/migrations/001_schema.sql#L95-L100)). Đây là một control tốt: không có đường API nào để leo thang thành admin.
-- Tự bảo vệ: admin không tự xoá được chính mình (`CANNOT_DELETE_SELF`, [users.ts:92](../backend/src/routes/users.ts#L92)) và không ai xoá được tài khoản có role admin (`CANNOT_DELETE_ADMIN`, [users.ts:103](../backend/src/routes/users.ts#L103)) — chống tình huống hệ thống mất hết admin.
+`GET /api/audit-log` không dùng `requireRole` để chặn, thay vào đó lọc `event_type` trả về dựa trên `req.user.role`:
 
-## 5. RBAC ở phía Frontend — chỉ là lớp UX, không phải security boundary
+| Role | Event types được xem |
+|------|----------------------|
+| `admin` | Tất cả 10 loại |
+| `operator` | 9 loại (trừ `DEVICE_DELETE`) |
+| `viewer` | 4 loại: `DATA_RECV`, `DEVICE_REGISTER`, `DEVICE_BLOCKED`, `DEVICE_STATUS_CHANGE` |
 
-- [frontend/src/features/users/pages/UsersPage.tsx](../frontend/src/features/users/pages/UsersPage.tsx) chặn render toàn bộ trang Users nếu `currentUser.role !== "admin"` — đây là **phòng vệ ở UI**, hiển thị "Không có quyền truy cập" thay vì gọi API rồi nhận lỗi.
-- [frontend/src/features/devices/pages/DevicesPage.tsx](../frontend/src/features/devices/pages/DevicesPage.tsx) **có kiểm tra role** thông qua hook `usePermissions()`: nút "Thêm thiết bị" chỉ hiển thị khi `canCreateDevice` (admin/operator); nút "Kích hoạt/Khóa/Mở khóa" chỉ khi `canUpdateDeviceStatus` (admin/operator); nút "Xóa" chỉ khi `canDeleteDevice` (chỉ admin). Viewer không thấy các nút này trên UI.
-- [frontend/src/features/audit/pages/AuditPage.tsx](../frontend/src/features/audit/pages/AuditPage.tsx): khối "Admin Actions" (xóa log đã chọn, dọn theo loại) chỉ hiển thị với `isAdmin` — operator và viewer không thấy.
-- `frontend/middleware.ts` ([frontend/middleware.ts](../frontend/middleware.ts)) chỉ kiểm tra **có cookie `token` hay không** để quyết định redirect `/login` ↔ `/dashboard`. Middleware này **không verify chữ ký JWT** (Next.js Edge Runtime không có `JWT_SECRET` ở đây), nên một cookie giả/hết hạn vẫn "qua" middleware và chỉ bị backend từ chối (401) khi gọi API thật. `frontend/src/features/auth/api/auth.api.ts` bắt sẵn lỗi 401 toàn cục để tự redirect về `/login`.
+→ Viewer không thể xem `GATEWAY_AUTH_FAIL`, `SENSOR_AUTH_FAIL`, `REPLAY_ATTACK`, `PRIVILEGE_ESCALATION`.
 
-## 6. Lớp (B): Kiểm soát truy cập thiết bị — bổ trợ kiểu ABAC
+**Bảo vệ leo thang đặc quyền:**
 
-Lớp này không gắn với "vai trò người dùng" mà gắn với **thuộc tính của thiết bị**, nên về bản chất gần ABAC hơn RBAC, nhưng đáp ứng đúng yêu cầu "kiểm soát thiết bị được phép truy cập" của đề bài:
+- `POST /api/users` chặn cứng `role` chỉ nhận `["operator", "viewer"]` — không có đường API nào tạo thêm admin mới.
+- Admin không tự xóa được chính mình (`CANNOT_DELETE_SELF`).
+- Không ai xóa được tài khoản admin khác (`CANNOT_DELETE_ADMIN`) — đảm bảo hệ thống luôn có ít nhất một admin.
 
-- **Thuộc tính `device_type`** (`sensor` | `gateway`): tại [data.routes.ts:35-43](../backend/src/routes/data.routes.ts#L35-L43), backend bắt buộc id đứng ở vai "gateway" trong request phải có `device_type = 'gateway'` trong DB, và id ở vai "sensor" phải có `device_type = 'sensor'`. Đây chính là dòng comment trong code: `// RBAC: device_type check` — tác giả gốc gọi nó là RBAC vì device_type hoạt động như một "role" gán cho thiết bị, dù cơ chế thực thi là so khớp thuộc tính.
-- **Thuộc tính `status`** (`inactive` | `active` | `blocked`): mới đăng ký → `inactive` (chưa có quyền gửi dữ liệu) → cần admin/operator chuyển `active` qua `PATCH /api/devices/:id/status` thì mới được phép gửi dữ liệu ([data.routes.ts:46-61](../backend/src/routes/data.routes.ts#L46-L61)); `blocked` luôn bị từ chối. Đây là một dạng **provisioning gate**: quyền của thiết bị do con người (lớp RBAC ở mục 4) cấp, nhưng được *thực thi* dựa trên thuộc tính lưu trong DB tại thời điểm gửi dữ liệu (ABAC).
-- **Tự động hạ quyền (auto-revoke)**: [hmacService.ts](../backend/src/services/hmacService.ts) + [validateDevice.ts](../backend/src/middleware/validateDevice.ts) đếm `fail_count`; sau `BLOCK_THRESHOLD = 5` lần xác thực sai liên tiếp, thiết bị bị set `status = 'blocked'` tự động ([validateDevice.ts:20-25](../backend/src/middleware/validateDevice.ts#L20-L25)) — quyền truy cập bị thu hồi không cần con người can thiệp, giảm thời gian phản ứng với tấn công brute-force secret key.
+---
 
-→ Kết luận: hệ thống không triển khai một engine ABAC tổng quát (không có policy ngôn ngữ kiểu Casbin/OPA), mà **mã hoá cứng (hard-code) một vài thuộc tính thiết bị** (`device_type`, `status`) trực tiếp vào logic route — đủ để thoả yêu cầu đề bài ("tuỳ chọn triển khai RBAC hoặc ABAC") nhưng không có khả năng mở rộng chính sách động (ví dụ: theo IP, theo giờ, theo vị trí địa lý) nếu không sửa code.
+## Lớp 5 — Frontend: Nhận và lưu role
 
-## 7. Hạn chế / điểm yếu của thiết kế RBAC hiện tại (để phục vụ phần threat model)
+### `AuthProvider` — Nguồn sự thật ở phía client
 
-1. **RBAC tĩnh, hard-code theo route**: danh sách role cho phép nằm rải rác trong từng file route (`requireRole("admin","operator")` lặp lại nhiều nơi) — không có bảng permission tập trung trong DB. Muốn thêm vai trò mới hoặc đổi quyền của operator phải sửa code và deploy lại, không cấu hình runtime được.
-2. **Không có row-level / resource-ownership scoping**: một operator có quyền khoá/mở **bất kỳ** thiết bị nào trong hệ thống, không bị giới hạn theo `created_by` (cột này tồn tại trong DB — [001_schema.sql:40](../database/migrations/001_schema.sql#L40) — nhưng không được dùng để lọc quyền). Nói cách khác, không có khái niệm "operator chỉ quản lý thiết bị mình đăng ký".
-3. **JWT không bị revoke sớm**: đổi role hoặc xoá user không làm mất hiệu lực JWT đã phát hành trước đó — JWT vẫn hợp lệ tới khi hết hạn (8h) vì hệ thống không lưu danh sách token đã cấp/blacklist.
-4. **Cookie thiếu cờ `secure`**: `res.cookie("token", ..., { httpOnly: true, sameSite: "strict" })` ở [auth.ts:45-49](../backend/src/routes/auth.ts#L45-L49) không set `secure: true` — nếu deploy qua HTTPS thật, nên bổ sung để cookie không bị gửi qua kênh HTTP trong trường hợp downgrade.
-5. **Audit log có lọc nội dung theo role (đã triển khai)**: `GET /api/audit-log` dùng `ALLOWED_EVENT_TYPES_BY_ROLE` trong [audit.ts:20-24](../backend/src/routes/audit.ts#L20-L24) — admin thấy cả 9 event types, operator thấy 8 (trừ `DEVICE_DELETE`), viewer chỉ thấy 4 loại (`DATA_RECV`, `DEVICE_REGISTER`, `DEVICE_BLOCKED`, `DEVICE_STATUS_CHANGE`). Viewer **không thể** xem `GATEWAY_AUTH_FAIL`, `SENSOR_AUTH_FAIL`, `REPLAY_ATTACK`, `PRIVILEGE_ESCALATION`, `DEVICE_DELETE`.
-6. **Frontend đồng bộ ẩn/hiện theo role**: Trang Devices dùng `usePermissions()` để ẩn nút theo quyền. Trang Audit chỉ hiện Admin Actions khi `isAdmin`. Trang Users chặn hoàn toàn nếu không phải admin.
+Khi app khởi động (hoặc refresh trang), `AuthProvider` gọi `GET /api/auth/me` để hỏi backend:
 
-Các điểm 1–4 nên được liệt kê trong phần "Threat Model & Security" của báo cáo như **điểm yếu đã biết, được đánh đổi có chủ đích cho một hệ thống học thuật / demo**, kèm hướng khắc phục nếu triển khai production (permission table động, token revocation/refresh token, ràng buộc ownership, cookie `secure`).
+```
+App mount
+    │
+    ▼
+GET /api/auth/me  (cookie tự động đính kèm)
+    │
+    ├─ 401 → user = null  (chưa đăng nhập / token hết hạn)
+    │
+    └─ 200 → user = { id, username, role }  → lưu vào React Context
+```
+
+Frontend **không tự decode JWT** để lấy role — luôn hỏi backend qua `/api/auth/me`. Đây là thiết kế đúng: backend là nguồn sự thật, frontend không tin vào giá trị tự tính.
+
+### `useAuth` hook
+
+Các component đọc thông tin user từ Context qua `useAuth()`:
+
+```ts
+const { user } = useAuth();
+// user = { id: 1, username: "admin", role: "admin" } | null
+```
+
+---
+
+## Lớp 6 — Frontend: Kiểm tra quyền hiển thị UI
+
+### `usePermissions` hook
+
+[`frontend/src/features/auth/hooks/usePermissions.ts`](../frontend/src/features/auth/hooks/usePermissions.ts):
+
+```ts
+export function usePermissions() {
+  const { user } = useAuth();
+  const role = user?.role;
+
+  return {
+    isAdmin:              role === "admin",
+    isOperator:           role === "operator",
+    isViewer:             role === "viewer",
+
+    canCreateDevice:      hasRole(role, "admin", "operator"),
+    canUpdateDeviceStatus:hasRole(role, "admin", "operator"),
+    canDeleteDevice:      hasRole(role, "admin"),
+    canDeleteAuditLog:    hasRole(role, "admin"),
+  };
+}
+```
+
+Hook này **phản chiếu đúng** các rule được khai báo trên backend — cùng role, cùng quyền, chỉ khác mục đích: backend dùng để từ chối request, frontend dùng để ẩn nút tránh gọi API thừa.
+
+### Cách áp dụng trong từng trang
+
+**DevicesPage** — nút hành động ẩn/hiện theo role:
+
+```tsx
+const { canCreateDevice, canUpdateDeviceStatus, canDeleteDevice } = usePermissions();
+
+// Nút "Thêm thiết bị" — chỉ admin/operator
+{canCreateDevice && <Button onClick={openAddModal}>Thêm thiết bị</Button>}
+
+// Nút "Kích hoạt / Khóa" — chỉ admin/operator
+{canUpdateDeviceStatus && <StatusButton device={device} />}
+
+// Nút "Xóa" — chỉ admin
+{canDeleteDevice && <DeleteButton device={device} />}
+```
+
+**UsersPage** — chặn toàn bộ trang nếu không phải admin:
+
+```tsx
+const { isAdmin } = usePermissions();
+
+if (!isAdmin) {
+  return <div>Không có quyền truy cập</div>;
+}
+```
+
+**AuditPage** — ẩn Admin Actions với operator/viewer:
+
+```tsx
+const { isAdmin } = usePermissions();
+
+{isAdmin && (
+  <AdminActions>
+    <DeleteSelectedButton />
+    <PurgeByTypeButton />
+  </AdminActions>
+)}
+```
+
+---
+
+## Lớp 7 — Frontend: Route protection với `middleware.ts`
+
+[`frontend/middleware.ts`](../frontend/middleware.ts) chạy ở **Next.js Edge Runtime**, trước khi trang được render:
+
+```
+Browser truy cập /dashboard
+        │
+        ▼
+middleware.ts kiểm tra: có cookie "token" không?
+        │
+        ├─ Không có → redirect /login
+        │
+        └─ Có → cho phép render trang
+                (không verify chữ ký JWT — Edge Runtime không có JWT_SECRET)
+```
+
+**Giới hạn quan trọng:** Middleware chỉ kiểm tra sự tồn tại của cookie, không verify chữ ký. Một cookie giả hoặc hết hạn vẫn "qua" middleware. Bảo vệ thật xảy ra ở hai điểm:
+
+1. `AuthProvider` gọi `/api/auth/me` khi app mount → backend trả 401 → frontend redirect về `/login`.
+2. Mọi API call đều qua `verifyJWT` ở backend → bị từ chối nếu token không hợp lệ.
+
+Tóm lại: `middleware.ts` chỉ là **UX optimization** (tránh flash trang protected rồi mới redirect), không phải security boundary.
+
+---
+
+## Tóm tắt: Ai kiểm soát gì
+
+| Lớp | Chịu trách nhiệm |
+|-----|-----------------|
+| **Database** | Ràng buộc giá trị role hợp lệ bằng ENUM; lưu role thực tế |
+| **Backend login** | Đọc role từ DB, đóng dấu vào JWT, set HttpOnly cookie |
+| **`verifyJWT`** | Xác thực chữ ký JWT, giải nén `req.user` (id, username, role) |
+| **`requireRole`** | Từ chối request nếu role không đủ quyền (403) |
+| **Route handler** | Logic nghiệp vụ — chỉ chạy khi đã qua cả hai middleware trên |
+| **`AuthProvider`** | Lưu `user.role` vào React Context từ `/api/auth/me` |
+| **`usePermissions`** | Chuyển role thành boolean flags để component đọc |
+| **Pages** | Ẩn/hiện UI element theo flags — **lớp UX, không phải security** |
+| **`middleware.ts`** | Redirect `/login` nếu không có cookie — **UX, không phải security** |
+
+> **Quy tắc vàng:** Frontend chỉ ẩn nút — backend mới thực sự từ chối. Không bao giờ tin vào kiểm tra role ở phía client như một rào cản bảo mật.
+
+---
+
+## Hạn chế đã biết
+
+| # | Hạn chế | Hướng khắc phục nếu production |
+|---|---------|--------------------------------|
+| 1 | **RBAC tĩnh hard-code theo route** — thêm role hoặc đổi quyền phải sửa code | Bảng `permissions` trong DB + middleware đọc động |
+| 2 | **Không có resource ownership** — operator quản lý được mọi thiết bị, không giới hạn theo `created_by` | Thêm điều kiện `AND created_by = req.user.id` hoặc ABAC engine |
+| 3 | **JWT không bị revoke sớm** — đổi role hoặc xóa user không vô hiệu hóa JWT đang hoạt động | Refresh token + blacklist / token family |
+| 4 | **Cookie thiếu cờ `secure`** — nếu deploy HTTPS, cookie có thể bị gửi qua HTTP khi downgrade | Thêm `secure: true` trong môi trường production |
