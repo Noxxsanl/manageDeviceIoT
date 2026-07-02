@@ -14,8 +14,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    {/* suppressHydrationWarning bắt buộc vì next-themes ghi attribute `class` lên <html>
-        sau khi hydration để áp dụng theme đã lưu, nếu không React sẽ báo lỗi hydration mismatch. */}
+    // suppressHydrationWarning bắt buộc vì next-themes ghi attribute `class` lên <html>
+    // sau khi hydration để áp dụng theme đã lưu, nếu không React sẽ báo lỗi hydration mismatch.
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-screen bg-[#F6F8FB] dark:bg-slate-900 text-gray-900 dark:text-slate-100">
         {/* ThemeProvider phải bọc ngoài AuthProvider để context theme có sẵn
